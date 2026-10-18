@@ -1,6 +1,6 @@
 import { Chess } from "chess.js";
 import { PIECE_IMAGES } from "./pieces.js";
-import { CLASSIFICATIONS, classifyMove, calculateAccuracy, isMaterialSacrifice } from "./classifications.js";
+import { CLASSIFICATIONS, classifyMove, calculateAccuracy, calculateEstimatedRating, isMaterialSacrifice } from "./classifications.js";
 import "./style.css";
 
 const $ = (id) => document.getElementById(id);
@@ -81,6 +81,13 @@ function readImport() {
     $("engineStatus").textContent = "Engine idle";
     updateAnalysisProgress(0, state.moves.length, "Ready to analyze", false, false);
 
+    if ($("topPlayerRatingEstimate")) $("topPlayerRatingEstimate").style.display = "none";
+    if ($("bottomPlayerRatingEstimate")) $("bottomPlayerRatingEstimate").style.display = "none";
+    if ($("topPlayerAccuracy")) $("topPlayerAccuracy").style.display = "none";
+    if ($("bottomPlayerAccuracy")) $("bottomPlayerAccuracy").style.display = "none";
+    if ($("summaryWhiteRating")) $("summaryWhiteRating").textContent = "—";
+    if ($("summaryBlackRating")) $("summaryBlackRating").textContent = "—";
+
     // Switch back to moves tab
     switchTab("moves");
     renderMoves();
@@ -131,6 +138,8 @@ function updatePlayerHeaders() {
 
   $("summaryWhiteName").textContent = whiteName;
   $("summaryBlackName").textContent = blackName;
+  if ($("summaryWhiteAvatar")) $("summaryWhiteAvatar").innerHTML = `<img src="${PIECE_IMAGES.wk}" alt="White">`;
+  if ($("summaryBlackAvatar")) $("summaryBlackAvatar").innerHTML = `<img src="${PIECE_IMAGES.bk}" alt="Black">`;
 }
 
 $("pgnFile").addEventListener("change", async e => {
@@ -532,21 +541,49 @@ function renderSummary() {
   const whiteAcc = calculateAccuracy(whiteMoves);
   const blackAcc = calculateAccuracy(blackMoves);
 
+  const whiteRating = calculateEstimatedRating(whiteMoves, whiteAcc, state.headers.WhiteElo);
+  const blackRating = calculateEstimatedRating(blackMoves, blackAcc, state.headers.BlackElo);
+
   $("summaryWhiteAcc").textContent = whiteMoves.length ? `${whiteAcc}%` : "—";
   $("summaryBlackAcc").textContent = blackMoves.length ? `${blackAcc}%` : "—";
 
-  // Show accuracy on player bars as well
+  if ($("summaryWhiteRating")) {
+    $("summaryWhiteRating").textContent = whiteMoves.length ? whiteRating : "—";
+  }
+  if ($("summaryBlackRating")) {
+    $("summaryBlackRating").textContent = blackMoves.length ? blackRating : "—";
+  }
+
+  // Show accuracy and estimated rating on player bars
   if (whiteMoves.length) {
     if (state.flipped) {
       $("topPlayerAccuracy").textContent = `${whiteAcc}%`;
       $("topPlayerAccuracy").style.display = "inline-block";
+      if ($("topPlayerRatingEstimate")) {
+        $("topPlayerRatingEstimate").textContent = `Est. ${whiteRating}`;
+        $("topPlayerRatingEstimate").style.display = "inline-block";
+      }
+
       $("bottomPlayerAccuracy").textContent = `${blackAcc}%`;
       $("bottomPlayerAccuracy").style.display = "inline-block";
+      if ($("bottomPlayerRatingEstimate")) {
+        $("bottomPlayerRatingEstimate").textContent = `Est. ${blackRating}`;
+        $("bottomPlayerRatingEstimate").style.display = "inline-block";
+      }
     } else {
       $("topPlayerAccuracy").textContent = `${blackAcc}%`;
       $("topPlayerAccuracy").style.display = "inline-block";
+      if ($("topPlayerRatingEstimate")) {
+        $("topPlayerRatingEstimate").textContent = `Est. ${blackRating}`;
+        $("topPlayerRatingEstimate").style.display = "inline-block";
+      }
+
       $("bottomPlayerAccuracy").textContent = `${whiteAcc}%`;
       $("bottomPlayerAccuracy").style.display = "inline-block";
+      if ($("bottomPlayerRatingEstimate")) {
+        $("bottomPlayerRatingEstimate").textContent = `Est. ${whiteRating}`;
+        $("bottomPlayerRatingEstimate").style.display = "inline-block";
+      }
     }
   }
 
