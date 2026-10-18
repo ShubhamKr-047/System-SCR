@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System SCR · Chess Analysis</title>
+  <link rel="stylesheet" href="/src/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Roboto+Mono:wght@500;600&display=swap" rel="stylesheet">
+</head>
+<body class="chesscom-theme">
+  <!-- SLIM TOPBAR -->
+  <header class="topbar">
+    <div class="brand-container">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+          <path d="M19 22H5v-2h14v2M17.5 10.5c-.3 0-.6.1-.8.2-.5-.7-1.3-1.2-2.2-1.4.3-.4.5-.8.5-1.3 0-1.1-.9-2-2-2-.3 0-.6.1-.8.2C11.7 5.5 11 5 10 5c-1.7 0-3 1.3-3 3 0 .3 0 .5.1.7C6.4 9.1 6 9.8 6 10.5c0 .9.5 1.7 1.2 2.1-.1.4-.2.9-.2 1.4 0 2.2 1.8 4 4 4h4c1.7 0 3-1.3 3-3 0-.5-.1-1-.3-1.5.5-.4.8-1.2.8-1.9 0-.6-.4-1.1-1-1.1z"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>System SCR</h1>
+        <span class="brand-sub">Stockfish 19 Review</span>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <span class="engine-badge">
+        <span class="engine-indicator"></span> STOCKFISH 19 (LOCAL)
+      </span>
+    </div>
+  </header>
+
+  <!-- MAIN SUITE LAYOUT (CENTERED BOARD + RIGHT ANALYSIS SIDEBAR) -->
+  <main class="main-container">
+    <!-- CENTER: MASSIVE CHESSBOARD AREA -->
+    <section class="center-board-stage">
+      <div class="board-and-eval-layout">
+        <!-- EVAL BAR (ALIGNED DIRECTLY WITH THE CHESSBOARD) -->
+        <div id="evalBar" class="eval-bar" title="Evaluation bar">
+          <div id="evalBarWhite" class="eval-bar-white"></div>
+          <span id="evalBarScore" class="eval-bar-score">0.0</span>
+        </div>
+
+        <!-- MAIN BOARD COLUMN (TOP BAR + BOARD + BOTTOM BAR + CONTROLS + DOCK) -->
+        <div class="board-column">
+          <!-- TOP PLAYER BAR (BLACK BY DEFAULT) -->
+          <div id="topPlayerBar" class="player-bar">
+            <div class="player-info">
+              <div class="avatar-circle black-player" id="topAvatar">
+                <img src="pieces/bk.png" class="avatar-piece" alt="Black piece" />
+              </div>
+              <span id="topPlayerName" class="player-name">Black</span>
+              <span id="topPlayerRating" class="player-rating"></span>
+            </div>
+            <div class="player-side-metrics">
+              <span id="topPlayerAccuracy" class="accuracy-pill" style="display:none">0%</span>
+              <span id="topPlayerEval" class="eval-pill">—</span>
+            </div>
+          </div>
+
+          <!-- CHESSBOARD CONTAINER -->
+          <div class="board-container">
+            <div id="board" class="board chesscom-board" aria-label="Chessboard">
+              <div class="board-placeholder">Import a PGN to see the board</div>
+            </div>
+          </div>
+
+          <!-- BOTTOM PLAYER BAR (WHITE BY DEFAULT) -->
+          <div id="bottomPlayerBar" class="player-bar">
+            <div class="player-info">
+              <div class="avatar-circle white-player" id="bottomAvatar">
+                <img src="pieces/wk.png" class="avatar-piece" alt="White piece" />
+              </div>
+              <span id="bottomPlayerName" class="player-name">White</span>
+              <span id="bottomPlayerRating" class="player-rating"></span>
+            </div>
+            <div class="player-side-metrics">
+              <span id="bottomPlayerAccuracy" class="accuracy-pill" style="display:none">0%</span>
+              <span id="bottomPlayerEval" class="eval-pill">—</span>
+            </div>
+          </div>
+
+          <!-- BOARD NAVIGATION CONTROLS -->
+          <div class="board-controls">
+            <button id="flipBoard" class="board-btn flip-btn" title="Flip Board (Hotkey: F or X)">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M7 7h10v2l4-3-4-3v2H5v6h2V7zm10 10H7v-2l-4 3 4 3v-2h12v-6h-2v4z"/>
+              </svg>
+              <span>Flip</span>
+            </button>
+
+            <div class="nav-controls">
+              <button id="firstMove" class="board-btn" title="First position (Up arrow)" disabled>⏮</button>
+              <button id="prevMove" class="board-btn" title="Previous move (Left arrow)" disabled>◀</button>
+              <span id="moveCounter" class="move-counter">—</span>
+              <button id="nextMove" class="board-btn" title="Next move (Right arrow)" disabled>▶</button>
+              <button id="lastMove" class="board-btn" title="Last position (Down arrow)" disabled>⏭</button>
+            </div>
+          </div>
+
+          <!-- ACTION & IMPORT BAR BELOW THE BOARD -->
+          <div class="board-action-dock">
+            <div class="dock-row">
+              <label for="pgnFile" class="dock-btn file-btn" title="Import PGN File">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                </svg>
+                <span>Import PGN</span>
+              </label>
+              <input id="pgnFile" type="file" accept=".pgn,.txt,text/plain" hidden>
+
+              <button id="togglePastePgn" class="dock-btn" title="Toggle Paste PGN drawer">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                </svg>
+                <span>Paste PGN</span>
+              </button>
+
+              <div class="dock-divider"></div>
+
+              <button id="loadPgn" class="dock-btn secondary">Load game</button>
+
+              <button id="startReview" class="dock-btn primary" disabled>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+                </svg>
+                <span>Analyze game</span>
+              </button>
+
+              <div class="dock-speed">
+                <label for="moveTime">Speed</label>
+                <select id="moveTime">
+                  <option value="250" selected>Fast · 0.25s</option>
+                  <option value="500">Balanced · 0.5s</option>
+                  <option value="1000">Deep · 1.0s</option>
+                </select>
+              </div>
+
+              <button id="stopReview" class="dock-btn stop-btn" disabled>Stop</button>
+            </div>
+
+            <!-- COLLAPSIBLE PASTE DRAWER -->
+            <div id="pasteDrawer" class="paste-drawer" style="display: none;">
+              <textarea id="pgnText" rows="3" spellcheck="false" placeholder='[Event "Live Chess"] 1. e4 e5 ... (Paste PGN text here)'></textarea>
+              <div class="drawer-actions">
+                <span id="importStatus" class="status-msg">Paste or load a PGN to analyze.</span>
+                <button id="drawerLoadBtn" class="dock-btn primary-sm">Load</button>
+              </div>
+            </div>
+
+            <!-- STATUS FOOTER UNDER DOCK -->
+            <div class="dock-status-line">
+              <div class="engine-state">
+                <span class="engine-dot"></span>
+                <span id="engineStatus">Engine idle</span>
+              </div>
+              <div class="dock-progress-wrapper">
+                <div class="dock-progress-track">
+                  <div id="dockProgressBarFill" class="dock-progress-bar-fill" style="width: 0%;"></div>
+                </div>
+                <span id="reviewProgress" class="progress-pill">Not analyzed</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: ANALYSIS & MOVE LIST SIDEBAR -->
+    <aside class="sidebar-panel">
+      <!-- MOVE FEEDBACK & COACHING CARD -->
+      <div id="feedbackContainer" class="feedback-container">
+        <div id="feedbackContent" class="feedback-content">
+          <div class="feedback-empty">
+            <p>Select any move or start analysis to inspect move classifications, evaluation changes, and coaching notes.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- TABS -->
+      <div class="sidebar-tabs">
+        <button id="tabMoves" class="tab-btn active">Moves</button>
+        <button id="tabSummary" class="tab-btn">Game Summary</button>
+      </div>
+
+      <!-- MOVE LIST TABLE -->
+      <div id="moveListWrapper" class="move-list-wrapper">
+        <div class="move-table-header">
+          <span class="col-num">#</span>
+          <span class="col-move">White</span>
+          <span class="col-move">Black</span>
+        </div>
+        <div id="moveList" class="move-list">
+          <p class="muted empty-state">Your game’s moves will appear here.</p>
+        </div>
+      </div>
+
+      <!-- SUMMARY PANEL (Accuracy & Breakdown) -->
+      <div id="summaryPanel" class="summary-panel" style="display:none">
+        <!-- PROGRESS BAR BOX -->
+        <div id="summaryProgressBarBox" class="summary-progress-box">
+          <div class="progress-info-row">
+            <span id="progressStatusLabel" class="progress-status-label">Analysis Progress</span>
+            <span id="progressPercentageText" class="progress-pct-text">0%</span>
+          </div>
+          <div class="progress-track">
+            <div id="summaryProgressBarFill" class="progress-bar-fill" style="width: 0%;"></div>
+          </div>
+          <div class="progress-sub-row">
+            <span id="progressDetailText" class="progress-detail-text">0 of 0 moves analyzed</span>
+          </div>
+        </div>
+
+        <div class="accuracy-comparison">
+          <div class="acc-box white-acc">
+            <span class="acc-title" id="summaryWhiteName">White</span>
+            <span class="acc-val" id="summaryWhiteAcc">—</span>
+            <span class="acc-label">Accuracy</span>
+          </div>
+          <div class="acc-vs">VS</div>
+          <div class="acc-box black-acc">
+            <span class="acc-title" id="summaryBlackName">Black</span>
+            <span class="acc-val" id="summaryBlackAcc">—</span>
+            <span class="acc-label">Accuracy</span>
+          </div>
+        </div>
+        <div class="breakdown-table" id="breakdownTable">
+          <!-- Dynamically populated classification counts -->
+        </div>
+      </div>
+    </aside>
+
+    <!-- Hidden compatibility elements -->
+    <div style="display:none" aria-hidden="true">
+      <span id="whiteName">White</span>
+      <span id="blackName">Black</span>
+      <span id="whiteEval">—</span>
+      <span id="blackEval">—</span>
+    </div>
+  </main>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

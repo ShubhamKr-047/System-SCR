@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "System SCR",
+  "version": "0.2.0",
+  "description": "Local Stockfish game analysis and review for Zen Browser.",
+  "action": {
+    "default_title": "System SCR",
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.chess.com/*",
+    "https://api.chess.com/*"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.chess.com/game/live/*",
+        "https://www.chess.com/game/daily/*",
+        "https://www.chess.com/analysis/game/live/*",
+        "https://www.chess.com/analysis/game/daily/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "zen-chess-review@example.local",
+      "strict_min_version": "128.0"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}
