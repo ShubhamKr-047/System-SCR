@@ -56,7 +56,6 @@
             <div class="player-side-metrics">
               <span id="topPlayerRatingEstimate" class="rating-pill" style="display:none">Est. —</span>
               <span id="topPlayerAccuracy" class="accuracy-pill" style="display:none">0%</span>
-              <span id="topPlayerEval" class="eval-pill">—</span>
             </div>
           </div>
 
@@ -79,91 +78,6 @@
             <div class="player-side-metrics">
               <span id="bottomPlayerRatingEstimate" class="rating-pill" style="display:none">Est. —</span>
               <span id="bottomPlayerAccuracy" class="accuracy-pill" style="display:none">0%</span>
-              <span id="bottomPlayerEval" class="eval-pill">—</span>
-            </div>
-          </div>
-
-          <!-- BOARD NAVIGATION CONTROLS -->
-          <div class="board-controls">
-            <button id="flipBoard" class="board-btn flip-btn" title="Flip Board (Hotkey: F or X)">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                <path d="M7 7h10v2l4-3-4-3v2H5v6h2V7zm10 10H7v-2l-4 3 4 3v-2h12v-6h-2v4z"/>
-              </svg>
-              <span>Flip</span>
-            </button>
-
-            <div class="nav-controls">
-              <button id="firstMove" class="board-btn" title="First position (Up arrow)" disabled>⏮</button>
-              <button id="prevMove" class="board-btn" title="Previous move (Left arrow)" disabled>◀</button>
-              <span id="moveCounter" class="move-counter">—</span>
-              <button id="nextMove" class="board-btn" title="Next move (Right arrow)" disabled>▶</button>
-              <button id="lastMove" class="board-btn" title="Last position (Down arrow)" disabled>⏭</button>
-            </div>
-          </div>
-
-          <!-- ACTION & IMPORT BAR BELOW THE BOARD -->
-          <div class="board-action-dock">
-            <div class="dock-row">
-              <label for="pgnFile" class="dock-btn file-btn" title="Import PGN File">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-                </svg>
-                <span>Import PGN</span>
-              </label>
-              <input id="pgnFile" type="file" accept=".pgn,.txt,text/plain" hidden>
-
-              <button id="togglePastePgn" class="dock-btn" title="Toggle Paste PGN drawer">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
-                </svg>
-                <span>Paste PGN</span>
-              </button>
-
-              <div class="dock-divider"></div>
-
-              <button id="loadPgn" class="dock-btn secondary">Load game</button>
-
-              <button id="startReview" class="dock-btn primary" disabled>
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
-                </svg>
-                <span>Analyze game</span>
-              </button>
-
-              <div class="dock-speed">
-                <label for="moveTime">Speed</label>
-                <select id="moveTime">
-                  <option value="250" selected>Fast · 0.25s</option>
-                  <option value="500">Balanced · 0.5s</option>
-                  <option value="1000">Deep · 1.0s</option>
-                </select>
-              </div>
-
-              <button id="stopReview" class="dock-btn stop-btn" disabled>Stop</button>
-            </div>
-
-            <!-- COLLAPSIBLE PASTE DRAWER -->
-            <div id="pasteDrawer" class="paste-drawer" style="display: none;">
-              <textarea id="pgnText" rows="3" spellcheck="false" placeholder='[Event "Live Chess"] 1. e4 e5 ... (Paste PGN text here)'></textarea>
-              <div class="drawer-actions">
-                <span id="importStatus" class="status-msg">Paste or load a PGN to analyze.</span>
-                <button id="drawerLoadBtn" class="dock-btn primary-sm">Load</button>
-              </div>
-            </div>
-
-            <!-- STATUS FOOTER UNDER DOCK -->
-            <div class="dock-status-line">
-              <div class="engine-state">
-                <span class="engine-dot"></span>
-                <span id="engineStatus">Engine idle</span>
-              </div>
-              <div class="dock-progress-wrapper">
-                <div class="dock-progress-track">
-                  <div id="dockProgressBarFill" class="dock-progress-bar-fill" style="width: 0%;"></div>
-                </div>
-                <span id="reviewProgress" class="progress-pill">Not analyzed</span>
-              </div>
             </div>
           </div>
         </div>
@@ -259,6 +173,132 @@
           <!-- Dynamically populated classification counts -->
         </div>
       </div>
+
+      <!-- SIDEBAR FOOTER: NAVIGATION, ANALYZE/START BUTTON & HAMBURGER MENU -->
+      <div class="sidebar-footer">
+        <!-- MOVE COUNTER & STATUS BAR -->
+        <div class="sidebar-footer-top">
+          <div class="engine-state">
+            <span class="engine-dot"></span>
+            <span id="engineStatus">Engine idle</span>
+          </div>
+          <span id="moveCounter" class="move-counter-badge">Start</span>
+        </div>
+
+        <!-- PROGRESS BAR TRACK -->
+        <div class="dock-progress-wrapper">
+          <div class="dock-progress-track">
+            <div id="dockProgressBarFill" class="dock-progress-bar-fill" style="width: 0%;"></div>
+          </div>
+          <span id="reviewProgress" class="progress-pill">Not analyzed</span>
+        </div>
+
+        <!-- MAIN CONTROL ROW -->
+        <div class="sidebar-nav-bar">
+          <button id="firstMove" class="sidebar-nav-btn" title="First move (Up arrow)" disabled>⏮</button>
+          <button id="prevMove" class="sidebar-nav-btn" title="Previous move (Left arrow)" disabled>◀</button>
+
+          <!-- MIDDLE: ANALYZE / START BUTTON -->
+          <div class="action-btn-container">
+            <button id="startReview" class="action-btn-primary" disabled title="Analyze game">
+              <svg class="action-btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+              </svg>
+              <span id="startReviewText">Analyze game</span>
+            </button>
+            <button id="stopReview" class="action-btn-stop" style="display:none" title="Stop analysis">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+              <span>Stop</span>
+            </button>
+          </div>
+
+          <button id="nextMove" class="sidebar-nav-btn" title="Next move (Right arrow)" disabled>▶</button>
+          <button id="lastMove" class="sidebar-nav-btn" title="Last move (Down arrow)" disabled>⏭</button>
+
+          <!-- RIGHT BOTTOM: 3-LINE HAMBURGER BUTTON -->
+          <div class="hamburger-container">
+            <button id="hamburgerBtn" class="hamburger-btn" type="button" title="Game Options (Flip, Import, Paste, Speed)" aria-label="Menu" aria-expanded="false">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round">
+                <line x1="4" y1="6" x2="20" y2="6"></line>
+                <line x1="4" y1="12" x2="20" y2="12"></line>
+                <line x1="4" y1="18" x2="20" y2="18"></line>
+              </svg>
+            </button>
+
+            <!-- HAMBURGER DROPDOWN MENU -->
+            <div id="hamburgerMenu" class="hamburger-dropdown" style="display:none">
+              <div class="menu-header">
+                <span class="menu-title">Game Options</span>
+                <button id="closeHamburgerBtn" class="menu-close-btn" type="button" title="Close menu">✕</button>
+              </div>
+
+              <div class="menu-items">
+                <!-- FLIP BOARD -->
+                <button id="flipBoard" class="menu-item-btn" type="button">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    <path d="M7 7h10v2l4-3-4-3v2H5v6h2V7zm10 10H7v-2l-4 3 4 3v-2h12v-6h-2v4z"/>
+                  </svg>
+                  <span>Flip Board</span>
+                  <kbd class="menu-kbd">F</kbd>
+                </button>
+
+                <!-- IMPORT PGN FILE -->
+                <label for="pgnFile" class="menu-item-btn menu-label-btn" title="Import PGN File">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                  </svg>
+                  <span>Import PGN</span>
+                </label>
+                <input id="pgnFile" type="file" accept=".pgn,.txt,text/plain" hidden>
+
+                <!-- PASTE PGN -->
+                <button id="togglePastePgn" class="menu-item-btn" type="button">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                  </svg>
+                  <span>Paste PGN</span>
+                </button>
+
+                <!-- LOAD GAME -->
+                <button id="loadPgn" class="menu-item-btn" type="button">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 4v16l16-8z"/>
+                  </svg>
+                  <span>Load Game</span>
+                </button>
+
+                <!-- SPEED SELECTOR -->
+                <div class="menu-speed-row">
+                  <span class="menu-speed-label">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    <span>Speed</span>
+                  </span>
+                  <select id="moveTime" class="menu-select">
+                    <option value="250" selected>Fast · 0.25s</option>
+                    <option value="500">Balanced · 0.5s</option>
+                    <option value="1000">Deep · 1.0s</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- COLLAPSIBLE PASTE DRAWER INSIDE MENU -->
+              <div id="pasteDrawer" class="paste-drawer" style="display: none;">
+                <textarea id="pgnText" rows="4" spellcheck="false" placeholder='[Event "Live Chess"] 1. e4 e5 ... (Paste PGN here)'></textarea>
+                <div class="drawer-actions">
+                  <span id="importStatus" class="status-msg">Paste PGN text and click Load</span>
+                  <button id="drawerLoadBtn" class="dock-btn primary-sm" type="button">Load</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </aside>
 
     <!-- Hidden compatibility elements -->
@@ -267,6 +307,8 @@
       <span id="blackName">Black</span>
       <span id="whiteEval">—</span>
       <span id="blackEval">—</span>
+      <span id="topPlayerEval">—</span>
+      <span id="bottomPlayerEval">—</span>
     </div>
   </main>
 

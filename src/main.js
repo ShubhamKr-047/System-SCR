@@ -72,8 +72,17 @@ function readImport() {
     state.analyses = [];
     state.results = [];
     state.cursor = 0;
+    state.isAnalyzed = false;
 
-    $("startReview").disabled = false;
+    if ($("startReviewText")) $("startReviewText").textContent = "Analyze game";
+    if ($("startReview")) {
+      $("startReview").disabled = false;
+      $("startReview").title = "Analyze game";
+      $("startReview").classList.remove("review-mode");
+      $("startReview").style.display = "inline-flex";
+    }
+    if ($("stopReview")) $("stopReview").style.display = "none";
+
     updatePlayerHeaders();
 
     $("reviewProgress").textContent = `${state.moves.length} half-moves loaded`;
@@ -142,17 +151,62 @@ function updatePlayerHeaders() {
   if ($("summaryBlackAvatar")) $("summaryBlackAvatar").innerHTML = `<img src="${PIECE_IMAGES.bk}" alt="Black">`;
 }
 
+// Hamburger Menu Wiring
+const hamburgerBtn = $("hamburgerBtn");
+const hamburgerMenu = $("hamburgerMenu");
+const closeHamburgerBtn = $("closeHamburgerBtn");
+
+function closeHamburger() {
+  if (hamburgerMenu) hamburgerMenu.style.display = "none";
+  if (hamburgerBtn) {
+    hamburgerBtn.classList.remove("active");
+    hamburgerBtn.setAttribute("aria-expanded", "false");
+  }
+}
+
+if (hamburgerBtn && hamburgerMenu) {
+  hamburgerBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isHidden = hamburgerMenu.style.display === "none";
+    hamburgerMenu.style.display = isHidden ? "block" : "none";
+    hamburgerBtn.classList.toggle("active", isHidden);
+    hamburgerBtn.setAttribute("aria-expanded", String(isHidden));
+  });
+
+  if (closeHamburgerBtn) {
+    closeHamburgerBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeHamburger();
+    });
+  }
+
+  // Click outside to close
+  document.addEventListener("click", (e) => {
+    if (!hamburgerMenu.contains(e.target) && !hamburgerBtn.contains(e.target)) {
+      closeHamburger();
+    }
+  });
+}
+
 $("pgnFile").addEventListener("change", async e => {
   const file = e.target.files?.[0];
   if (!file) return;
   $("pgnText").value = await file.text();
   setStatus(`Loaded file: ${file.name}. Click “Load game”.`);
   readImport();
+  closeHamburger();
 });
 
-$("loadPgn").addEventListener("click", readImport);
+$("loadPgn").addEventListener("click", () => {
+  readImport();
+  if (state.moves.length) closeHamburger();
+});
+
 $("pgnText").addEventListener("keydown", e => {
-  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") readImport();
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+    readImport();
+    if (state.moves.length) closeHamburger();
+  }
 });
 
 // Toggle Paste PGN Drawer
@@ -173,9 +227,10 @@ const drawerLoadBtn = $("drawerLoadBtn");
 if (drawerLoadBtn) {
   drawerLoadBtn.addEventListener("click", () => {
     readImport();
-    if (state.moves.length && pasteDrawer) {
-      pasteDrawer.style.display = "none";
+    if (state.moves.length) {
+      if (pasteDrawer) pasteDrawer.style.display = "none";
       togglePasteBtn?.classList.remove("active");
+      closeHamburger();
     }
   });
 }
@@ -311,11 +366,11 @@ function updateEvaluationDisplay() {
   const bottomEvalEl = $("bottomPlayerEval");
 
   if (state.flipped) {
-    topEvalEl.textContent = currentEval ? scoreText : "—";
-    bottomEvalEl.textContent = currentEval ? formatScore(-whiteScore) : "—";
+    if (topEvalEl) topEvalEl.textContent = currentEval ? scoreText : "—";
+    if (bottomEvalEl) bottomEvalEl.textContent = currentEval ? formatScore(-whiteScore) : "—";
   } else {
-    topEvalEl.textContent = currentEval ? formatScore(-whiteScore) : "—";
-    bottomEvalEl.textContent = currentEval ? scoreText : "—";
+    if (topEvalEl) topEvalEl.textContent = currentEval ? formatScore(-whiteScore) : "—";
+    if (bottomEvalEl) bottomEvalEl.textContent = currentEval ? scoreText : "—";
   }
 
   // Update Vertical Eval Bar
@@ -340,7 +395,7 @@ function updateEvaluationDisplay() {
   // If flipped, reverse bar
   const finalFill = state.flipped ? (100 - pct) : pct;
   evalBarFill.style.height = `${finalFill}%`;
-  evalBarScore.textContent = scoreText;
+  evalBarScore.textContent = formatEvalBarScore(whiteScore);
 
   if (whiteScore < 0) {
     evalBar.classList.add("black-winning");
@@ -443,6 +498,15 @@ function formatScore(score) {
     return score > 0 ? `+M${moves || 1}` : `-M${moves || 1}`;
   }
   return `${score > 0 ? "+" : ""}${score.toFixed(1)}`;
+}
+
+function formatEvalBarScore(score) {
+  if (!Number.isFinite(score)) return "0.0";
+  if (Math.abs(score) >= 9) {
+    const moves = Math.round((10 - Math.abs(score)) * 100);
+    return `M${moves || 1}`;
+  }
+  return Math.abs(score).toFixed(1);
 }
 
 function renderFeedback(result) {
@@ -719,8 +783,11 @@ async function startReview() {
   updateAnalysisProgress(0, state.moves.length, "Starting engine…", false, false);
   renderSummary();
 
-  $("startReview").disabled = true;
-  $("stopReview").disabled = false;
+  $("startReview").style.display = "none";
+  if ($("stopReview")) {
+    $("stopReview").style.display = "inline-flex";
+    $("stopReview").disabled = false;
+  }
   $("engineStatus").textContent = "Starting local Stockfish…";
   $("engineStatus").previousElementSibling?.classList.add("running");
 
@@ -853,8 +920,27 @@ async function startReview() {
     setStatus(`Analysis stopped: ${e.message}`, true);
   } finally {
     state.running = false;
-    $("startReview").disabled = false;
-    $("stopReview").disabled = true;
+    if ($("stopReview")) {
+      $("stopReview").style.display = "none";
+      $("stopReview").disabled = true;
+    }
+    $("startReview").style.display = "inline-flex";
+
+    const completed = state.results.filter(Boolean).length;
+    if (!state.stopRequested && completed === state.moves.length && state.moves.length > 0) {
+      state.isAnalyzed = true;
+      if ($("startReviewText")) $("startReviewText").textContent = "Start";
+      $("startReview").title = "Start Review (Move 1)";
+      $("startReview").classList.add("review-mode");
+      $("startReview").disabled = false;
+    } else {
+      state.isAnalyzed = false;
+      if ($("startReviewText")) $("startReviewText").textContent = "Analyze game";
+      $("startReview").title = "Analyze game";
+      $("startReview").classList.remove("review-mode");
+      $("startReview").disabled = false;
+    }
+
     $("engineStatus").previousElementSibling?.classList.remove("running");
     renderMoves();
     renderSummary();
@@ -862,7 +948,14 @@ async function startReview() {
   }
 }
 
-$("startReview").addEventListener("click", startReview);
+$("startReview").addEventListener("click", () => {
+  if (state.isAnalyzed) {
+    switchTab("moves");
+    renderBoard(1);
+    return;
+  }
+  startReview();
+});
 $("stopReview").addEventListener("click", () => {
   state.stopRequested = true;
   if (state.worker && state.pending) {
