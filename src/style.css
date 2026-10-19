@@ -167,6 +167,10 @@ body.chesscom-theme {
   flex-shrink: 0;
 }
 
+.eval-bar.flipped {
+  justify-content: flex-start;
+}
+
 .eval-bar-white {
   width: 100%;
   height: 50%;
@@ -356,6 +360,11 @@ body.chesscom-theme {
   background: radial-gradient(circle at center, var(--board-check) 0%, rgba(224, 60, 60, 0.55) 55%, transparent 100%) !important;
 }
 
+/* Brilliant move radial glow */
+.square.brilliant-move {
+  background: radial-gradient(circle at center, var(--badge-brilliant) 0%, rgba(27, 172, 166, 0.6) 55%, transparent 100%) !important;
+}
+
 /* CHESS PIECES (Chess.com Neo PNG/SVG) */
 .square img.piece {
   width: 100%;
@@ -402,20 +411,44 @@ body.chesscom-theme {
 /* SQUARE BADGE (Move classification badge on destination square) */
 .square-badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 22px;
-  height: 22px;
+  top: -5px;
+  right: -5px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
   z-index: 5;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 800;
   border: 2px solid var(--bg-card);
   line-height: 1;
   animation: popIn 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.square-badge.brilliant {
+  font-size: 12.5px;
+  letter-spacing: -0.7px;
+}
+
+.square-badge.blunder {
+  font-size: 12.5px;
+  letter-spacing: -0.5px;
+}
+
+.square-badge.inaccuracy {
+  font-size: 12px;
+  letter-spacing: -0.5px;
+}
+
+.square-badge.miss {
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.square-badge.book {
+  font-size: 13px;
 }
 
 @keyframes popIn {
@@ -1158,14 +1191,12 @@ body.chesscom-theme {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-.move-sign.brilliant,
-.square-badge.brilliant {
+.move-sign.brilliant {
   font-size: 9.5px;
   letter-spacing: -0.6px;
 }
 
-.move-sign.miss,
-.square-badge.miss {
+.move-sign.miss {
   font-size: 10.5px;
   font-weight: 900;
 }
@@ -1424,31 +1455,87 @@ body.chesscom-theme {
 .breakdown-table {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 .breakdown-row {
+  display: grid;
+  grid-template-columns: 1fr 155px 1fr;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background-color: #24221f;
+  transition: background-color 0.15s ease;
+}
+
+.breakdown-row:hover {
+  background-color: #2d2b27;
+}
+
+.breakdown-count {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 15px;
+  font-weight: 800;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background-color: #272522;
-  font-size: 11px;
+  justify-content: center;
+  color: #f5f5f5;
+  user-select: none;
+}
+
+.breakdown-count.zero {
+  color: #66625a;
+  font-weight: 600;
 }
 
 .breakdown-badge-name {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-weight: 600;
+  gap: 10px;
+  width: 155px;
+  justify-self: center;
 }
 
-.breakdown-counts {
-  display: flex;
-  gap: 16px;
-  font-family: 'Roboto Mono', monospace;
+.breakdown-name {
+  font-size: 14.5px;
   font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+}
+
+.breakdown-row .move-sign {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.breakdown-row .move-sign.brilliant {
+  font-size: 11px;
+  letter-spacing: -0.7px;
+}
+
+.breakdown-row .move-sign.blunder {
+  font-size: 11px;
+  letter-spacing: -0.5px;
+}
+
+.breakdown-row .move-sign.inaccuracy {
+  font-size: 11px;
+  letter-spacing: -0.5px;
+}
+
+.breakdown-row .move-sign.miss {
+  font-size: 12.5px;
+  font-weight: 900;
 }
 
 /* RESPONSIVE */

@@ -96,6 +96,8 @@ function readImport() {
     if ($("bottomPlayerAccuracy")) $("bottomPlayerAccuracy").style.display = "none";
     if ($("summaryWhiteRating")) $("summaryWhiteRating").textContent = "—";
     if ($("summaryBlackRating")) $("summaryBlackRating").textContent = "—";
+    if ($("summaryWhiteAcc")) $("summaryWhiteAcc").textContent = "—";
+    if ($("summaryBlackAcc")) $("summaryBlackAcc").textContent = "—";
 
     // Switch back to moves tab
     switchTab("moves");
@@ -240,6 +242,7 @@ $("flipBoard").addEventListener("click", () => {
   state.flipped = !state.flipped;
   updatePlayerHeaders();
   renderBoard(state.cursor);
+  renderSummary();
 });
 
 // Tab Switching
@@ -329,11 +332,12 @@ function renderBoard(index) {
 
       // Move classification badge on the move's destination square
       let badgeHtml = "";
+      const isBrilliant = Boolean(currentResult?.key === "brilliant" && lastMove && sqName === lastMove.to);
       if (currentResult && lastMove && sqName === lastMove.to) {
         badgeHtml = `<div class="square-badge ${currentResult.key}" style="background-color: ${currentResult.color}; color: ${currentResult.textColor};" title="${esc(currentResult.label)}: ${esc(currentResult.sign)}">${esc(currentResult.sign)}</div>`;
       }
 
-      html += `<div class="square ${shade} ${isLast ? 'last-move' : ''} ${isCheck ? 'in-check' : ''}" data-square="${sqName}">${pieceHtml}${coordRank}${coordFile}${badgeHtml}</div>`;
+      html += `<div class="square ${shade} ${isLast ? 'last-move' : ''} ${isCheck ? 'in-check' : ''} ${isBrilliant ? 'brilliant-move' : ''}" data-square="${sqName}">${pieceHtml}${coordRank}${coordFile}${badgeHtml}</div>`;
     }
   }
 
@@ -359,18 +363,33 @@ function renderBoard(index) {
 
 function updateEvaluationDisplay() {
   const currentEval = state.analyses[state.cursor];
-  const whiteScore = currentEval?.whiteScore ?? 0;
-  const scoreText = formatScore(whiteScore);
+  let whiteScore = currentEval?.whiteScore;
+
+  if (whiteScore === undefined) {
+    const currentPos = state.positions[state.cursor];
+    if (currentPos) {
+      try {
+        const ch = new Chess(currentPos.fen);
+        if (ch.isCheckmate()) {
+          whiteScore = ch.turn() === "w" ? -10 : 10;
+        }
+      } catch {}
+    }
+  }
+
+  const hasScore = whiteScore !== undefined && Number.isFinite(whiteScore);
+  const effectiveScore = hasScore ? whiteScore : 0;
+  const scoreText = hasScore ? formatScore(effectiveScore) : "—";
 
   const topEvalEl = $("topPlayerEval");
   const bottomEvalEl = $("bottomPlayerEval");
 
   if (state.flipped) {
-    if (topEvalEl) topEvalEl.textContent = currentEval ? scoreText : "—";
-    if (bottomEvalEl) bottomEvalEl.textContent = currentEval ? formatScore(-whiteScore) : "—";
+    if (topEvalEl) topEvalEl.textContent = hasScore ? scoreText : "—";
+    if (bottomEvalEl) bottomEvalEl.textContent = hasScore ? formatScore(-effectiveScore) : "—";
   } else {
-    if (topEvalEl) topEvalEl.textContent = currentEval ? formatScore(-whiteScore) : "—";
-    if (bottomEvalEl) bottomEvalEl.textContent = currentEval ? scoreText : "—";
+    if (topEvalEl) topEvalEl.textContent = hasScore ? formatScore(-effectiveScore) : "—";
+    if (bottomEvalEl) bottomEvalEl.textContent = hasScore ? scoreText : "—";
   }
 
   // Update Vertical Eval Bar
@@ -378,30 +397,51 @@ function updateEvaluationDisplay() {
   const evalBarFill = $("evalBarWhite");
   const evalBarScore = $("evalBarScore");
 
-  if (!currentEval || !Number.isFinite(whiteScore)) {
+  if (state.flipped) {
+    evalBar.classList.add("flipped");
+  } else {
+    evalBar.classList.remove("flipped");
+  }
+
+  if (!hasScore) {
     evalBarFill.style.height = "50%";
     evalBarScore.textContent = "0.0";
     evalBar.classList.remove("black-winning");
+    evalBarScore.style.top = "auto";
+    evalBarScore.style.bottom = "6px";
+    evalBarScore.style.color = "#17241c";
     return;
   }
 
-  // Convert pawn score to percentage: 0.0 -> 50%
-  // Using sigmoid / capped linear scale
-  let pct = 50 + (whiteScore * 6.5);
-  if (whiteScore > 8) pct = 98;
-  if (whiteScore < -8) pct = 2;
-  pct = Math.max(2, Math.min(98, pct));
-
-  // If flipped, reverse bar
-  const finalFill = state.flipped ? (100 - pct) : pct;
-  evalBarFill.style.height = `${finalFill}%`;
-  evalBarScore.textContent = formatEvalBarScore(whiteScore);
-
-  if (whiteScore < 0) {
-    evalBar.classList.add("black-winning");
+  // Check for forced mate: Math.abs >= 9
+  const isMate = Math.abs(effectiveScore) >= 9;
+  let pct;
+  if (isMate) {
+    // Forced mate fills the eval bar completely (100% for White, 0% for Black)
+    pct = effectiveScore > 0 ? 100 : 0;
   } else {
-    evalBar.classList.remove("black-winning");
+    // Regular evaluation: smooth scale, capped between 4% and 96%
+    pct = 50 + (effectiveScore * 6.5);
+    pct = Math.max(4, Math.min(96, pct));
   }
+
+  evalBarFill.style.height = `${pct}%`;
+  evalBarScore.textContent = formatEvalBarScore(effectiveScore);
+
+  // Position score on winning side of eval bar
+  const isWhiteWinning = effectiveScore >= 0;
+  const isScoreAtTop = state.flipped ? isWhiteWinning : !isWhiteWinning;
+  const isScoreOnWhite = isWhiteWinning;
+
+  if (isScoreAtTop) {
+    evalBarScore.style.top = "6px";
+    evalBarScore.style.bottom = "auto";
+  } else {
+    evalBarScore.style.top = "auto";
+    evalBarScore.style.bottom = "6px";
+  }
+
+  evalBarScore.style.color = isScoreOnWhite ? "#17241c" : "#ffffff";
 }
 
 function renderMoves() {
@@ -488,6 +528,7 @@ window.addEventListener("keydown", e => {
     state.flipped = !state.flipped;
     updatePlayerHeaders();
     renderBoard(state.cursor);
+    renderSummary();
   }
 });
 
@@ -562,38 +603,18 @@ function renderFeedback(result) {
 function updateAnalysisProgress(current, total, statusText, isDone = false, isStopped = false) {
   const pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
 
-  const box = $("summaryProgressBarBox");
-  const fill = $("summaryProgressBarFill");
-  const pctText = $("progressPercentageText");
-  const statusLabel = $("progressStatusLabel");
-  const detailText = $("progressDetailText");
   const dockFill = $("dockProgressBarFill");
   const reviewProgress = $("reviewProgress");
 
-  if (fill) fill.style.width = `${pct}%`;
   if (dockFill) dockFill.style.width = `${pct}%`;
-  if (pctText) pctText.textContent = `${pct}%`;
-
-  if (box) {
-    box.classList.toggle("running", !isDone && !isStopped && current > 0 && current < total);
-    box.classList.toggle("completed", isDone);
-  }
 
   if (isDone) {
-    if (statusLabel) statusLabel.textContent = "Review Complete";
-    if (detailText) detailText.textContent = `All ${total} half-moves analyzed (100%)`;
     if (reviewProgress) reviewProgress.textContent = `100% · Complete (${total} moves)`;
   } else if (isStopped) {
-    if (statusLabel) statusLabel.textContent = "Analysis Stopped";
-    if (detailText) detailText.textContent = `Stopped at ${current}/${total} moves (${pct}%)`;
     if (reviewProgress) reviewProgress.textContent = `Stopped · ${pct}% (${current}/${total})`;
   } else if (current === 0) {
-    if (statusLabel) statusLabel.textContent = "Analysis Progress";
-    if (detailText) detailText.textContent = total > 0 ? `0 of ${total} moves analyzed` : "Load a game to start analysis";
     if (reviewProgress) reviewProgress.textContent = total > 0 ? `${total} moves loaded` : "Not analyzed";
   } else {
-    if (statusLabel) statusLabel.textContent = statusText || "Analyzing game…";
-    if (detailText) detailText.textContent = `Analyzing move ${current} of ${total} (${pct}%)`;
     if (reviewProgress) reviewProgress.textContent = `${pct}% · ${current}/${total}`;
   }
 }
@@ -602,53 +623,75 @@ function renderSummary() {
   const whiteMoves = state.results.filter((_, i) => i % 2 === 0);
   const blackMoves = state.results.filter((_, i) => i % 2 !== 0);
 
-  const whiteAcc = calculateAccuracy(whiteMoves);
-  const blackAcc = calculateAccuracy(blackMoves);
+  const completed = state.results.filter(Boolean).length;
+  const isComplete = !state.running && !state.stopRequested && Boolean(state.isAnalyzed || (state.moves.length > 0 && completed === state.moves.length));
 
-  const whiteRating = calculateEstimatedRating(whiteMoves, whiteAcc, state.headers.WhiteElo);
-  const blackRating = calculateEstimatedRating(blackMoves, blackAcc, state.headers.BlackElo);
+  if (isComplete) {
+    const whiteAcc = calculateAccuracy(whiteMoves);
+    const blackAcc = calculateAccuracy(blackMoves);
 
-  $("summaryWhiteAcc").textContent = whiteMoves.length ? `${whiteAcc}%` : "—";
-  $("summaryBlackAcc").textContent = blackMoves.length ? `${blackAcc}%` : "—";
+    const whiteRating = calculateEstimatedRating(whiteMoves, whiteAcc, state.headers.WhiteElo);
+    const blackRating = calculateEstimatedRating(blackMoves, blackAcc, state.headers.BlackElo);
 
-  if ($("summaryWhiteRating")) {
-    $("summaryWhiteRating").textContent = whiteMoves.length ? whiteRating : "—";
-  }
-  if ($("summaryBlackRating")) {
-    $("summaryBlackRating").textContent = blackMoves.length ? blackRating : "—";
-  }
+    if ($("summaryWhiteAcc")) $("summaryWhiteAcc").textContent = `${whiteAcc}%`;
+    if ($("summaryBlackAcc")) $("summaryBlackAcc").textContent = `${blackAcc}%`;
 
-  // Show accuracy and estimated rating on player bars
-  if (whiteMoves.length) {
+    if ($("summaryWhiteRating")) {
+      $("summaryWhiteRating").textContent = whiteRating;
+    }
+    if ($("summaryBlackRating")) {
+      $("summaryBlackRating").textContent = blackRating;
+    }
+
+    // Show accuracy and estimated rating on player bars
     if (state.flipped) {
-      $("topPlayerAccuracy").textContent = `${whiteAcc}%`;
-      $("topPlayerAccuracy").style.display = "inline-block";
+      if ($("topPlayerAccuracy")) {
+        $("topPlayerAccuracy").textContent = `${whiteAcc}%`;
+        $("topPlayerAccuracy").style.display = "inline-block";
+      }
       if ($("topPlayerRatingEstimate")) {
         $("topPlayerRatingEstimate").textContent = `Est. ${whiteRating}`;
         $("topPlayerRatingEstimate").style.display = "inline-block";
       }
 
-      $("bottomPlayerAccuracy").textContent = `${blackAcc}%`;
-      $("bottomPlayerAccuracy").style.display = "inline-block";
+      if ($("bottomPlayerAccuracy")) {
+        $("bottomPlayerAccuracy").textContent = `${blackAcc}%`;
+        $("bottomPlayerAccuracy").style.display = "inline-block";
+      }
       if ($("bottomPlayerRatingEstimate")) {
         $("bottomPlayerRatingEstimate").textContent = `Est. ${blackRating}`;
         $("bottomPlayerRatingEstimate").style.display = "inline-block";
       }
     } else {
-      $("topPlayerAccuracy").textContent = `${blackAcc}%`;
-      $("topPlayerAccuracy").style.display = "inline-block";
+      if ($("topPlayerAccuracy")) {
+        $("topPlayerAccuracy").textContent = `${blackAcc}%`;
+        $("topPlayerAccuracy").style.display = "inline-block";
+      }
       if ($("topPlayerRatingEstimate")) {
         $("topPlayerRatingEstimate").textContent = `Est. ${blackRating}`;
         $("topPlayerRatingEstimate").style.display = "inline-block";
       }
 
-      $("bottomPlayerAccuracy").textContent = `${whiteAcc}%`;
-      $("bottomPlayerAccuracy").style.display = "inline-block";
+      if ($("bottomPlayerAccuracy")) {
+        $("bottomPlayerAccuracy").textContent = `${whiteAcc}%`;
+        $("bottomPlayerAccuracy").style.display = "inline-block";
+      }
       if ($("bottomPlayerRatingEstimate")) {
         $("bottomPlayerRatingEstimate").textContent = `Est. ${whiteRating}`;
         $("bottomPlayerRatingEstimate").style.display = "inline-block";
       }
     }
+  } else {
+    // Only show predicted rating and accuracy after complete analysis
+    if ($("summaryWhiteAcc")) $("summaryWhiteAcc").textContent = "—";
+    if ($("summaryBlackAcc")) $("summaryBlackAcc").textContent = "—";
+    if ($("summaryWhiteRating")) $("summaryWhiteRating").textContent = "—";
+    if ($("summaryBlackRating")) $("summaryBlackRating").textContent = "—";
+
+    if ($("topPlayerAccuracy")) $("topPlayerAccuracy").style.display = "none";
+    if ($("topPlayerRatingEstimate")) $("topPlayerRatingEstimate").style.display = "none";
+    if ($("bottomPlayerAccuracy")) $("bottomPlayerAccuracy").style.display = "none";
+    if ($("bottomPlayerRatingEstimate")) $("bottomPlayerRatingEstimate").style.display = "none";
   }
 
   // Count classifications
@@ -662,14 +705,12 @@ function renderSummary() {
 
     rowsHtml += `
       <div class="breakdown-row">
+        <span class="breakdown-count white-count ${wCount === 0 ? "zero" : ""}" title="White">${wCount}</span>
         <div class="breakdown-badge-name">
           <span class="move-sign ${cls.key}" style="background-color: ${cls.color}; color: ${cls.textColor};">${cls.sign}</span>
-          <span>${cls.name}</span>
+          <span class="breakdown-name">${cls.name}</span>
         </div>
-        <div class="breakdown-counts">
-          <span>${wCount}</span>
-          <span>${bCount}</span>
-        </div>
+        <span class="breakdown-count black-count ${bCount === 0 ? "zero" : ""}" title="Black">${bCount}</span>
       </div>`;
   }
   $("breakdownTable").innerHTML = rowsHtml;
@@ -775,6 +816,7 @@ async function startReview() {
   if (!state.moves.length || state.running) return;
   state.running = true;
   state.stopRequested = false;
+  state.isAnalyzed = false;
   state.results = [];
   state.analyses = new Array(state.positions.length);
 
