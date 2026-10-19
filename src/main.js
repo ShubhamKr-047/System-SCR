@@ -1,6 +1,7 @@
 import { Chess } from "chess.js";
 import { PIECE_IMAGES } from "./pieces.js";
 import { CLASSIFICATIONS, classifyMove, calculateAccuracy, calculateEstimatedRating, isMaterialSacrifice } from "./classifications.js";
+import { getApiKey, setApiKey, hasApiKey, getCachedCoaching, generateCoaching } from "./gemini.js";
 import "./style.css";
 
 const $ = (id) => document.getElementById(id);
@@ -233,6 +234,72 @@ if (drawerLoadBtn) {
       if (pasteDrawer) pasteDrawer.style.display = "none";
       togglePasteBtn?.classList.remove("active");
       closeHamburger();
+    }
+  });
+}
+
+// Gemini AI Settings Wiring
+function updateGeminiUi() {
+  const hasKey = hasApiKey();
+  const statusEl = $("geminiStatus");
+  const inputEl = $("geminiApiKey");
+  const clearBtn = $("clearGeminiKey");
+
+  if (statusEl) {
+    statusEl.className = hasKey ? "gemini-status-dot on" : "gemini-status-dot off";
+    statusEl.title = hasKey ? "Gemini AI Coach Active (Google AI Studio)" : "Gemini AI Coach Disabled";
+  }
+  if (inputEl) {
+    inputEl.value = getApiKey();
+  }
+  if (clearBtn) {
+    clearBtn.style.display = hasKey ? "inline-flex" : "none";
+  }
+}
+
+function openGeminiSettings() {
+  if (hamburgerMenu) hamburgerMenu.style.display = "block";
+  if (hamburgerBtn) {
+    hamburgerBtn.classList.add("active");
+    hamburgerBtn.setAttribute("aria-expanded", "true");
+  }
+  $("geminiApiKey")?.focus();
+}
+
+const saveGeminiKeyBtn = $("saveGeminiKey");
+if (saveGeminiKeyBtn) {
+  saveGeminiKeyBtn.addEventListener("click", () => {
+    const val = $("geminiApiKey")?.value || "";
+    setApiKey(val);
+    updateGeminiUi();
+    if (val.trim()) {
+      setStatus("Gemini API key saved! AI Coach is active.");
+    } else {
+      setStatus("Gemini API key removed.");
+    }
+    if (state.cursor > 0 && state.results[state.cursor - 1]) {
+      renderFeedback(state.results[state.cursor - 1]);
+    }
+  });
+}
+
+const clearGeminiKeyBtn = $("clearGeminiKey");
+if (clearGeminiKeyBtn) {
+  clearGeminiKeyBtn.addEventListener("click", () => {
+    setApiKey("");
+    updateGeminiUi();
+    setStatus("Gemini API key cleared.");
+    if (state.cursor > 0 && state.results[state.cursor - 1]) {
+      renderFeedback(state.results[state.cursor - 1]);
+    }
+  });
+}
+
+const geminiApiKeyInput = $("geminiApiKey");
+if (geminiApiKeyInput) {
+  geminiApiKeyInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      saveGeminiKeyBtn?.click();
     }
   });
 }
@@ -550,6 +617,218 @@ function formatEvalBarScore(score) {
   return Math.abs(score).toFixed(1);
 }
 
+function getLocalDetailedFeedback(result) {
+  if (!result) return { whyText: "", tipText: "", concept: "" };
+
+  const pieceNames = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
+  const isWhite = result.moveColor === "w" || (result.ply !== undefined ? result.ply % 2 === 0 : false);
+  const moverName = isWhite ? "White" : "Black";
+  const opponentName = isWhite ? "Black" : "White";
+  const pName = pieceNames[result.playedPiece?.toLowerCase()] || "piece";
+  const toSq = result.to || "";
+  const bestSan = result.bestSan;
+  const punishSan = result.punishSan;
+  const punishPv = result.punishPv;
+  const punishDetails = result.punishDetails;
+  const bestDetails = result.bestDetails;
+
+  const isDirectHang = Boolean(punishDetails && punishDetails.captured && punishDetails.to === result.to);
+  const isOtherHang = Boolean(punishDetails && punishDetails.captured && punishDetails.to !== result.to);
+  const isMate = Boolean(punishDetails && (punishDetails.san?.endsWith("#") || Math.abs(result.afterWhite) >= 9.5));
+  const isCheck = Boolean(punishDetails && punishDetails.san?.endsWith("+"));
+
+  let moveDesc = "";
+  if (result.san === "O-O") {
+    moveDesc = `${moverName} castled kingside (O-O).`;
+  } else if (result.san === "O-O-O") {
+    moveDesc = `${moverName} castled queenside (O-O-O).`;
+  } else if (result.capturedPiece) {
+    const capName = pieceNames[result.capturedPiece?.toLowerCase()] || "piece";
+    moveDesc = `${moverName} played ${result.san}, capturing ${opponentName}'s ${capName} on ${toSq} with the ${pName}.`;
+  } else {
+    moveDesc = `${moverName} played ${result.san}, advancing the ${pName} to ${toSq}.`;
+  }
+
+  let whyText = "";
+  let tipText = "";
+  let concept = "";
+
+  switch (result.key) {
+    case "blunder": {
+      let punishmentDesc = "";
+      if (isDirectHang) {
+        concept = "Hanging Piece";
+        punishmentDesc = `${moverName} moved the ${pName} to ${toSq}, but left it completely undefended! ${opponentName} can punish this immediately with <strong>${punishSan}</strong>, winning the ${pName} for free${punishPv ? ` (${punishPv})` : ''}.`;
+      } else if (isOtherHang) {
+        const hungPiece = pieceNames[punishDetails.captured?.toLowerCase()] || "piece";
+        concept = "Hanging Material";
+        punishmentDesc = `${moveDesc} However, this leaves the ${hungPiece} on ${punishDetails.to} completely unguarded! ${opponentName} can strike immediately with <strong>${punishSan}</strong>, winning material${punishPv ? ` (${punishPv})` : ''}.`;
+      } else if (isMate) {
+        concept = "Mating Threat";
+        punishmentDesc = `${moveDesc} This fatally exposes the king to an unstoppable mating attack! ${opponentName} has forced checkmate starting with <strong>${punishSan}</strong>${punishPv ? ` (${punishPv})` : ''}.`;
+      } else if (isCheck) {
+        concept = "Exposed King";
+        punishmentDesc = `${moveDesc} This walks directly into a dangerous check. ${opponentName} can punish this immediately with <strong>${punishSan}</strong>${punishPv ? ` (${punishPv})` : ''}, taking full control.`;
+      } else if (punishSan) {
+        concept = "Tactical Oversight";
+        punishmentDesc = `${moveDesc} A critical blunder that surrenders the initiative. ${opponentName} can punish this right away with <strong>${punishSan}</strong>${punishPv ? ` (${punishPv})` : ''}.`;
+      } else {
+        concept = "Tactical Blunder";
+        punishmentDesc = `${moveDesc} A critical error that hands ${opponentName} a decisive advantage.`;
+      }
+
+      let betterAlternative = "";
+      if (bestSan) {
+        if (bestDetails?.captured) {
+          const capName = pieceNames[bestDetails.captured?.toLowerCase()] || "piece";
+          betterAlternative = `Instead of ${result.san}, ${moverName} needed to play <strong>${bestSan}</strong> to capture the ${capName} on ${bestDetails.to}.`;
+        } else if (bestDetails?.piece === "k") {
+          betterAlternative = `Instead of ${result.san}, ${moverName} had to play <strong>${bestSan}</strong> to step the king out of danger and secure safety.`;
+        } else {
+          betterAlternative = `Instead of ${result.san}, ${moverName} had to play <strong>${bestSan}</strong> to keep pieces defended and prevent ${opponentName}'s threats.`;
+        }
+      }
+
+      whyText = `${punishmentDesc} ${betterAlternative}`;
+      tipText = isDirectHang
+        ? `Always run a quick "undefended piece check" before moving: is your destination square guarded? Does your opponent have an immediate capture?`
+        : `Whenever you make a move, pause to ask: what did my piece stop defending? Look for opponent checks, captures, and counter-threats.`;
+      break;
+    }
+
+    case "mistake": {
+      let mistakeDesc = "";
+      if (punishSan && (isDirectHang || isOtherHang)) {
+        const hungPiece = pieceNames[punishDetails.captured?.toLowerCase()] || "material";
+        concept = "Dropped Material";
+        mistakeDesc = `${moveDesc} This allows ${opponentName} to win material with <strong>${punishSan}</strong>.`;
+      } else if (punishSan && isCheck) {
+        concept = "King Weakness";
+        mistakeDesc = `${moveDesc} This gives ${opponentName} a dangerous check with <strong>${punishSan}</strong>, disorganizing ${moverName}'s pieces.`;
+      } else if (punishSan) {
+        concept = "Positional Slip";
+        mistakeDesc = `${moveDesc} This concession allows ${opponentName} to seize the upper hand with <strong>${punishSan}</strong>${punishPv ? ` (${punishPv})` : ''}.`;
+      } else {
+        concept = "Positional Mistake";
+        mistakeDesc = `${moveDesc} This compromises ${moverName}'s position and hands ${opponentName} control.`;
+      }
+
+      let betterAlternative = "";
+      if (bestSan) {
+        betterAlternative = `${moverName} should have chosen <strong>${bestSan}</strong> to maintain a solid, active position.`;
+      }
+
+      whyText = `${mistakeDesc} ${betterAlternative}`;
+      tipText = `Watch out for moves that surrender central control or let your opponent's pieces jump into active squares with tempo.`;
+      break;
+    }
+
+    case "miss": {
+      let missDesc = "";
+      if (bestDetails?.san?.endsWith("#")) {
+        concept = "Missed Checkmate";
+        missDesc = `${moveDesc} ${moverName} missed a forced checkmate! Playing <strong>${bestSan}</strong> would have ended the game on the spot.`;
+      } else if (bestDetails?.captured) {
+        const targetCap = pieceNames[bestDetails.captured?.toLowerCase()] || "piece";
+        concept = "Missed Material Win";
+        missDesc = `${moveDesc} ${moverName} missed a winning tactical opportunity! Finding <strong>${bestSan}</strong> would have won ${opponentName}'s ${targetCap} on ${bestDetails.to}.`;
+      } else if (bestDetails?.san?.endsWith("+")) {
+        concept = "Missed Tactical Blow";
+        missDesc = `${moveDesc} ${moverName} missed a decisive tactical attack. <strong>${bestSan}</strong> would have shattered ${opponentName}'s king defenses.`;
+      } else {
+        concept = "Missed Opportunity";
+        missDesc = `${moveDesc} ${moverName} missed a chance to capitalize decisively. Playing <strong>${bestSan}</strong> would have kept crushing pressure on ${opponentName}.`;
+      }
+
+      whyText = `${missDesc} Instead, the position slips back toward equality.`;
+      tipText = `Whenever the opponent's king or pieces look vulnerable, always calculate every check and forcing capture first before choosing a quiet move.`;
+      break;
+    }
+
+    case "inaccuracy": {
+      concept = "Minor Inaccuracy";
+      whyText = `${moveDesc} A slightly imprecise move that lets ${opponentName} equalize or relieve pressure. The engine preferred <strong>${bestSan || "a sharper line"}</strong> to keep active control and maintain tempo.`;
+      tipText = `Compare your move with ${bestSan || 'the engine suggestion'}: notice how the engine continuation coordinates more aggressively toward central outposts.`;
+      break;
+    }
+
+    case "brilliant": {
+      concept = "Tactical Sacrifice";
+      const sacrificeNote = result.isSacrifice
+        ? `A brilliant material sacrifice! ${moverName} boldly gives up the ${pName} to blow open ${opponentName}'s defenses and launch an unstoppable attack.`
+        : `A brilliant tactical strike that completely paralyzes ${opponentName}'s position.`;
+      const refutationNote = punishSan
+        ? ` Even if ${opponentName} tries to respond with ${punishSan}, ${moverName}'s continuation is totally winning.`
+        : ``;
+      whyText = `${moveDesc} ${sacrificeNote}${refutationNote}`;
+      tipText = `Sacrifices that decisively expose the enemy king require calculating all forced responses. Superb tactical vision!`;
+      break;
+    }
+
+    case "great": {
+      concept = "Critical Find";
+      whyText = `${moveDesc} A critical continuation! In a high-pressure position, ${result.san} was the only move that maintains the initiative or prevents ${opponentName} from turning the tables.`;
+      tipText = `When under tactical tension, finding the single winning resource separates master games from missed opportunities.`;
+      break;
+    }
+
+    case "best": {
+      concept = "Optimal Move";
+      whyText = `${moveDesc} Stockfish's top engine choice. Maximizes piece activity, maintains central harmony, and leaves ${opponentName} with zero counterplay.`;
+      tipText = `Consistent best moves compound pressure over time. Notice how seamlessly this aligns with king safety and piece coordination.`;
+      break;
+    }
+
+    case "excellent": {
+      concept = "Strong Continuation";
+      whyText = `${moveDesc} A very strong practical choice. Retains full control and keeps the position healthy, nearly identical in strength to ${bestSan || "the engine line"}.`;
+      tipText = `Practical moves that keep your initiative intact are just as effective as engine top choices.`;
+      break;
+    }
+
+    case "good": {
+      concept = "Solid Move";
+      whyText = `${moveDesc} A sound and sensible move that continues piece development and keeps the position solid.`;
+      tipText = `Look for opportunities to transition from solid development into active threats against weak squares in the opponent's camp.`;
+      break;
+    }
+
+    case "book": {
+      concept = "Opening Theory";
+      whyText = `${moveDesc} Standard grandmaster opening theory. Follows established master principles for early piece development and king safety.`;
+      tipText = `In the opening, focus on rapid development, central control, and king safety before launching premature attacks.`;
+      break;
+    }
+
+    default: {
+      concept = "Move Analysis";
+      whyText = `${moveDesc} The engine preferred ${bestSan || "a different continuation"}.`;
+      tipText = `Analyze the difference between this move and the engine recommendation ${bestSan || ''}.`;
+    }
+  }
+
+  return { whyText, tipText, concept };
+}
+
+function renderAiCoachCardHtml(coaching) {
+  if (!coaching) return "";
+  const conceptHtml = coaching.concept
+    ? `<span class="ai-concept-badge">⚡ ${esc(coaching.concept)}</span>`
+    : "";
+
+  return `
+    <div id="aiCoachSection" class="ai-coach-card">
+      <div class="ai-coach-header">
+        <div class="ai-coach-title">
+          <span class="ai-sparkle-icon">✦</span>
+          <span>Gemini AI Coach</span>
+        </div>
+        ${conceptHtml}
+      </div>
+      <p class="ai-coach-why">${esc(coaching.why || "")}</p>
+    </div>`;
+}
+
 function renderFeedback(result) {
   if (!result) {
     $("feedbackContent").innerHTML = `
@@ -557,6 +836,35 @@ function renderFeedback(result) {
         Select a move after analysis to view its evaluation, classification, and coaching notes.
       </div>`;
     return;
+  }
+
+  const local = getLocalDetailedFeedback(result);
+  const beforeFen = result.beforeFen || (state.cursor > 0 ? state.positions[state.cursor - 1]?.fen : "");
+  const cachedAi = getCachedCoaching(result, beforeFen);
+
+  let aiSectionHtml = "";
+  if (hasApiKey()) {
+    if (cachedAi) {
+      aiSectionHtml = renderAiCoachCardHtml(cachedAi);
+    } else {
+      aiSectionHtml = `
+        <div id="aiCoachSection" class="ai-coach-loading">
+          <div class="ai-loading-spinner"></div>
+          <span>Analyzing position with Gemini AI Coach...</span>
+        </div>`;
+    }
+  } else {
+    aiSectionHtml = `
+      <div class="ai-coach-banner">
+        <div class="ai-banner-left">
+          <span class="ai-banner-icon">✦</span>
+          <div class="ai-banner-text">
+            <strong>Unlock Grandmaster AI Explanations</strong>
+            Connect free Google Gemini for deep natural-language move coaching.
+          </div>
+        </div>
+        <button id="openAiSettingsBtn" class="ai-banner-btn" type="button">Connect AI</button>
+      </div>`;
   }
 
   $("feedbackContent").innerHTML = `
@@ -569,35 +877,41 @@ function renderFeedback(result) {
       </div>
     </div>
 
-    <div class="eval-cards">
-      <div class="eval-card">
-        <span>Eval before</span>
-        <strong>${esc(formatScore(result.beforeWhite))}</strong>
-      </div>
-      <div class="eval-card">
-        <span>Eval after</span>
-        <strong>${esc(formatScore(result.afterWhite))}</strong>
-      </div>
-      <div class="eval-card">
-        <span>Advantage loss</span>
-        <strong>${result.lossCp > 900 ? "Mate swing" : `${(result.lossCp / 100).toFixed(2)} pawns`}</strong>
-      </div>
-    </div>
+    ${aiSectionHtml}
 
     <div class="feedback-block">
-      <h3>Why this classification?</h3>
-      <p>${esc(result.explanation)}</p>
+      <div class="feedback-block-header">
+        <h3>Tactical & Positional Breakdown</h3>
+        <span class="feedback-concept-pill">${esc(local.concept)}</span>
+      </div>
+      <p>${local.whyText}</p>
     </div>
 
     <div class="feedback-block">
       <h3>Engine’s recommended continuation</h3>
       <p class="pv-line">${esc(result.pv || "No continuation reported.")}</p>
-    </div>
-
-    <div class="feedback-block">
-      <h3>Coaching Key</h3>
-      <p>${esc(result.coachingTip)}</p>
     </div>`;
+
+  const openAiBtn = $("openAiSettingsBtn");
+  if (openAiBtn) {
+    openAiBtn.addEventListener("click", openGeminiSettings);
+  }
+
+  if (hasApiKey() && !cachedAi) {
+    const targetPly = result.ply;
+    const targetSan = result.san;
+    generateCoaching(result, beforeFen).then(coaching => {
+      const currentActive = state.cursor > 0 ? state.results[state.cursor - 1] : null;
+      if (currentActive && currentActive.ply === targetPly && currentActive.san === targetSan) {
+        const aiSec = $("aiCoachSection");
+        if (aiSec && coaching) {
+          aiSec.outerHTML = renderAiCoachCardHtml(coaching);
+        } else if (aiSec && !coaching) {
+          aiSec.style.display = "none";
+        }
+      }
+    });
+  }
 }
 
 function updateAnalysisProgress(current, total, statusText, isDone = false, isStopped = false) {
@@ -895,6 +1209,43 @@ async function startReview() {
       });
 
       const bestSan = convertPvToSan(beforeFen, before.bestmove);
+
+      // Opponent's punishing response and continuation
+      let punishSan = "";
+      let punishPv = "";
+      let punishDetails = null;
+      if (after?.bestmove) {
+        punishSan = convertPvToSan(afterFen, after.bestmove);
+        punishPv = after.pv ? convertPvToSan(afterFen, after.pv) : "";
+        try {
+          const ch = new Chess(afterFen);
+          const u = after.bestmove;
+          if (u && u.length >= 4) {
+            punishDetails = ch.move({
+              from: u.slice(0, 2),
+              to: u.slice(2, 4),
+              promotion: u[4] || "q"
+            });
+          }
+        } catch {}
+      }
+
+      // Player's best move details
+      let bestDetails = null;
+      if (before?.bestmove) {
+        try {
+          const ch = new Chess(beforeFen);
+          const u = before.bestmove;
+          if (u && u.length >= 4) {
+            bestDetails = ch.move({
+              from: u.slice(0, 2),
+              to: u.slice(2, 4),
+              promotion: u[4] || "q"
+            });
+          }
+        } catch {}
+      }
+
       let coachingTip = "";
       if (classificationObj.key === "brilliant") {
         coachingTip = `Brilliant play! You found a sharp tactical idea, sacrificing material to seize a decisive advantage.`;
@@ -918,6 +1269,7 @@ async function startReview() {
         ply: i,
         san: playedMove.san,
         color: mover,
+        moveColor: mover,
         moveNo: `${Math.floor(i / 2) + 1}${mover === "w" ? "." : "…"}` ,
         beforeWhite,
         afterWhite,
@@ -931,6 +1283,18 @@ async function startReview() {
         coachingTip,
         pv: before.pv ? convertPvToSan(beforeFen, before.pv) : "",
         bestUci: before.bestmove,
+        bestSan,
+        bestDetails,
+        punishSan,
+        punishPv,
+        punishDetails,
+        playedPiece: playedMove.piece,
+        capturedPiece: playedMove.captured,
+        from: playedMove.from,
+        to: playedMove.to,
+        isSacrifice,
+        beforeFen,
+        afterFen,
         playedUci
       };
 
@@ -1028,4 +1392,5 @@ async function autoImportPendingGame() {
   }
 }
 updatePlayerHeaders();
+updateGeminiUi();
 autoImportPendingGame();

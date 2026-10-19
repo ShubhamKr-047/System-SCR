@@ -271,6 +271,25 @@
                     <option value="1000">Deep · 1.0s</option>
                   </select>
                 </div>
+
+                <!-- AI COACHING (GEMINI API KEY) -->
+                <div class="menu-speed-row" style="border-top: 1px solid var(--line-subtle); margin-top: 4px; padding-top: 8px;">
+                  <span class="menu-speed-label">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                    <span>AI Coach</span>
+                  </span>
+                  <span id="geminiStatus" class="gemini-status-dot off" title="Gemini AI coaching disabled"></span>
+                </div>
+                <div class="menu-api-row">
+                  <input id="geminiApiKey" type="password" class="menu-api-input" placeholder="Gemini API key" autocomplete="off" spellcheck="false" />
+                  <button id="saveGeminiKey" class="dock-btn primary-sm" type="button" style="flex-shrink:0;">Save</button>
+                  <button id="clearGeminiKey" class="sidebar-nav-btn" type="button" title="Clear API key" style="width:28px;height:28px;font-size:11px;display:none;padding:0;">✕</button>
+                </div>
+                <div class="menu-api-help">
+                  Free at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio ↗</a>
+                </div>
               </div>
 
               <!-- COLLAPSIBLE PASTE DRAWER INSIDE MENU -->
