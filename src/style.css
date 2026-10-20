@@ -1278,6 +1278,7 @@ body.chesscom-theme {
 /* RIGHT: ANALYSIS & MOVE LIST SIDEBAR */
 .sidebar-panel {
   flex: 1;
+  min-height: 0;
   max-width: 460px;
   min-width: 330px;
   display: flex;
@@ -1298,9 +1299,14 @@ body.chesscom-theme {
   margin-bottom: 10px;
   max-height: 65%;
   overflow-y: auto;
-  flex-shrink: 0;
+  flex-shrink: 1;
   min-height: 0;
   scrollbar-width: thin;
+}
+
+.feedback-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .feedback-empty {
@@ -1342,6 +1348,8 @@ body.chesscom-theme {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .feedback-badge {
@@ -1429,6 +1437,8 @@ body.chesscom-theme {
 }
 
 .feedback-concept-pill {
+  display: inline-block;
+  max-width: 100%;
   font-size: 10px;
   font-weight: 700;
   padding: 2px 7px;
@@ -1694,6 +1704,7 @@ body.chesscom-theme {
 
 /* SIDEBAR TABS */
 .sidebar-tabs {
+  flex-shrink: 0;
   display: flex;
   gap: 4px;
   border-bottom: 1px solid var(--line-subtle);
@@ -1718,13 +1729,14 @@ body.chesscom-theme {
 
 /* MOVE LIST TABLE */
 .move-list-wrapper {
-  flex: 1;
+  flex: 1 0 140px;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-height: 140px;
 }
 
 .move-table-header {
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: 32px 1fr 1fr;
   gap: 4px;
@@ -1747,7 +1759,7 @@ body.chesscom-theme {
   background-color: var(--bg-card);
   border: 1px solid var(--line-subtle);
   padding: 4px;
-  min-height: 160px;
+  min-height: 0;
 }
 
 .move-list::-webkit-scrollbar {
@@ -1843,7 +1855,8 @@ body.chesscom-theme {
 
 /* SUMMARY PANEL (Game review accuracy & breakdown) */
 .summary-panel {
-  flex: 1;
+  flex: 1 0 140px;
+  min-height: 140px;
   overflow-y: auto;
   background-color: var(--bg-card);
   border: 1px solid var(--line-subtle);
@@ -2186,8 +2199,10 @@ body.chesscom-theme {
     height: min(70vh, 70vw, 560px);
   }
   .sidebar-panel {
+    flex: none;
     width: 100%;
     max-width: 600px;
     height: 500px;
+    max-height: none;
   }
 }

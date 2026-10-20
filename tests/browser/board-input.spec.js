@@ -98,7 +98,7 @@ test("right-drag previews, toggles, recolors, and preserves annotations during e
   await drag(page, "g1", "f3", "right");
   await page.keyboard.up("Control");
   await expect(plans(page).locator(":is(line, path)")).toHaveCount(1);
-  await expect(plans(page).locator(":is(line, path)")).toHaveAttribute("stroke", "#ffa500");
+  await expect(plans(page).locator(":is(line, path)")).toHaveAttribute("stroke", "#fa412d");
   await page.keyboard.down("Alt");
   await drag(page, "c1", "h6", "right");
   await page.keyboard.up("Alt");

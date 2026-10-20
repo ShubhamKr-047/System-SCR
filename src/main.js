@@ -1315,7 +1315,9 @@ function feedbackBlock(title, text) {
 function renderFeedback(result) {
   const tree = state.tree;
   const node = tree?.current;
-  if (!feedbackTarget || feedbackTarget.tree !== tree || feedbackTarget.node !== node || feedbackTarget.result !== result) {
+  const samePosition = feedbackTarget?.tree === tree && feedbackTarget?.node === node && feedbackTarget?.result === result;
+  const scrollTop = samePosition ? $("feedbackContainer").scrollTop : 0;
+  if (!samePosition) {
     cancelPendingCoaching();
     feedbackTarget = { tree, node, result };
   }
@@ -1350,7 +1352,7 @@ function renderFeedback(result) {
   const bannerHtml = !hasKey
     ? `<div class="ai-coach-banner"><div class="ai-banner-text"><strong>About move explanations</strong>You're viewing local Stockfish-based feedback. Choose Gemini or Groq and add its API key in Settings to get tactical and positional explanations based on the board and Stockfish's recommended lines.</div>
         <button id="openAiSettingsBtn" class="ai-banner-btn" type="button">Settings</button></div>`
-    : `<button id="openAiSettingsBtn" style="display:none;" type="button" aria-hidden="true"></button>`;
+    : "";
 
   let promptHtml = "";
   let status = "";
@@ -1363,7 +1365,7 @@ function renderFeedback(result) {
       status = `<div id="aiCoachStatus" class="ai-coach-loading" role="status"><div class="ai-loading-spinner"></div>
         <span>${provider.name} is explaining this position. Local feedback remains available below.</span></div>`;
     } else if (coaching) {
-      status = "";
+      status = `<div id="aiCoachStatus" class="ai-feedback-status">Explained by ${esc(provider.name)} using Stockfish analysis.</div>`;
     } else if (hasKey) {
       const question = getMoveQuestion(result);
       promptHtml = `
@@ -1409,10 +1411,12 @@ function renderFeedback(result) {
   $("feedbackContent").innerHTML = `
     <div class="feedback-header-box ${esc(result.key)}"><div class="feedback-title-group">
       <span class="feedback-badge" style="background-color: ${result.color}; color: ${result.textColor};">${esc(result.sign)} ${esc(result.label)}</span>
-      <span class="feedback-move-text">${esc(result.moveNo)} ${esc(result.san)}</span></div></div>
+      <span class="feedback-move-text">${esc(result.moveNo)} ${esc(result.san)}</span></div>
+      ${hasKey ? '<button id="openAiSettingsBtn" class="ai-banner-btn" type="button">Settings</button>' : ""}</div>
     ${promptHtml}
     ${bannerHtml}
-    ${status}<div id="positionFeedback" data-source="${coaching ? providerId : "local"}">${body}</div>`;
+    ${status}<div id="positionFeedback" data-source="${coaching ? providerId : "local"}" aria-busy="${ai?.status === "pending"}">${body}</div>`;
+  $("feedbackContainer").scrollTop = scrollTop;
 
   $("openAiSettingsBtn")?.addEventListener("click", event => {
     event.stopPropagation();
@@ -1430,6 +1434,7 @@ function renderFeedback(result) {
     const promise = generateCoaching(result, beforeFen, { retry });
     // Render pending/loading state immediately when triggered
     renderFeedback(result);
+    $("feedbackContainer").focus({ preventScroll: true });
     promise.then(() => {
       if (getProvider() !== selectedProvider || getApiKey() !== key) return;
       updateAiUi(false);

@@ -257,5 +257,53 @@ test("book moves and forced moves do not ask for AI coaching or send requests", 
   expect(requests.get(page)).toHaveLength(0);
 });
 
+
+test("long explanations keep moves and footer separate and request AI only on demand", async ({ page }, info) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await key(page, "test-long");
+  await page.locator("#resetVariationBtn").click();
+  await play(page, "f2", "f3");
+  await expect(page.locator("#askAiCoachingBtn")).toBeVisible();
+  expect(requests.get(page)).toHaveLength(0);
+  await askAi(page);
+  await expect(page.locator("#aiCoachStatus")).toContainText("is explaining");
+  await expect(page.locator("#feedbackContainer")).toBeFocused();
+  await expect(local(page)).toBeVisible();
+  await expect(ai(page)).toContainText("central pawn tension");
+  expect(requests.get(page)).toHaveLength(1);
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    const dimensions = await page.evaluate(() => {
+      const rect = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
+      const feedback = document.querySelector("#feedbackContainer");
+      const list = document.querySelector("#moveList");
+      return { panel: rect(".sidebar-panel"), feedback: rect("#feedbackContainer"),
+        tabs: rect(".sidebar-tabs"), list: rect("#moveList"), footer: rect(".sidebar-footer"),
+        feedbackOverflow: feedback.scrollHeight - feedback.clientHeight,
+        horizontalOverflow: Math.max(feedback.scrollWidth - feedback.clientWidth, list.scrollWidth - list.clientWidth) };
+    });
+    await page.screenshot({ path: info.outputPath(`long-answer-${viewport.width}.png`), fullPage: true });
+    expect(dimensions.list.bottom, JSON.stringify(dimensions)).toBeLessThanOrEqual(dimensions.footer.top + 1);
+    expect(dimensions.footer.bottom).toBeLessThanOrEqual(dimensions.panel.bottom + 1);
+    expect(dimensions.feedback.bottom).toBeLessThanOrEqual(dimensions.tabs.top + 1);
+    expect(dimensions.feedback.height).toBeGreaterThanOrEqual(140);
+    expect(dimensions.list.height).toBeGreaterThanOrEqual(80);
+    expect(dimensions.feedbackOverflow).toBeGreaterThan(0);
+    expect(dimensions.horizontalOverflow).toBeLessThanOrEqual(1);
+    await page.locator("#tabSummary").click();
+    const summary = await page.locator("#summaryPanel").boundingBox();
+    const footer = await page.locator(".sidebar-footer").boundingBox();
+    expect(summary.y + summary.height).toBeLessThanOrEqual(footer.y + 1);
+    await page.locator("#tabMoves").click();
+  }
+  await page.locator("#feedbackContainer").evaluate(element => { element.scrollTop = 120; });
+  await page.keyboard.press("f");
+  await expect.poll(() => page.locator("#feedbackContainer").evaluate(element => element.scrollTop)).toBe(120);
+  // Layout changes and another position must not trigger another paid request.
+  await play(page, "c7", "c5");
+  await expect(local(page)).toBeVisible();
+  expect(requests.get(page)).toHaveLength(1);
+});
+
 });
 }

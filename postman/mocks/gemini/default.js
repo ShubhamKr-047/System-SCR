@@ -33,6 +33,13 @@ http.createServer(async (req, res) => {
     tip: "Check your opponent's best reply before committing to the move.",
     concept: "Piece activity"
   };
+  if (key === "test-long") {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const paragraph = "The knight supports the central pawn and helps protect the king while the opponent prepares a reply. ";
+    for (const field of ["why", "tactical", "positional", "recommendation", "tip"]) coaching[field] = paragraph.repeat(10);
+    coaching.positional += " LongToken" + "x".repeat(250);
+    coaching.concept = "A detailed explanation of central pawn tension and piece activity in this position";
+  }
   if (key === "test-html") coaching.why = '<img src=x onerror="window.aiInjected=true">';
   if (key === "test-malformed") coaching.tactical = { invalid: true };
   if (key === "test-blocked") return send(200, { promptFeedback: { blockReason: "SAFETY" } });
