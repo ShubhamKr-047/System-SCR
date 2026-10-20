@@ -180,7 +180,10 @@ export class BoardOverlay {
       for (const shape of squareMarks) {
         const sqEl = board.querySelector(`[data-square="${shape.from}"]`);
         if (sqEl) {
-          sqEl.classList.add(`highlight-${shape.brush || "orange"}`);
+          let brush = shape.brush || "orange";
+          if (brush === "orange") brush = "red";
+          else if (brush === "red") brush = "orange";
+          sqEl.classList.add(`highlight-${brush}`);
         }
       }
     }

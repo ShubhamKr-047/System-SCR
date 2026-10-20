@@ -1,4 +1,5 @@
 import { annotationBrush, squareAt } from "./board-overlay.js";
+import { playSound } from "./audio.js";
 
 // The board element stays mounted while squares are redrawn. Capture gestures
 // on that stable element so engine updates and outside-board drops are safe.
@@ -13,6 +14,20 @@ export class BoardInput {
     board.addEventListener("lostpointercapture", () => this.cancel());
     board.addEventListener("contextmenu", event => event.preventDefault());
     board.addEventListener("dragstart", event => event.preventDefault());
+    this.suppressContextMenu = false;
+    window.addEventListener("mousedown", event => {
+      if (this.gesture && this.gesture.button === 0 && event.button === 2) {
+        event.preventDefault();
+        this.suppressContextMenu = true;
+        this.cancel();
+      }
+    });
+    window.addEventListener("contextmenu", event => {
+      if (this.suppressContextMenu) {
+        event.preventDefault();
+        this.suppressContextMenu = false;
+      }
+    });
     window.addEventListener("blur", () => this.cancel());
     window.addEventListener("resize", () => this.cancel());
   }
@@ -22,6 +37,12 @@ export class BoardInput {
   }
 
   down(event) {
+    if (this.gesture && this.gesture.button === 0 && event.button === 2) {
+      event.preventDefault();
+      this.suppressContextMenu = true;
+      this.cancel();
+      return;
+    }
     if (event.isPrimary === false || ![0, 2].includes(event.button)) return;
     const context = this.context();
     const from = this.square(event);
@@ -33,6 +54,7 @@ export class BoardInput {
     if (drawing) this.clearSelection();
     else this.overlay.clear();
     this.gesture = {
+      button: event.button,
       type: drawing ? "draw" : "click", from, to: from,
       key: context.key, flipped: context.flipped, pointerId: event.pointerId,
       x: event.clientX, y: event.clientY, moved: false,
@@ -97,7 +119,11 @@ export class BoardInput {
       if (to) this.overlay.toggle({ from: gesture.from, to, brush: gesture.brush });
     } else if (gesture.type === "drag") {
       this.clearSelection();
-      if (to && gesture.legal.includes(to)) this.move(gesture.from, to);
+      if (to && gesture.legal.includes(to)) {
+        this.move(gesture.from, to);
+      } else {
+        playSound("illegal");
+      }
     } else if (!gesture.moved && to === gesture.from) this.click(to);
   }
 

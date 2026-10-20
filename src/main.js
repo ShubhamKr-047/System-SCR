@@ -8,6 +8,7 @@ import { analyzeMove } from "./analysis.js";
 import { BoardOverlay } from "./board-overlay.js";
 import { BoardInput } from "./board-input.js";
 import { evaluatePosition, legalBestMove } from "./position-analysis.js";
+import { playSound } from "./audio.js";
 import "./style.css";
 
 const $ = (id) => document.getElementById(id);
@@ -503,7 +504,11 @@ function refreshAnalysisView() {
     badge.textContent = result.sign;
     badge.title = `${result.label}: ${result.sign}`;
     square.append(badge);
-    square.classList.toggle("brilliant-move", result.key === "brilliant");
+    const isBrilliant = result.key === "brilliant";
+    square.classList.toggle("brilliant-move", isBrilliant);
+    if (isBrilliant) {
+      playSound("brilliant");
+    }
   }
 }
 
@@ -651,6 +656,7 @@ function executeUserMove(fromSq, toSq, promotion = "q") {
     switchTab("moves");
     renderBoard(node.ply);
   } catch (error) {
+    playSound("illegal");
     setStatus(`Could not play move: ${error.message}`, true);
   }
 }
@@ -687,10 +693,38 @@ function renderBoard(index) {
     state.tree.select(target);
   }
   syncActiveLine();
-  if (displayedNode !== state.tree.current || displayedFlipped !== state.flipped) {
+  const nodeChanged = displayedNode !== state.tree.current;
+  if (nodeChanged || displayedFlipped !== state.flipped) {
     boardInput.cancel();
     clearBoardSelection();
-    if (displayedNode !== state.tree.current) overlay.clear();
+    if (nodeChanged) {
+      overlay.clear();
+      const node = state.tree.current;
+      if (node?.move) {
+        const chessAfter = new Chess(node.fen);
+        const isGameOver = chessAfter.isGameOver();
+        const san = node.move.san || "";
+        const isCastle = san === "O-O" || san === "O-O-O" || (node.move.piece === "k" && Math.abs(node.move.from.charCodeAt(0) - node.move.to.charCodeAt(0)) === 2);
+
+        if (isGameOver) {
+          if (chessAfter.isCheckmate()) {
+            playSound("gameEnd");
+          } else {
+            playSound("draw");
+          }
+        } else if (node.result?.key === "brilliant") {
+          playSound("brilliant");
+        } else if (chessAfter.inCheck()) {
+          playSound("check");
+        } else if (isCastle) {
+          playSound("castle");
+        } else if (node.move.captured) {
+          playSound("capture");
+        } else {
+          playSound("move");
+        }
+      }
+    }
     displayedNode = state.tree.current;
     displayedFlipped = state.flipped;
   }
