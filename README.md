@@ -70,6 +70,23 @@ The Game Summary always describes the original game. Exploring alternatives pres
 
 Variations and their analyses remain available in the current review session. Loading another PGN or reloading the page clears them. Saving studies across sessions and exporting PGNs with variations are not included.
 
+## Moving pieces and planning on the board
+
+Click a piece and its destination, or drag it onto a legal square. Legal destinations appear while dragging. Dropping outside the board or on an illegal square cancels the move. Promotion opens the Queen/Rook/Bishop/Knight picker. Escape cancels an unfinished drag or drawing; navigation, board flipping, and game import also cancel active gestures.
+
+The engine's best-move arrow is translucent light blue. Selecting pieces leaves its analysis request running. If the engine cannot provide a legal suggestion, use **Retry** beside its status; terminal positions have no best-move arrow.
+
+Right-drag between any two squares to draw a planning arrow, or right-click a square to add a circle. Repeat an annotation to remove it. Drawing over the same endpoints with another color changes its color:
+
+| Modifier with right-click/drag | Color |
+| --- | --- |
+| None | Green |
+| Ctrl | Red |
+| Alt (or Meta) | Blue |
+| Ctrl + Alt | Yellow |
+
+Planning annotations remain visible while the engine updates and when you flip the board. Left-clicking the board, making a move, navigating to another position, or loading a game clears them. The best-move arrow toggle affects only the engine suggestion. Planning arrows do not change the game or start engine analysis.
+
 ## Development checks
 
 Use Node.js 22.20+ or a newer supported LTS release. After `npm ci`:
@@ -80,7 +97,7 @@ npx playwright install chromium firefox
 npm run test:browser
 ```
 
-Unit tests cover branching, return positions, special moves, shared move analysis, and engine queue cancellation/recovery. Browser tests build the extension and exercise the generated review page in Chromium and Firefox with the actual packaged Stockfish worker and WASM, including rapid exploration, nested variations, unchanged game summaries, and switching games during analysis.
+Unit tests cover branching, return positions, special moves, board coordinates, suggestion validation, and engine queue cancellation/recovery. Browser tests exercise the generated review page in Chromium and Firefox with the packaged Stockfish worker and WASM, including drag-and-drop, planning annotations, gesture cancellation, variations, and game summaries. Controlled delayed-worker tests also verify suggestion recovery and uninterrupted requests during piece selection.
 
 To load the extension itself in Firefox/Zen, run `npm run build`, open `about:debugging`, select **This Firefox > Load Temporary Add-on**, and choose `dist/manifest.json`.
 
