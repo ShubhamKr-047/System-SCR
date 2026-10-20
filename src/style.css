@@ -1296,12 +1296,50 @@ body.chesscom-theme {
 
 /* MOVE FEEDBACK CARD */
 .feedback-container {
-  margin-bottom: 10px;
+  margin-bottom: 0;
   max-height: 65%;
   overflow-y: auto;
   flex-shrink: 1;
   min-height: 0;
   scrollbar-width: thin;
+}
+
+.sidebar-panel.has-feedback-split .feedback-container {
+  flex: 0 0 var(--feedback-height);
+  max-height: none;
+}
+
+.feedback-splitter {
+  flex: 0 0 12px;
+  cursor: row-resize;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.feedback-splitter::after {
+  content: "";
+  width: 44px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--text-dim);
+}
+
+.feedback-splitter:hover::after,
+.feedback-splitter:focus-visible::after,
+.feedback-splitter.is-dragging::after {
+  background: var(--chess-green);
+}
+
+.feedback-splitter:focus-visible {
+  outline: 1px solid var(--chess-green);
+}
+
+body.resizing-feedback {
+  cursor: row-resize;
+  user-select: none;
 }
 
 .feedback-content {

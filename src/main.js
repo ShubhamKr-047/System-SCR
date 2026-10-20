@@ -9,9 +9,11 @@ import { BoardOverlay } from "./board-overlay.js";
 import { BoardInput } from "./board-input.js";
 import { evaluatePosition, legalBestMove } from "./position-analysis.js";
 import { playSound } from "./audio.js";
+import { initSidebarResize } from "./sidebar-resize.js";
 import "./style.css";
 
 const $ = (id) => document.getElementById(id);
+initSidebarResize();
 
 const state = {
   moves: [],
