@@ -37,7 +37,7 @@
   --badge-forced: #7d8c83;
 
   /* Board sizing */
-  --board-size: min(calc(100vh - 126px), 72vw, 820px);
+  --board-size: min(calc(100vh - 138px), 72vw, 820px);
 }
 
 * {
@@ -61,8 +61,8 @@ body.chesscom-theme {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 38px;
-  padding: 0 clamp(14px, 2vw, 24px);
+  height: 50px;
+  padding: 8px clamp(14px, 2vw, 24px);
   background-color: #181715;
   border-bottom: 1px solid var(--line-subtle);
 }
@@ -81,12 +81,6 @@ body.chesscom-theme {
   font-weight: 800;
   letter-spacing: -0.3px;
   color: #ffffff;
-}
-
-.brand-sub {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-weight: 600;
 }
 
 .engine-badge {
@@ -120,7 +114,7 @@ body.chesscom-theme {
   max-width: 1680px;
   margin: 4px auto 0;
   padding: 0 16px 8px;
-  height: calc(100vh - 44px);
+  height: calc(100vh - 56px);
   box-sizing: border-box;
 }
 
@@ -640,7 +634,6 @@ body.chesscom-theme {
 .board-import-hint { display: block; margin-top: 18px; color: var(--text-dim); font-size: 10px; line-height: 1.5; }
 
 @media (max-width: 600px) {
-  .brand-sub { display: none; }
   .board-import-piece { display: none; }
   .board-import-card > p { margin-bottom: 12px; }
   .board-import-hint { margin-top: 12px; }
