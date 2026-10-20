@@ -16,11 +16,11 @@
   --chess-green-hover: #96bc4b;
   --chess-green-active: #6f9d3f;
   
-  /* Chess.com Board Colors */
-  --board-light: #ebecd0;
-  --board-dark: #739552;
-  --board-light-hl: #f5f682;
-  --board-dark-hl: #b9ca43;
+  /* Lichess default brown board and yellow move highlights. */
+  --board-light: #f0d9b5;
+  --board-dark: #b58863;
+  --board-light-hl: #cdd26a;
+  --board-dark-hl: #aaa23b;
   --board-check: #e03c3c;
   
   /* Move Classification Colors */
@@ -753,6 +753,8 @@ body.chesscom-theme {
   bottom: 42px;
   right: 0;
   width: 270px;
+  max-height: 75vh;
+  overflow-y: auto;
   background-color: #23211e;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
@@ -877,7 +879,7 @@ body.chesscom-theme {
   border-color: var(--chess-green);
 }
 
-.gemini-status-dot {
+.ai-status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -885,12 +887,12 @@ body.chesscom-theme {
   transition: all 0.2s ease;
 }
 
-.gemini-status-dot.on {
+.ai-status-dot.on {
   background-color: #81b64c;
   box-shadow: 0 0 7px rgba(129, 182, 76, 0.9);
 }
 
-.gemini-status-dot.off {
+.ai-status-dot.off {
   background-color: #55534e;
 }
 
@@ -1201,6 +1203,11 @@ body.chesscom-theme {
 /* MOVE FEEDBACK CARD */
 .feedback-container {
   margin-bottom: 10px;
+  max-height: 65%;
+  overflow-y: auto;
+  flex-shrink: 0;
+  min-height: 0;
+  scrollbar-width: thin;
 }
 
 .feedback-empty {
@@ -1338,89 +1345,20 @@ body.chesscom-theme {
   border: 1px solid var(--line-subtle);
 }
 
-/* AI COACH CARD */
-.ai-coach-card {
-  margin-top: 10px;
-  padding: 12px;
-  border-radius: 8px;
-  background: linear-gradient(145deg, rgba(23, 29, 42, 0.95) 0%, rgba(17, 21, 29, 0.98) 100%);
-  border: 1px solid rgba(88, 166, 255, 0.35);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
-  position: relative;
-}
-
-.ai-coach-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.ai-coach-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: #79c0ff;
-}
-
-.ai-sparkle-icon {
-  font-size: 13px;
-  display: inline-block;
-  animation: sparklePulse 2.5s ease-in-out infinite alternate;
-}
-
-@keyframes sparklePulse {
-  0% { transform: scale(1) rotate(0deg); opacity: 0.85; filter: drop-shadow(0 0 1px #79c0ff); }
-  100% { transform: scale(1.18) rotate(12deg); opacity: 1; filter: drop-shadow(0 0 5px #79c0ff); }
-}
-
-.ai-concept-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(88, 166, 255, 0.16);
-  border: 1px solid rgba(88, 166, 255, 0.4);
-  color: #a5d6ff;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-}
-
-.ai-coach-why {
-  color: #e6edf3;
-  font-size: 12px;
-  line-height: 1.45;
-  margin: 0 0 8px;
-}
-
-.ai-coach-tip-box {
+.ai-feedback-status {
+  margin-top: 8px;
   padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border-left: 3px solid #58a6ff;
-  border-radius: 4px;
-}
-
-.ai-coach-tip-title {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   color: #a5d6ff;
-  margin-bottom: 2px;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
-.ai-coach-tip-box p {
-  margin: 0;
-  color: #d2a8ff;
-  font-size: 11.5px;
-  line-height: 1.4;
-}
+.ai-feedback-status.error { color: #e9b678; }
+.ai-feedback-status button { margin: 6px 0 0 6px; }
+.ai-status-dot.error { background: #e9b678; }
+#aiConnectionStatus { display: block; margin-top: 6px; }
+.ai-banner-text { overflow-wrap: anywhere; }
+.feedback-block-header { gap: 8px; flex-wrap: wrap; }
 
 /* AI LOADING STATE */
 .ai-coach-loading {
@@ -1450,7 +1388,7 @@ body.chesscom-theme {
   to { transform: rotate(360deg); }
 }
 
-/* AI BANNER PROMPT (WHEN NO KEY IS SET) */
+/* EXPLANATION GUIDANCE */
 .ai-coach-banner {
   margin-top: 10px;
   padding: 9px 12px;
@@ -1461,18 +1399,6 @@ body.chesscom-theme {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-}
-
-.ai-banner-left {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.ai-banner-icon {
-  color: #79c0ff;
-  font-size: 15px;
-  flex-shrink: 0;
 }
 
 .ai-banner-text {

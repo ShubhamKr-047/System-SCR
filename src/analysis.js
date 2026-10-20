@@ -134,7 +134,11 @@ export async function analyzeMove(node, evaluate, options) {
     isSacrifice,
     beforeFen,
     afterFen,
-    playedUci
+    playedUci,
+    engineEvidence: {
+      before: { score: beforeWhite, moveTime: before.moveTime, bestmove: before.bestmove, pv: before.pv || "" },
+      after: { score: afterWhite, moveTime: after.moveTime, bestmove: after.bestmove, pv: after.pv || "" }
+    }
   };
 
   return result;
