@@ -1,32 +1,30 @@
 import { Chess } from "chess.js";
 import { PIECE_IMAGES } from "./pieces.js";
-import { CLASSIFICATIONS, classifyMove, calculateAccuracy, calculateEstimatedRating, isMaterialSacrifice } from "./classifications.js";
+import { CLASSIFICATIONS, calculateAccuracy, calculateEstimatedRating } from "./classifications.js";
 import { getApiKey, setApiKey, hasApiKey, getCachedCoaching, generateCoaching } from "./gemini.js";
+import { GameTree, moveLabel } from "./game-tree.js";
+import { EngineQueue } from "./engine.js";
+import { analyzeMove } from "./analysis.js";
 import "./style.css";
 
 const $ = (id) => document.getElementById(id);
 
 const state = {
-  chess: new Chess(),
-  pgn: "",
   moves: [],
   positions: [],
   analyses: [],
   results: [],
   cursor: 0,
   flipped: false,
-  worker: null,
   running: false,
-  stopRequested: false,
-  pending: null,
-  timer: null,
   headers: {},
   selectedSquare: null,
   legalMoves: [],
   showBestMoveArrow: localStorage.getItem("zen-chess-show-arrow") !== "false",
-  originalPgn: "",
-  originalAnalyses: null,
-  originalResults: null,
+  tree: null,
+  line: [],
+  session: new AbortController(),
+  reviewController: null,
   isVariation: false
 };
 
@@ -48,23 +46,6 @@ function esc(s) {
   }[c]));
 }
 
-function parsePgn(pgn) {
-  const chess = new Chess();
-  chess.loadPgn(pgn, { strict: false });
-  const history = chess.history({ verbose: true });
-  if (!history.length) {
-    throw new Error("No moves found. Make sure this is a PGN for a completed game.");
-  }
-  const headers = chess.getHeaders();
-  const replay = new Chess();
-  const positions = [{ fen: replay.fen(), move: null }];
-  for (const move of history) {
-    replay.move(move.san);
-    positions.push({ fen: replay.fen(), move });
-  }
-  return { headers, moves: history, positions };
-}
-
 function readImport() {
   const pgn = $("pgnText").value.trim();
   if (!pgn) {
@@ -72,22 +53,19 @@ function readImport() {
     return;
   }
   try {
-    const parsed = parsePgn(pgn);
-    state.pgn = pgn;
-    state.originalPgn = pgn;
-    state.originalAnalyses = null;
-    state.originalResults = null;
-    state.isVariation = false;
+    const tree = new GameTree(pgn);
+    state.session.abort();
+    state.reviewController?.abort();
+    engine.clear();
+    clearTimeout(quickAnalysisTimer);
+    quickController?.abort();
+    state.session = new AbortController();
+    state.tree = tree;
+    state.headers = tree.headers;
+    state.running = false;
     state.selectedSquare = null;
     state.legalMoves = [];
-    if ($("resetVariationBtn")) $("resetVariationBtn").style.display = "none";
-    state.headers = parsed.headers;
-    state.moves = parsed.moves;
-    state.positions = parsed.positions;
-    state.analyses = [];
-    state.results = [];
-    state.cursor = 0;
-    state.isAnalyzed = false;
+    syncActiveLine();
 
     if ($("startReviewText")) $("startReviewText").textContent = "Analyze game";
     if ($("startReview")) {
@@ -337,43 +315,50 @@ if (arrowToggle) {
   });
 }
 
-// Reset Variation / Revert to Main Game
-const resetVariationBtn = $("resetVariationBtn");
-if (resetVariationBtn) {
-  resetVariationBtn.addEventListener("click", () => {
-    if (!state.originalPgn) return;
-    try {
-      const parsed = parsePgn(state.originalPgn);
-      state.pgn = state.originalPgn;
-      state.isVariation = false;
-      state.selectedSquare = null;
-      state.legalMoves = [];
-      resetVariationBtn.style.display = "none";
-      state.headers = parsed.headers;
-      state.moves = parsed.moves;
-      state.positions = parsed.positions;
-      if (state.originalAnalyses && state.originalResults) {
-        state.analyses = [...state.originalAnalyses];
-        state.results = [...state.originalResults];
-        state.isAnalyzed = true;
-        if ($("startReviewText")) $("startReviewText").textContent = "Start";
-        $("startReview").classList.add("review-mode");
-      } else {
-        state.analyses = [];
-        state.results = [];
-        state.isAnalyzed = false;
-        if ($("startReviewText")) $("startReviewText").textContent = "Analyze game";
-        $("startReview").classList.remove("review-mode");
-      }
-      updatePlayerHeaders();
-      renderMoves();
-      renderBoard(0);
-      renderSummary();
-      setStatus(`Reverted to main game (${state.moves.length} moves).`);
-    } catch (e) {
-      setStatus(`Error reverting to main game: ${e.message}`, true);
-    }
-  });
+// Returning keeps all branches and their evaluations in the tree.
+$("resetVariationBtn").addEventListener("click", () => {
+  if (!state.tree) return;
+  navigateNode(state.tree.returnToGame());
+});
+$("parentVariationBtn").addEventListener("click", () => {
+  if (state.tree) navigateNode(state.tree.branchOrigin());
+});
+
+function syncActiveLine() {
+  const tree = state.tree;
+  if (!tree) return;
+  state.line = tree.line();
+  state.moves = state.line.slice(1).map(node => node.move);
+  state.positions = state.line.map(node => ({ fen: node.fen, move: node.move }));
+  state.analyses = state.line.map(node => node.analysis);
+  state.results = state.line.slice(1).map(node => node.result);
+  state.cursor = tree.current.ply;
+  state.isVariation = !tree.current.mainline;
+  const moveTime = Number($("moveTime").value);
+  state.isAnalyzed = tree.mainline.slice(1).every(node => node.result && node.resultTime >= moveTime);
+  const origin = tree.nodes.get(tree.returnId);
+  const back = $("resetVariationBtn");
+  back.hidden = !origin;
+  back.style.display = origin ? "inline-flex" : "none";
+  back.textContent = origin ? `Back to game - ${moveLabel(origin)}` : "Back to game";
+  back.title = "Return to the original position where this variation started";
+  const parent = tree.branchOrigin();
+  $("parentVariationBtn").hidden = !state.isVariation || parent.mainline;
+  $("variationIndicator").hidden = !state.isVariation;
+  if (!state.running) {
+    $("startReviewText").textContent = state.isAnalyzed ? "Start" : "Analyze game";
+    $("startReview").classList.toggle("review-mode", state.isAnalyzed);
+    $("startReview").title = state.isAnalyzed ? "Start original game review" : "Analyze original game";
+  }
+}
+
+function navigateNode(node) {
+  if (!state.tree || !node) return;
+  state.tree.select(node);
+  state.selectedSquare = null;
+  state.legalMoves = [];
+  syncActiveLine();
+  renderBoard(state.cursor);
 }
 
 // Tab Switching
@@ -468,28 +453,141 @@ function drawBestMoveArrow() {
   `;
 }
 
+const engine = new EngineQueue(() => {
+  const isExtension = typeof browser !== "undefined" && Boolean(browser?.runtime?.id);
+  const url = isExtension
+    ? browser.runtime.getURL("engine/stockfish-19-lite-single.js")
+    : "/engine/stockfish-19-lite-single.js";
+  return new Worker(url);
+});
+
 let quickAnalysisTimer = null;
-function requestQuickAnalysisForCurrentPosition() {
+let quickController = null;
+
+async function evaluateNode(node, { moveTime, priority = 0, signal }) {
+  if (signal?.aborted) throw new DOMException("Analysis cancelled", "AbortError");
+  if (node.analysis?.moveTime >= moveTime) return node.analysis;
+  const chess = new Chess(node.fen);
+  let result;
+  if (chess.isGameOver()) {
+    result = { score: chess.isCheckmate() ? -10 : 0, bestmove: "", pv: "", moveTime };
+  } else {
+    result = await engine.evaluate(node.fen, moveTime, { priority, signal });
+  }
+  if (signal?.aborted) throw new DOMException("Analysis cancelled", "AbortError");
+  const whiteScore = node.fen.split(" ")[1] === "w" ? result.score : -result.score;
+  const analysis = { ...result, whiteScore };
+  if (!node.analysis || node.analysis.moveTime <= moveTime) node.analysis = analysis;
+  return analysis;
+}
+
+function refreshPositionAnalysis() {
+  const node = state.tree?.current;
+  if (!node) return;
+  $("engineStatus").previousElementSibling?.classList.toggle("running", state.running || node.analysisStatus === "pending");
   if (state.running) return;
+  $("engineStatus").textContent = node.analysisStatus === "pending" ? "Analyzing move..."
+    : node.analysisStatus === "error" ? `Analysis failed: ${node.error}`
+    : node.result ? "Move analyzed" : "Engine idle";
+}
+
+function refreshAnalysisView() {
+  syncActiveLine();
+  renderMoves();
+  renderSummary();
+  updateEvaluationDisplay();
+  drawBestMoveArrow();
+  const node = state.tree.current;
+  renderFeedback(node.result);
+  refreshPositionAnalysis();
+  // Engine completion never replaces the squares underneath a user's click.
+  $("board").querySelectorAll(".square-badge").forEach(badge => badge.remove());
+  $("board").querySelectorAll(".brilliant-move").forEach(square => square.classList.remove("brilliant-move"));
+  if (node.result && node.move) {
+    const square = $("board").querySelector(`[data-square="${node.move.to}"]`);
+    if (!square) return;
+    const result = node.result;
+    const badge = document.createElement("div");
+    badge.className = `square-badge ${result.key}`;
+    badge.style.backgroundColor = result.color;
+    badge.style.color = result.textColor;
+    badge.textContent = result.sign;
+    badge.title = `${result.label}: ${result.sign}`;
+    square.append(badge);
+    square.classList.toggle("brilliant-move", result.key === "brilliant");
+  }
+}
+
+async function ensureMoveAnalysis(node, { moveTime, priority = 1, signal = state.session.signal } = {}) {
+  if (!node.move) return;
+  if (node.result && node.resultTime >= moveTime) return node.result;
+  const tree = state.tree;
+  if (node.analysisPromise) {
+    await node.analysisPromise;
+    if (signal.aborted || state.tree !== tree) return;
+    if (node.resultTime >= moveTime) return node.result;
+  }
+  if (signal.aborted) return;
+  node.analysisStatus = "pending";
+  node.error = "";
+  const task = (async () => {
+    try {
+      const result = await analyzeMove(node, evaluateNode, { moveTime, priority, signal });
+      if (signal.aborted) return;
+      node.result = result;
+      node.resultTime = moveTime;
+      node.analysisStatus = "complete";
+      return result;
+    } catch (error) {
+      node.analysisStatus = error.name === "AbortError" ? "idle" : "error";
+      node.error = error.message;
+      if (error.name !== "AbortError") throw error;
+    }
+  })();
+  node.analysisPromise = task;
+  if (state.tree === tree) {
+    renderMoves();
+    refreshPositionAnalysis();
+    if (tree.current === node) renderFeedback(node.result);
+  }
+  try {
+    return await task;
+  } finally {
+    if (node.analysisPromise === task) node.analysisPromise = null;
+    if (state.tree === tree) refreshAnalysisView();
+  }
+}
+
+function requestQuickAnalysisForCurrentPosition() {
   clearTimeout(quickAnalysisTimer);
-  const cursor = state.cursor;
-  if (state.analyses[cursor]?.bestmove) {
-    drawBestMoveArrow();
+  quickController?.abort();
+  const tree = state.tree;
+  const node = tree?.current;
+  if (!node) return;
+  engine.focus([node.fen, node.parent?.fen].filter(Boolean));
+  refreshPositionAnalysis();
+  // Every explored move gets full feedback, including after a cancelled review.
+  const moveTime = Number($("moveTime")?.value) || 250;
+  if (!node.mainline && node.analysisStatus !== "pending" && node.resultTime < moveTime && node.analysisStatus !== "error") {
+    ensureMoveAnalysis(node, { moveTime, priority: 3 }).catch(() => {});
     return;
   }
+  if (node.analysis || node.analysisStatus === "pending" || state.running) return;
+  quickController = new AbortController();
+  const signal = AbortSignal.any([quickController.signal, state.session.signal]);
   quickAnalysisTimer = setTimeout(async () => {
-    if (state.running || state.cursor !== cursor) return;
-    const pos = state.positions[cursor];
-    if (!pos) return;
     try {
-      const res = await analyzeFen(pos.fen, 200);
-      if (state.cursor === cursor) {
-        const whiteScore = scoreWhite(res.score, pos.fen);
-        state.analyses[cursor] = { whiteScore, bestmove: res.bestmove, pv: res.pv };
+      await evaluateNode(node, { moveTime: 200, priority: 4, signal });
+      if (state.tree === tree && tree.current === node) {
+        syncActiveLine();
         updateEvaluationDisplay();
         drawBestMoveArrow();
       }
-    } catch {}
+    } catch (error) {
+      if (error.name !== "AbortError" && state.tree === tree && tree.current === node) {
+        $("engineStatus").textContent = `Analysis failed: ${error.message}`;
+      }
+    }
   }, 140);
 }
 
@@ -534,240 +632,62 @@ function handleSquareClick(sqName) {
   }
 }
 
-function executeUserMove(fromSq, toSq) {
-  const currentPos = state.positions[state.cursor];
-  if (!currentPos) return;
+function stopReview() {
+  state.reviewController?.abort();
+}
 
-  if (state.running) {
-    state.stopRequested = true;
-    if (state.worker && state.pending) {
-      state.worker.postMessage("stop");
-    }
-  }
-
-  const chess = new Chess(currentPos.fen);
-  const moveObj = chess.move({ from: fromSq, to: toSq, promotion: "q" });
-  if (!moveObj) return;
-
-  // If user played the identical move already in the main game
-  if (state.cursor < state.moves.length && state.moves[state.cursor].san === moveObj.san) {
-    renderBoard(state.cursor + 1);
+function executeUserMove(fromSq, toSq, promotion = "q") {
+  if (!state.tree) return;
+  if (state.running) stopReview();
+  // Promotion must be chosen explicitly, including underpromotion.
+  const chess = new Chess(state.tree.current.fen);
+  const candidates = chess.moves({ square: fromSq, verbose: true }).filter(move => move.to === toSq);
+  if (candidates.some(move => move.promotion) && arguments.length < 3) {
+    openPromotionPicker(fromSq, toSq);
     return;
   }
-
-  // Branching / continuing variation
-  if (!state.isVariation) {
-    state.isVariation = true;
-    if (!state.originalAnalyses && state.isAnalyzed) {
-      state.originalAnalyses = [...state.analyses];
-      state.originalResults = [...state.results];
-    }
-  }
-
-  if ($("resetVariationBtn")) {
-    $("resetVariationBtn").style.display = "inline-flex";
-  }
-
-  // Truncate following moves
-  state.moves = state.moves.slice(0, state.cursor);
-  state.positions = state.positions.slice(0, state.cursor + 1);
-  state.analyses = state.analyses.slice(0, state.cursor + 1);
-  state.results = state.results.slice(0, state.cursor);
-
-  const newPly = state.cursor;
-  state.moves.push(moveObj);
-  state.positions.push({ fen: chess.fen(), move: moveObj });
-  state.cursor = newPly + 1;
-
-  switchTab("moves");
-  renderMoves();
-  renderBoard(state.cursor);
-  renderSummary();
-
-  classifyAndFeedbackNewMove(newPly);
-}
-
-function scoreFromWhite(whiteScore, fen) {
-  if (whiteScore === undefined || !Number.isFinite(whiteScore)) return 0;
-  const turn = fen.split(" ")[1];
-  return turn === "w" ? whiteScore : -whiteScore;
-}
-
-async function classifyAndFeedbackNewMove(newPly) {
-  const playedMove = state.moves[newPly];
-  if (!playedMove) return;
-  const beforeFen = state.positions[newPly].fen;
-  const afterFen = state.positions[newPly + 1].fen;
-  const moveTime = Number($("moveTime")?.value) || 250;
-
-  $("engineStatus").textContent = `Analyzing variation move ${newPly + 1}…`;
-  $("engineStatus").previousElementSibling?.classList.add("running");
-
   try {
-    let before = null;
-    if (state.analyses[newPly] && state.analyses[newPly].bestmove) {
-      before = {
-        score: scoreFromWhite(state.analyses[newPly].whiteScore, beforeFen),
-        bestmove: state.analyses[newPly].bestmove,
-        pv: state.analyses[newPly].pv || ""
-      };
-    } else {
-      before = await analyzeFen(beforeFen, moveTime);
-    }
-
-    const after = await analyzeFen(afterFen, moveTime);
-
-    const beforeWhite = scoreWhite(before.score, beforeFen);
-    let afterWhite = scoreWhite(after.score, afterFen);
-    const mover = playedMove.color;
-
-    let isDeliveringMate = false;
-    try {
-      const afterChess = new Chess(afterFen);
-      isDeliveringMate = afterChess.isCheckmate() || playedMove.san.endsWith("#");
-    } catch {
-      isDeliveringMate = playedMove.san.endsWith("#");
-    }
-
-    if (isDeliveringMate) {
-      afterWhite = mover === "w" ? 10 : -10;
-    }
-
-    const beforePlayer = mover === "w" ? beforeWhite : -beforeWhite;
-    const afterPlayer = mover === "w" ? afterWhite : -afterWhite;
-
-    let lossCp = isDeliveringMate ? 0 : Math.max(0, Math.min(1000, (beforePlayer - afterPlayer) * 100));
-
-    const playedUci = `${playedMove.from}${playedMove.to}${playedMove.promotion || ""}`;
-    const isBest = isDeliveringMate || before.bestmove === playedUci || lossCp <= 10;
-    const isSacrifice = isMaterialSacrifice(beforeFen, afterFen, playedMove);
-
-    let legalMovesCount = 10;
-    try {
-      legalMovesCount = new Chess(beforeFen).moves().length;
-    } catch {}
-
-    const classificationObj = classifyMove({
-      lossCp,
-      ply: newPly,
-      isBest,
-      beforePlayerScore: beforePlayer,
-      afterPlayerScore: afterPlayer,
-      legalMovesCount,
-      capturedPiece: playedMove.captured,
-      playedPiece: playedMove.piece,
-      isSacrifice
-    });
-
-    const bestSan = convertPvToSan(beforeFen, before.bestmove);
-
-    let punishSan = "";
-    let punishPv = "";
-    let punishDetails = null;
-    if (after?.bestmove) {
-      punishSan = convertPvToSan(afterFen, after.bestmove);
-      punishPv = after.pv ? convertPvToSan(afterFen, after.pv) : "";
-      try {
-        const ch = new Chess(afterFen);
-        const u = after.bestmove;
-        if (u && u.length >= 4) {
-          punishDetails = ch.move({
-            from: u.slice(0, 2),
-            to: u.slice(2, 4),
-            promotion: u[4] || "q"
-          });
-        }
-      } catch {}
-    }
-
-    let bestDetails = null;
-    if (before?.bestmove) {
-      try {
-        const ch = new Chess(beforeFen);
-        const u = before.bestmove;
-        if (u && u.length >= 4) {
-          bestDetails = ch.move({
-            from: u.slice(0, 2),
-            to: u.slice(2, 4),
-            promotion: u[4] || "q"
-          });
-        }
-      } catch {}
-    }
-
-    let coachingTip = "";
-    if (classificationObj.key === "brilliant") {
-      coachingTip = `Brilliant play! You found a sharp tactical idea, sacrificing material to seize a decisive advantage.`;
-    } else if (classificationObj.key === "great") {
-      coachingTip = `Great find! You found the critical move to keep the upper hand or turn the tide.`;
-    } else if (classificationObj.key === "miss") {
-      coachingTip = `You had an opportunity to capitalize decisively. The engine prefers ${bestSan || "a sharper line"}.`;
-    } else if (classificationObj.key === "blunder") {
-      coachingTip = `Severe evaluation swing. Check for hanging pieces, unguarded squares, and forcing tactics before moving.`;
-    } else if (classificationObj.key === "mistake") {
-      coachingTip = `This gave away a chunk of your advantage. Compare your move with ${bestSan || "the engine suggestion"}.`;
-    } else if (classificationObj.key === "inaccuracy") {
-      coachingTip = `A slight concession. Notice how ${bestSan || "the engine line"} maintains more control and pressure.`;
-    } else if (classificationObj.key === "best") {
-      coachingTip = `Top-notch calculation. This is the optimal continuation that maximizes piece activity.`;
-    } else {
-      coachingTip = `Good practical choice. Continues developing and preserving a healthy position.`;
-    }
-
-    const result = {
-      ply: newPly,
-      san: playedMove.san,
-      color: mover,
-      moveColor: mover,
-      moveNo: `${Math.floor(newPly / 2) + 1}${mover === "w" ? "." : "…"}` ,
-      beforeWhite,
-      afterWhite,
-      lossCp,
-      key: classificationObj.key,
-      label: classificationObj.name,
-      sign: classificationObj.sign,
-      color: classificationObj.color,
-      textColor: classificationObj.textColor,
-      explanation: classificationObj.description,
-      coachingTip,
-      pv: before.pv ? convertPvToSan(beforeFen, before.pv) : "",
-      bestUci: before.bestmove,
-      bestSan,
-      bestDetails,
-      punishSan,
-      punishPv,
-      punishDetails,
-      playedPiece: playedMove.piece,
-      capturedPiece: playedMove.captured,
-      from: playedMove.from,
-      to: playedMove.to,
-      isSacrifice,
-      beforeFen,
-      afterFen,
-      playedUci
-    };
-
-    state.analyses[newPly] = { whiteScore: beforeWhite, bestmove: before.bestmove, pv: before.pv };
-    state.analyses[newPly + 1] = { whiteScore: afterWhite, bestmove: after.bestmove, pv: after.pv };
-    state.results[newPly] = result;
-
-    $("engineStatus").textContent = "Variation move analyzed";
-    $("engineStatus").previousElementSibling?.classList.remove("running");
-
-    renderMoves();
-    renderSummary();
-    if (state.cursor === newPly + 1) {
-      renderBoard(state.cursor);
-    }
-  } catch (err) {
-    console.error("Variation analysis error:", err);
-    $("engineStatus").textContent = "Engine idle";
-    $("engineStatus").previousElementSibling?.classList.remove("running");
+    const node = state.tree.play({ from: fromSq, to: toSq, promotion });
+    syncActiveLine();
+    switchTab("moves");
+    renderBoard(node.ply);
+  } catch (error) {
+    setStatus(`Could not play move: ${error.message}`, true);
   }
+}
+
+function openPromotionPicker(from, to) {
+  const dialog = $("promotionDialog");
+  dialog.replaceChildren();
+  const label = document.createElement("p");
+  label.textContent = "Promote pawn to:";
+  dialog.append(label);
+  for (const [piece, name] of [["q", "Queen"], ["r", "Rook"], ["b", "Bishop"], ["n", "Knight"]]) {
+    const button = document.createElement("button");
+    button.textContent = name;
+    button.type = "button";
+    button.addEventListener("click", () => {
+      dialog.close();
+      executeUserMove(from, to, piece);
+    }, { once: true });
+    dialog.append(button);
+  }
+  const cancel = document.createElement("button");
+  cancel.textContent = "Cancel";
+  cancel.addEventListener("click", () => dialog.close(), { once: true });
+  dialog.append(cancel);
+  dialog.showModal();
 }
 
 function renderBoard(index) {
-  state.cursor = Math.max(0, Math.min(index, state.positions.length - 1));
+  if (!state.tree) return;
+  const target = state.line[Math.max(0, Math.min(index, state.line.length - 1))];
+  if (target !== state.tree.current) {
+    state.selectedSquare = null;
+    state.legalMoves = [];
+    state.tree.select(target);
+  }
+  syncActiveLine();
   const currentPos = state.positions[state.cursor];
   const fen = currentPos.fen;
   const chessInstance = new Chess(fen);
@@ -866,19 +786,17 @@ function renderBoard(index) {
   drawBestMoveArrow();
 
   // Update Move Counter
-  const moveNo = Math.ceil(state.cursor / 2);
   if (state.cursor === 0) {
     $("moveCounter").textContent = "Start";
   } else {
-    const isWhite = state.cursor % 2 !== 0;
-    const san = lastMove ? lastMove.san : "";
-    $("moveCounter").textContent = `${moveNo}${isWhite ? "." : "…"} ${san}`;
+    $("moveCounter").textContent = moveLabel(state.tree.current);
   }
 
   // Update Evaluation & Eval Bar
   updateEvaluationDisplay();
 
   renderFeedback(currentResult);
+  renderMoves();
   highlightActiveMoveInList();
   setNavEnabled();
 
@@ -969,54 +887,99 @@ function updateEvaluationDisplay() {
   evalBarScore.style.color = isScoreOnWhite ? "#17241c" : "#ffffff";
 }
 
+let renderedTree = null;
+let renderedNodeCount = 0;
+
+$("moveList").addEventListener("click", event => {
+  const button = event.target.closest("[data-node], [data-retry]");
+  if (!button || !state.tree) return;
+  if (button.dataset.node) navigateNode(state.tree.nodes.get(button.dataset.node));
+  else ensureMoveAnalysis(state.tree.nodes.get(button.dataset.retry), {
+    moveTime: Number($("moveTime").value), priority: 3
+  }).catch(() => {});
+});
+
 function renderMoves() {
-  if (!state.moves.length) {
-    $("moveList").innerHTML = '<p class="muted empty-state">Your game’s moves will appear here.</p>';
+  const tree = state.tree;
+  if (!tree) {
+    $("moveList").innerHTML = '<p class="muted empty-state">Your game moves will appear here.</p>';
     return;
   }
-  let html = "";
-  for (let i = 0; i < state.moves.length; i += 2) {
-    const white = state.moves[i];
-    const black = state.moves[i + 1];
-    const moveNumber = Math.floor(i / 2) + 1;
-
-    html += `<div class="move-row">`;
-    html += `<span class="move-number">${moveNumber}.</span>`;
-    html += moveButton(i, white);
-    html += black ? moveButton(i + 1, black) : '<div class="move-placeholder"></div>';
-    html += `</div>`;
+  function chip(node) {
+    const result = node.result;
+    const status = node.analysisStatus;
+    const badge = result ? `<span class="move-sign ${result.key}" style="background-color:${result.color};color:${result.textColor}" title="${esc(result.label)}">${esc(result.sign)}</span>` : "";
+    return `<button type="button" class="move-chip ${node === tree.current ? "active" : ""}" data-node="${node.id}" aria-current="${node === tree.current ? "step" : "false"}" title="${esc(moveLabel(node))}">
+      <span class="move-number">${node.parent.fen.split(" ")[5]}${node.move.color === "w" ? "." : "..."}</span>
+      <span class="move-san">${esc(node.move.san)}</span>${badge}
+      ${status === "pending" ? '<span class="analysis-pending" aria-label="Analysis pending">...</span>' : ""}
+      ${status === "error" ? '<span class="analysis-error" aria-label="Analysis failed">!</span>' : ""}
+    </button>${status === "error" ? `<button type="button" class="retry-analysis" data-retry="${node.id}" title="${esc(node.error)}">Retry</button>` : ""}`;
   }
+  function branch(first) {
+    return `<details class="variation-branch" data-branch="${first.id}" ${first.collapsed ? "" : "open"}>
+      <summary>Variation: ${esc(moveLabel(first))}</summary>
+      <div class="variation-moves">${branchLine(first)}</div>
+    </details>`;
+  }
+  function branchLine(first) {
+    let html = "";
+    let node = first;
+    while (node) {
+      html += chip(node);
+      const next = node.children[0];
+      if (node.mainline && next && !next.mainline) {
+        html += node.children.map(branch).join("");
+        break;
+      }
+      html += node.children.slice(1).map(branch).join("");
+      node = next;
+    }
+    return html;
+  }
+  const first = tree.root.children[0];
+  const html = first ? tree.root.children.slice(1).map(branch).join("") + branchLine(first) : "";
+  if (renderedTree === tree && renderedNodeCount === tree.nodes.size) {
+    // Keep buttons stable while their results arrive, including between
+    // pointerdown and click. Only adding a move changes the list structure.
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    $("moveList").querySelectorAll("[data-node]").forEach(button => {
+      const replacement = template.content.querySelector(`[data-node="${button.dataset.node}"]`);
+      button.className = replacement.className;
+      button.setAttribute("aria-current", replacement.getAttribute("aria-current"));
+      if (button.innerHTML !== replacement.innerHTML) button.innerHTML = replacement.innerHTML;
+      const oldRetry = $("moveList").querySelector(`[data-retry="${button.dataset.node}"]`);
+      const newRetry = template.content.querySelector(`[data-retry="${button.dataset.node}"]`);
+      if (newRetry && !oldRetry) button.after(newRetry.cloneNode(true));
+      if (!newRetry) oldRetry?.remove();
+    });
+    $("moveList").querySelectorAll("[data-branch]").forEach(details => {
+      const open = !tree.nodes.get(details.dataset.branch).collapsed;
+      if (details.open !== open) details.open = open;
+    });
+    return;
+  }
+  renderedTree = tree;
+  renderedNodeCount = tree.nodes.size;
   $("moveList").innerHTML = html;
-  $("moveList").querySelectorAll("[data-ply]").forEach(btn => {
-    btn.addEventListener("click", () => renderBoard(Number(btn.dataset.ply) + 1));
+  $("moveList").querySelectorAll("[data-branch]").forEach(details => {
+    details.querySelector("summary").addEventListener("click", event => {
+      // Persist synchronously: an engine result can rebuild the list before
+      // the browser dispatches its asynchronous details toggle event.
+      event.preventDefault();
+      const first = tree.nodes.get(details.dataset.branch);
+      first.collapsed = details.open;
+      details.open = !first.collapsed;
+    });
+    details.addEventListener("toggle", () => {
+      if (details.isConnected) tree.nodes.get(details.dataset.branch).collapsed = !details.open;
+    });
   });
-}
-
-function moveButton(i, move) {
-  const result = state.results[i];
-  const isActive = state.cursor === i + 1;
-
-  let signBadge = "";
-  if (result) {
-    signBadge = `<span class="move-sign ${result.key}" style="background-color: ${result.color}; color: ${result.textColor};" title="${esc(result.label)}">${esc(result.sign)}</span>`;
-  }
-
-  return `<button class="move-chip ${isActive ? "active" : ""}" data-ply="${i}" title="${esc(move.san)}">
-    <span class="move-san">${esc(move.san)}</span>
-    ${signBadge}
-  </button>`;
 }
 
 function highlightActiveMoveInList() {
-  const allBtns = $("moveList").querySelectorAll(".move-chip");
-  allBtns.forEach(btn => {
-    const ply = Number(btn.dataset.ply);
-    const active = state.cursor === ply + 1;
-    btn.classList.toggle("active", active);
-    if (active) {
-      btn.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
-  });
+  $("moveList").querySelector(`[data-node="${state.tree?.current.id}"]`)?.scrollIntoView({ block: "nearest" });
 }
 
 function setNavEnabled() {
@@ -1035,7 +998,7 @@ $("lastMove").addEventListener("click", () => renderBoard(state.moves.length));
 
 // Global Keyboard Navigation
 window.addEventListener("keydown", e => {
-  if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
+  if (["TEXTAREA", "INPUT", "SELECT"].includes(e.target.tagName) || e.target.isContentEditable || $("promotionDialog").open) return;
   if (e.key === "ArrowLeft") {
     e.preventDefault();
     renderBoard(state.cursor - 1);
@@ -1289,9 +1252,13 @@ function renderAiCoachCardHtml(coaching) {
 
 function renderFeedback(result) {
   if (!result) {
+    const node = state.tree?.current;
+    const message = node?.analysisStatus === "pending" ? "Analyzing this move with Stockfish..."
+      : node?.analysisStatus === "error" ? `Analysis failed: ${node.error}. Use Retry beside the move.`
+      : "Select a move after analysis to view its evaluation, classification, and coaching notes.";
     $("feedbackContent").innerHTML = `
       <div class="feedback-empty">
-        Select a move after analysis to view its evaluation, classification, and coaching notes.
+        ${esc(message)}
       </div>`;
     return;
   }
@@ -1356,11 +1323,11 @@ function renderFeedback(result) {
   }
 
   if (hasApiKey() && !cachedAi) {
-    const targetPly = result.ply;
-    const targetSan = result.san;
+    const targetTree = state.tree;
+    const targetNode = state.tree?.current;
     generateCoaching(result, beforeFen).then(coaching => {
       const currentActive = state.cursor > 0 ? state.results[state.cursor - 1] : null;
-      if (currentActive && currentActive.ply === targetPly && currentActive.san === targetSan) {
+      if (state.tree === targetTree && state.tree.current === targetNode && currentActive === result) {
         const aiSec = $("aiCoachSection");
         if (aiSec && coaching) {
           aiSec.outerHTML = renderAiCoachCardHtml(coaching);
@@ -1392,11 +1359,10 @@ function updateAnalysisProgress(current, total, statusText, isDone = false, isSt
 }
 
 function renderSummary() {
-  const whiteMoves = state.results.filter((_, i) => i % 2 === 0);
-  const blackMoves = state.results.filter((_, i) => i % 2 !== 0);
-
-  const completed = state.results.filter(Boolean).length;
-  const isComplete = !state.running && !state.stopRequested && Boolean(state.isAnalyzed || (state.moves.length > 0 && completed === state.moves.length));
+  const nodes = state.tree?.mainline.slice(1) || [];
+  const whiteMoves = nodes.filter(node => node.move.color === "w" && node.result).map(node => node.result);
+  const blackMoves = nodes.filter(node => node.move.color === "b" && node.result).map(node => node.result);
+  const isComplete = nodes.length > 0 && nodes.every(node => Boolean(node.result));
 
   if (isComplete) {
     const whiteAcc = calculateAccuracy(whiteMoves);
@@ -1488,345 +1454,57 @@ function renderSummary() {
   $("breakdownTable").innerHTML = rowsHtml;
 }
 
-// STOCKFISH WORKER INTEGRATION
-function createEngine() {
-  if (state.worker) return state.worker;
-  const isExtension = typeof browser !== "undefined" && Boolean(browser?.runtime?.id);
-  const workerUrl = isExtension
-    ? browser.runtime.getURL("engine/stockfish-19-lite-single.js")
-    : "/engine/stockfish-19-lite-single.js";
-
-  state.worker = new Worker(workerUrl);
-  state.worker.addEventListener("message", e => {
-    const line = String(e.data || "");
-    if (line === "uciok") state.worker.postMessage("isready");
-    if (line === "readyok" && state.pending?.waitingReady) {
-      state.pending.waitingReady = false;
-      state.pending.start();
-    }
-    if (line.startsWith("info ") && state.pending) parseInfo(line, state.pending);
-    if (line.startsWith("bestmove ") && state.pending) {
-      const p = state.pending;
-      clearTimeout(state.timer);
-      state.timer = null;
-      state.pending = null;
-      p.resolve({ score: p.score, pv: p.pv, bestmove: line.split(/\s+/)[1] || "" });
-    }
-  });
-
-  state.worker.addEventListener("error", e => {
-    setStatus(`Engine error: ${e.message || "worker failed"}`, true);
-    $("engineStatus").textContent = "Engine error";
-  });
-
-  state.worker.postMessage("uci");
-  return state.worker;
-}
-
-function parseInfo(line, pending) {
-  const depth = line.match(/\bdepth (\d+)/);
-  const score = line.match(/\bscore (cp|mate) (-?\d+)/);
-  const pv = line.match(/\bpv (.+)$/);
-  if (depth && Number(depth[1]) < (pending.depth || 1)) return;
-  if (score) {
-    const n = Number(score[2]);
-    pending.score = score[1] === "mate"
-      ? (n > 0 ? 10 - Math.min(n, 9) * 0.01 : -10 + Math.min(-n, 9) * 0.01)
-      : n / 100;
-    pending.scoreType = score[1];
-    pending.depthSeen = depth ? Number(depth[1]) : pending.depthSeen;
-  }
-  if (pv) pending.pv = pv[1].split(" ").slice(0, 8).join(" ");
-}
-
-function analyzeFen(fen, moveTime) {
-  return new Promise((resolve, reject) => {
-    const worker = createEngine();
-    if (state.pending) {
-      reject(new Error("Engine already analyzing"));
-      return;
-    }
-    const p = { resolve, reject, score: 0, pv: "", depth: 1, waitingReady: true, start: null };
-    p.start = () => {
-      worker.postMessage(`position fen ${fen}`);
-      worker.postMessage(`go movetime ${moveTime}`);
-    };
-    state.pending = p;
-    worker.postMessage("isready");
-    state.timer = setTimeout(() => {
-      if (state.pending === p) {
-        state.pending = null;
-        reject(new Error("Engine timed out. Try reloading the review page."));
-      }
-    }, Math.max(15000, moveTime * 10));
-  });
-}
-
-function scoreWhite(engineScore, fen) {
-  const turn = fen.split(" ")[1];
-  return turn === "w" ? engineScore : -engineScore;
-}
-
-function convertPvToSan(fen, pv) {
-  const c = new Chess(fen);
-  const sanMoves = [];
-  for (const uci of pv.split(/\s+/).slice(0, 8)) {
-    if (!uci || uci.length < 4 || uci === "(none)") break;
-    try {
-      const move = c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || "q" });
-      if (!move) { sanMoves.push(uci); break; }
-      sanMoves.push(move.san);
-    } catch {
-      sanMoves.push(uci);
-      break;
-    }
-  }
-  return sanMoves.join(" ");
-}
-
 async function startReview() {
-  if (!state.moves.length || state.running) return;
+  const tree = state.tree;
+  if (!tree || state.running) return;
   state.running = true;
-  state.stopRequested = false;
-  state.isAnalyzed = false;
-  state.results = [];
-  state.analyses = new Array(state.positions.length);
-
-  // Switch to Game Summary tab immediately on start
-  switchTab("summary");
-  updateAnalysisProgress(0, state.moves.length, "Starting engine…", false, false);
-  renderSummary();
-
-  $("startReview").style.display = "none";
-  if ($("stopReview")) {
-    $("stopReview").style.display = "inline-flex";
-    $("stopReview").disabled = false;
-  }
-  $("engineStatus").textContent = "Starting local Stockfish…";
-  $("engineStatus").previousElementSibling?.classList.add("running");
-
+  state.reviewController = new AbortController();
+  const controller = state.reviewController;
+  const signal = AbortSignal.any([controller.signal, state.session.signal]);
   const moveTime = Number($("moveTime").value);
-
+  const nodes = tree.mainline.slice(1);
+  clearTimeout(quickAnalysisTimer);
+  quickController?.abort();
+  switchTab("summary");
+  $("startReview").style.display = "none";
+  $("stopReview").style.display = "inline-flex";
+  $("stopReview").disabled = false;
   try {
-    for (let i = 0; i < state.moves.length; i++) {
-      if (state.stopRequested) break;
-      const current = i + 1;
-      const total = state.moves.length;
-
-      updateAnalysisProgress(current, total, `Analyzing move ${current} of ${total}`, false, false);
-      $("engineStatus").textContent = `Analyzing move ${current} of ${total}…`;
-
-      const beforeFen = state.positions[i].fen;
-      const afterFen = state.positions[i + 1].fen;
-      const playedMove = state.moves[i];
-
-      const before = await analyzeFen(beforeFen, moveTime);
-      if (state.stopRequested) break;
-      const after = await analyzeFen(afterFen, moveTime);
-
-      const beforeWhite = scoreWhite(before.score, beforeFen);
-      let afterWhite = scoreWhite(after.score, afterFen);
-      const mover = playedMove.color;
-
-      let isDeliveringMate = false;
-      try {
-        const afterChess = new Chess(afterFen);
-        isDeliveringMate = afterChess.isCheckmate() || playedMove.san.endsWith("#");
-      } catch {
-        isDeliveringMate = playedMove.san.endsWith("#");
-      }
-
-      if (isDeliveringMate) {
-        afterWhite = mover === "w" ? 10 : -10;
-      }
-
-      const beforePlayer = mover === "w" ? beforeWhite : -beforeWhite;
-      const afterPlayer = mover === "w" ? afterWhite : -afterWhite;
-
-      let lossCp = isDeliveringMate ? 0 : Math.max(0, Math.min(1000, (beforePlayer - afterPlayer) * 100));
-
-      const playedUci = `${playedMove.from}${playedMove.to}${playedMove.promotion || ""}`;
-      const isBest = isDeliveringMate || before.bestmove === playedUci || lossCp <= 10;
-
-      const isSacrifice = isMaterialSacrifice(beforeFen, afterFen, playedMove);
-      let legalMovesCount = 10;
-      try {
-        legalMovesCount = new Chess(beforeFen).moves().length;
-      } catch {}
-
-      const classificationObj = classifyMove({
-        lossCp,
-        ply: i,
-        isBest,
-        beforePlayerScore: beforePlayer,
-        afterPlayerScore: afterPlayer,
-        legalMovesCount,
-        capturedPiece: playedMove.captured,
-        playedPiece: playedMove.piece,
-        isSacrifice
-      });
-
-      const bestSan = convertPvToSan(beforeFen, before.bestmove);
-
-      // Opponent's punishing response and continuation
-      let punishSan = "";
-      let punishPv = "";
-      let punishDetails = null;
-      if (after?.bestmove) {
-        punishSan = convertPvToSan(afterFen, after.bestmove);
-        punishPv = after.pv ? convertPvToSan(afterFen, after.pv) : "";
-        try {
-          const ch = new Chess(afterFen);
-          const u = after.bestmove;
-          if (u && u.length >= 4) {
-            punishDetails = ch.move({
-              from: u.slice(0, 2),
-              to: u.slice(2, 4),
-              promotion: u[4] || "q"
-            });
-          }
-        } catch {}
-      }
-
-      // Player's best move details
-      let bestDetails = null;
-      if (before?.bestmove) {
-        try {
-          const ch = new Chess(beforeFen);
-          const u = before.bestmove;
-          if (u && u.length >= 4) {
-            bestDetails = ch.move({
-              from: u.slice(0, 2),
-              to: u.slice(2, 4),
-              promotion: u[4] || "q"
-            });
-          }
-        } catch {}
-      }
-
-      let coachingTip = "";
-      if (classificationObj.key === "brilliant") {
-        coachingTip = `Brilliant play! You found a sharp tactical idea, sacrificing material to seize a decisive advantage.`;
-      } else if (classificationObj.key === "great") {
-        coachingTip = `Great find! You found the critical move to keep the upper hand or turn the tide.`;
-      } else if (classificationObj.key === "miss") {
-        coachingTip = `You had an opportunity to capitalize decisively. The engine prefers ${bestSan || "a sharper line"}.`;
-      } else if (classificationObj.key === "blunder") {
-        coachingTip = `Severe evaluation swing. Check for hanging pieces, unguarded squares, and forcing tactics before moving.`;
-      } else if (classificationObj.key === "mistake") {
-        coachingTip = `This gave away a chunk of your advantage. Compare your move with ${bestSan || "the engine suggestion"}.`;
-      } else if (classificationObj.key === "inaccuracy") {
-        coachingTip = `A slight concession. Notice how ${bestSan || "the engine line"} maintains more control and pressure.`;
-      } else if (classificationObj.key === "best") {
-        coachingTip = `Top-notch calculation. This is the optimal continuation that maximizes piece activity.`;
-      } else {
-        coachingTip = `Good practical choice. Continues developing and preserving a healthy position.`;
-      }
-
-      const result = {
-        ply: i,
-        san: playedMove.san,
-        color: mover,
-        moveColor: mover,
-        moveNo: `${Math.floor(i / 2) + 1}${mover === "w" ? "." : "…"}` ,
-        beforeWhite,
-        afterWhite,
-        lossCp,
-        key: classificationObj.key,
-        label: classificationObj.name,
-        sign: classificationObj.sign,
-        color: classificationObj.color,
-        textColor: classificationObj.textColor,
-        explanation: classificationObj.description,
-        coachingTip,
-        pv: before.pv ? convertPvToSan(beforeFen, before.pv) : "",
-        bestUci: before.bestmove,
-        bestSan,
-        bestDetails,
-        punishSan,
-        punishPv,
-        punishDetails,
-        playedPiece: playedMove.piece,
-        capturedPiece: playedMove.captured,
-        from: playedMove.from,
-        to: playedMove.to,
-        isSacrifice,
-        beforeFen,
-        afterFen,
-        playedUci
-      };
-
-      state.analyses[i] = { whiteScore: beforeWhite, bestmove: before.bestmove, pv: before.pv };
-      state.analyses[i + 1] = { whiteScore: afterWhite, bestmove: after.bestmove, pv: after.pv };
-      state.results[i] = result;
-
-      renderMoves();
-      renderSummary();
-      if (state.cursor === i + 1) {
-        renderBoard(state.cursor);
-      }
+    for (const node of nodes) {
+      if (signal.aborted) break;
+      $("engineStatus").textContent = `Analyzing original game move ${node.ply} of ${nodes.length}...`;
+      await ensureMoveAnalysis(node, { moveTime, priority: 0, signal });
+      if (state.tree !== tree) return;
+      updateAnalysisProgress(nodes.filter(n => n.result).length, nodes.length, "Analyzing game");
     }
-
-    const completed = state.results.filter(Boolean).length;
-    if (state.stopRequested) {
-      updateAnalysisProgress(completed, state.moves.length, "Analysis stopped", false, true);
-      $("engineStatus").textContent = "Analysis stopped";
-      setStatus("Review stopped. You can analyze again to restart.");
-    } else {
-      updateAnalysisProgress(completed, state.moves.length, "Review complete", true, false);
-      $("engineStatus").textContent = "Analysis complete — engine ran locally";
-      setStatus("Analysis complete! Click any move or open Game Summary.");
-    }
-
-    renderSummary();
-  } catch (e) {
-    $("engineStatus").textContent = "Analysis interrupted";
-    setStatus(`Analysis stopped: ${e.message}`, true);
+    if (state.tree !== tree) return;
+    const completed = nodes.filter(node => node.result).length;
+    updateAnalysisProgress(completed, nodes.length, signal.aborted ? "Analysis stopped" : "Review complete", !signal.aborted, signal.aborted);
+    setStatus(signal.aborted ? "Review stopped. Completed moves are retained; Analyze game resumes the review." : "Analysis complete. Select a move to review or explore a variation.");
+  } catch (error) {
+    if (state.tree === tree && error.name !== "AbortError") setStatus(`Analysis stopped: ${error.message}`, true);
   } finally {
-    state.running = false;
-    if ($("stopReview")) {
+    if (state.tree === tree && state.reviewController === controller) {
+      state.running = false;
       $("stopReview").style.display = "none";
       $("stopReview").disabled = true;
+      $("startReview").style.display = "inline-flex";
+      refreshAnalysisView();
+      setNavEnabled();
+      requestQuickAnalysisForCurrentPosition();
     }
-    $("startReview").style.display = "inline-flex";
-
-    const completed = state.results.filter(Boolean).length;
-    if (!state.stopRequested && completed === state.moves.length && state.moves.length > 0) {
-      state.isAnalyzed = true;
-      state.originalAnalyses = [...state.analyses];
-      state.originalResults = [...state.results];
-      if ($("startReviewText")) $("startReviewText").textContent = "Start";
-      $("startReview").title = "Start Review (Move 1)";
-      $("startReview").classList.add("review-mode");
-      $("startReview").disabled = false;
-    } else {
-      state.isAnalyzed = false;
-      if ($("startReviewText")) $("startReviewText").textContent = "Analyze game";
-      $("startReview").title = "Analyze game";
-      $("startReview").classList.remove("review-mode");
-      $("startReview").disabled = false;
-    }
-
-    $("engineStatus").previousElementSibling?.classList.remove("running");
-    renderMoves();
-    renderSummary();
-    renderBoard(state.cursor);
   }
 }
 
 $("startReview").addEventListener("click", () => {
   if (state.isAnalyzed) {
     switchTab("moves");
-    renderBoard(1);
-    return;
-  }
-  startReview();
+    navigateNode(state.tree.mainline[1]);
+  } else startReview();
 });
-$("stopReview").addEventListener("click", () => {
-  state.stopRequested = true;
-  if (state.worker && state.pending) {
-    state.worker.postMessage("stop");
-  }
+$("stopReview").addEventListener("click", stopReview);
+$("moveTime").addEventListener("change", () => {
+  if (state.tree) renderBoard(state.cursor);
 });
 
 // AUTOMATIC IMPORT

@@ -55,7 +55,34 @@ Temporary add-ons may be removed when Zen restarts. To test code changes, rebuil
 
 - Single-threaded WASM engine: one CPU worker, so the thread setting cannot be increased.
 - Per-position time: 250 / 500 / 1000 ms.
-- No engine work runs until the user presses Analyze game.
+- Selecting an unevaluated position requests a quick local evaluation. New variation moves are analyzed automatically using the selected per-position time.
+
+## Exploring variations
+
+1. Select a position in the original game's move list and play an alternative move on the board.
+2. Continue playing to explore the line. Stockfish evaluates each new move and adds its classification, recommended continuation, and coaching feedback.
+3. Click **Back to game - [move]** to return to the exact original-game position where that variation started. The next navigation step follows the original game's continuation.
+4. Reopen any saved variation by clicking its moves in the indented move list. Branches can be expanded or collapsed; playing a different reply within a variation creates a nested branch. **Back to parent branch** returns to the nearest nested fork.
+
+Left/Right arrows and the navigation buttons follow the selected line. Up goes to the imported game's initial position; Down goes to the selected line's end. Pawn promotion offers Queen, Rook, Bishop, and Knight.
+
+The Game Summary always describes the original game. Exploring alternatives preserves its evaluations, classifications, accuracy, and rating estimates. Moving pieces during a full-game review stops that review safely; **Analyze game** resumes using completed results.
+
+Variations and their analyses remain available in the current review session. Loading another PGN or reloading the page clears them. Saving studies across sessions and exporting PGNs with variations are not included.
+
+## Development checks
+
+Use Node.js 22.20+ or a newer supported LTS release. After `npm ci`:
+
+```powershell
+npm test
+npx playwright install chromium firefox
+npm run test:browser
+```
+
+Unit tests cover branching, return positions, special moves, shared move analysis, and engine queue cancellation/recovery. Browser tests build the extension and exercise the generated review page in Chromium and Firefox with the actual packaged Stockfish worker and WASM, including rapid exploration, nested variations, unchanged game summaries, and switching games during analysis.
+
+To load the extension itself in Firefox/Zen, run `npm run build`, open `about:debugging`, select **This Firefox > Load Temporary Add-on**, and choose `dist/manifest.json`.
 
 ## Privacy and fair play
 

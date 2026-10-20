@@ -987,6 +987,75 @@ body.chesscom-theme {
   border-color: #ff7b72;
 }
 
+[hidden] { display: none !important; }
+
+.move-counter-group {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+#moveList {
+  display: block;
+  line-height: 2.5;
+}
+
+.move-tree-heading { grid-column: 1 / -1; }
+
+#moveList .move-chip {
+  display: inline-flex;
+  width: auto;
+  min-width: 72px;
+  gap: 5px;
+  margin: 2px;
+  vertical-align: middle;
+}
+
+.variation-branch {
+  margin: 6px 0 6px 10px;
+  border-left: 2px solid var(--chess-green);
+  padding-left: 10px;
+  line-height: 1.6;
+}
+
+.variation-branch summary {
+  cursor: pointer;
+  color: #b4d995;
+  font-size: 12px;
+  padding: 4px;
+}
+
+.variation-indicator, .analysis-pending {
+  color: #b4d995;
+  font-size: 11px;
+}
+
+.analysis-error { color: #ff7b72; }
+
+.retry-analysis {
+  cursor: pointer;
+  background: transparent;
+  color: #ff7b72;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+
+#promotionDialog {
+  background: #262421;
+  color: #fff;
+  border: 1px solid #b4d995;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+#promotionDialog::backdrop { background: #0009; }
+
+#promotionDialog button {
+  padding: 8px 12px;
+  margin: 4px;
+  cursor: pointer;
+}
+
 /* COLLAPSIBLE PASTE DRAWER */
 .paste-drawer {
   margin-top: 8px;

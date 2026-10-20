@@ -105,9 +105,7 @@
       <!-- MOVE LIST TABLE -->
       <div id="moveListWrapper" class="move-list-wrapper">
         <div class="move-table-header">
-          <span class="col-num">#</span>
-          <span class="col-move">White</span>
-          <span class="col-move">Black</span>
+          <span class="move-tree-heading">Original game &amp; variations</span>
         </div>
         <div id="moveList" class="move-list">
           <p class="muted empty-state">Your game’s moves will appear here.</p>
@@ -170,7 +168,9 @@
             <span id="engineStatus">Engine idle</span>
           </div>
           <div class="move-counter-group" style="display: flex; align-items: center; gap: 6px;">
-            <button id="resetVariationBtn" class="reset-variation-btn" type="button" style="display:none;" title="Revert to original game">↺ Main Game</button>
+            <span id="variationIndicator" class="variation-indicator" hidden>Exploring variation</span>
+            <button id="parentVariationBtn" class="reset-variation-btn" type="button" hidden>Back to parent branch</button>
+            <button id="resetVariationBtn" class="reset-variation-btn" type="button" style="display:none;" title="Return to where exploration started">Back to game</button>
             <span id="moveCounter" class="move-counter-badge">Start</span>
           </div>
         </div>
@@ -336,6 +336,7 @@
     </div>
   </main>
 
+  <dialog id="promotionDialog" aria-label="Choose promotion piece"></dialog>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

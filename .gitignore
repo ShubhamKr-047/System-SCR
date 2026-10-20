@@ -12,6 +12,8 @@ public/engine/
 
 # Vite & dev cache
 .vite/
+test-results/
+playwright-report/
 
 # Logs
 logs/

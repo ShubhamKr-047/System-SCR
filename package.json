@@ -5,6 +5,8 @@
   "description": "Local Stockfish game review extension for Zen Browser",
   "type": "module",
   "scripts": {
+    "test": "node --test tests/game-tree.test.js tests/engine.test.js",
+    "test:browser": "npm run build && playwright test",
     "copy-engine": "node scripts/copy-engine.mjs",
     "build": "npm run copy-engine && vite build",
     "dev": "vite --host 127.0.0.1"
@@ -14,6 +16,7 @@
     "stockfish": "19.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "vite": "6.4.1"
   }
 }
