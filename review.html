@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>System SCR · Chess Analysis</title>
+  <link rel="icon" type="image/svg+xml" sizes="any" href="./branding/scr-rook.svg">
   <link rel="stylesheet" href="/src/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,15 +14,8 @@
   <!-- SLIM TOPBAR -->
   <header class="topbar">
     <div class="brand-container">
-      <div class="brand-mark">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
-          <path d="M19 22H5v-2h14v2M17.5 10.5c-.3 0-.6.1-.8.2-.5-.7-1.3-1.2-2.2-1.4.3-.4.5-.8.5-1.3 0-1.1-.9-2-2-2-.3 0-.6.1-.8.2C11.7 5.5 11 5 10 5c-1.7 0-3 1.3-3 3 0 .3 0 .5.1.7C6.4 9.1 6 9.8 6 10.5c0 .9.5 1.7 1.2 2.1-.1.4-.2.9-.2 1.4 0 2.2 1.8 4 4 4h4c1.7 0 3-1.3 3-3 0-.5-.1-1-.3-1.5.5-.4.8-1.2.8-1.9 0-.6-.4-1.1-1-1.1z"/>
-        </svg>
-      </div>
-      <div class="brand-text">
-        <h1>System SCR</h1>
-        <span class="brand-sub">Stockfish 19 Review</span>
-      </div>
+      <h1 class="brand-logo"><img src="./branding/scr-logo.svg" width="110" height="32" alt="System SCR" /></h1>
+      <span class="brand-sub">Stockfish 19 Review</span>
     </div>
 
     <div class="topbar-actions">
@@ -61,10 +55,30 @@
 
           <!-- CHESSBOARD CONTAINER -->
           <div class="board-container">
-            <div id="board" class="board chesscom-board" aria-label="Chessboard" title="Click or drag to move. Right-drag to draw arrows; right-click to highlight square. Red by default, Ctrl: orange, Alt: blue, Shift: green, Ctrl+Alt: yellow.">
-              <div class="board-placeholder">Import a PGN to see the board</div>
-            </div>
+            <div id="board" class="board chesscom-board is-empty" aria-label="Chessboard" title="Click or drag to move. Right-drag to draw arrows; right-click to highlight square. Red by default, Ctrl: orange, Alt: blue, Shift: green, Ctrl+Alt: yellow."></div>
             <svg id="boardArrows" class="board-arrows" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+            <div id="emptyBoardState" class="empty-board-state">
+              <section class="board-import-card" aria-labelledby="boardImportTitle">
+                <img src="pieces/wn.png" class="board-import-piece" width="56" height="56" alt="" />
+                <span class="board-import-eyebrow">Game review</span>
+                <h2 id="boardImportTitle">Start with your game</h2>
+                <p>Import a PGN file or paste your moves to explore the game, try variations, and find your next improvement.</p>
+                <div class="board-import-actions">
+                  <button id="emptyImportFile" class="board-import-button primary" type="button">Import PGN file</button>
+                  <button id="emptyPasteToggle" class="board-import-button" type="button" aria-expanded="false" aria-controls="emptyPasteForm">Paste PGN</button>
+                </div>
+                <p id="emptyImportStatus" class="board-import-status" role="status" aria-live="polite"></p>
+                <form id="emptyPasteForm" class="board-paste-form" hidden>
+                  <label for="emptyPgnText">Paste your game's PGN</label>
+                  <textarea id="emptyPgnText" rows="5" spellcheck="false" placeholder='[Event "My game"]&#10;&#10;1. e4 e5 2. Nf3 Nc6 *'></textarea>
+                  <div class="board-paste-footer">
+                    <span>Ctrl / ⌘ + Enter to load</span>
+                    <button class="board-import-button primary" type="submit">Load game</button>
+                  </div>
+                </form>
+                <span class="board-import-hint">Use a PGN from Chess.com, Lichess, or your chess app.</span>
+              </section>
+            </div>
           </div>
 
           <!-- BOTTOM PLAYER BAR (WHITE BY DEFAULT) -->

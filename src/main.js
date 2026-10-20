@@ -39,6 +39,11 @@ function setStatus(message, error = false) {
     el.textContent = message;
     el.classList.toggle("error", error);
   }
+  if (!state.tree) {
+    $("emptyImportStatus").textContent = message;
+    $("emptyImportStatus").classList.toggle("error", error);
+    if (error) $("emptyImportStatus").scrollIntoView({ block: "nearest" });
+  }
 }
 
 function esc(s) {
@@ -55,7 +60,7 @@ function readImport() {
   const pgn = $("pgnText").value.trim();
   if (!pgn) {
     setStatus("Paste PGN text or choose a .pgn file first.", true);
-    return;
+    return false;
   }
   try {
     const tree = new GameTree(pgn);
@@ -107,8 +112,12 @@ function readImport() {
     renderBoard(0);
     renderFeedback(null);
     setNavEnabled();
+    $("emptyBoardState").hidden = true;
+    $("board").classList.remove("is-empty");
+    return true;
   } catch (e) {
     setStatus(`Could not read PGN: ${e.message}`, true);
+    return false;
   }
 }
 
@@ -195,10 +204,33 @@ if (hamburgerBtn && hamburgerMenu) {
 $("pgnFile").addEventListener("change", async e => {
   const file = e.target.files?.[0];
   if (!file) return;
-  $("pgnText").value = await file.text();
-  setStatus(`Loaded file: ${file.name}. Click “Load game”.`);
-  readImport();
-  closeHamburger();
+  try {
+    $("pgnText").value = await file.text();
+    if (readImport()) closeHamburger();
+  } catch {
+    setStatus("Could not open this file. Try another PGN or paste the moves instead.", true);
+  } finally {
+    e.target.value = "";
+  }
+});
+
+$("emptyImportFile").addEventListener("click", () => $("pgnFile").click());
+$("emptyPasteToggle").addEventListener("click", () => {
+  const open = $("emptyPasteForm").hidden;
+  $("emptyPasteForm").hidden = !open;
+  $("emptyPasteToggle").setAttribute("aria-expanded", String(open));
+  if (open) $("emptyPgnText").focus();
+});
+$("emptyPasteForm").addEventListener("submit", event => {
+  event.preventDefault();
+  $("pgnText").value = $("emptyPgnText").value;
+  if (!readImport()) $("emptyPgnText").focus({ preventScroll: true });
+});
+$("emptyPgnText").addEventListener("keydown", event => {
+  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+    event.preventDefault();
+    $("emptyPasteForm").requestSubmit();
+  }
 });
 
 $("loadPgn").addEventListener("click", () => {

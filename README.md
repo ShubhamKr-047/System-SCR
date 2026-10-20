@@ -39,7 +39,7 @@ The content script adds a fixed “Analyze with Zen” button on Chess.com live/
 6. Choose **This Firefox** → **Load Temporary Add-on**.
 7. Open the `dist` folder and select `manifest.json`.
 8. Click the Zen Chess Review toolbar icon → **Open Game Review**.
-9. On Chess.com, open a completed game. Click **Share** → **PGN** → **Download**. Return to the review page, choose the downloaded `.pgn`, click **Load game**, then **Analyze game**.
+9. On Chess.com, open a completed game. Click **Share** → **PGN** → **Download**. On the review page's empty board, choose **Import PGN file** to load the downloaded game, then select **Analyze game**. Alternatively, select **Paste PGN**, paste the game, and select **Load game** (or press Ctrl/Cmd + Enter). Import controls also remain available in the menu.
 
 Temporary add-ons may be removed when Zen restarts. To test code changes, rebuild and use the extension's Reload button in `about:debugging`.
 
