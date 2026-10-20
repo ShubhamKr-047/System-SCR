@@ -1,7 +1,7 @@
 import { Chess } from "chess.js";
 import { PIECE_IMAGES } from "./pieces.js";
 import { CLASSIFICATIONS, calculateAccuracy, calculateEstimatedRating } from "./classifications.js";
-import { getApiKey, setApiKey, hasApiKey, getCachedCoaching, generateCoaching } from "./gemini.js";
+import { getApiKey, setApiKey, hasApiKey, getCoachingState, generateCoaching, cancelPendingCoaching, getConnectionStatus, getProvider, setProvider, PROVIDERS } from "./coaching.js";
 import { GameTree, moveLabel } from "./game-tree.js";
 import { EngineQueue } from "./engine.js";
 import { analyzeMove } from "./analysis.js";
@@ -19,6 +19,7 @@ const state = {
   results: [],
   cursor: 0,
   flipped: false,
+  displayedWhiteScore: null,
   running: false,
   headers: {},
   selectedSquare: null,
@@ -67,6 +68,7 @@ function readImport() {
     $("retryPositionAnalysis").hidden = true;
     state.session = new AbortController();
     state.tree = tree;
+    state.displayedWhiteScore = null;
     state.headers = tree.headers;
     state.running = false;
     state.selectedSquare = null;
@@ -236,68 +238,82 @@ if (drawerLoadBtn) {
   });
 }
 
-// Gemini AI Settings Wiring
-function updateGeminiUi() {
+// AI provider settings
+function updateAiUi(refreshInput = true) {
   const hasKey = hasApiKey();
-  const statusEl = $("geminiStatus");
-  const inputEl = $("geminiApiKey");
-  const clearBtn = $("clearGeminiKey");
+  const provider = PROVIDERS[getProvider()];
+  $("aiProvider").value = getProvider();
+  const statusEl = $("aiStatus");
+  const inputEl = $("aiApiKey");
+  const clearBtn = $("clearAiKey");
 
   if (statusEl) {
-    statusEl.className = hasKey ? "gemini-status-dot on" : "gemini-status-dot off";
-    statusEl.title = hasKey ? "Gemini AI Coach Active (Google AI Studio)" : "Gemini AI Coach Disabled";
+    const connection = getConnectionStatus();
+    statusEl.className = `ai-status-dot ${connection === "verified" ? "on" : connection === "error" ? "error" : "off"}`;
+    statusEl.title = connection === "verified" ? `${provider.name} connection verified` : connection === "error"
+      ? `${provider.name} request failed; local feedback remains available` : hasKey ? "API key saved; connection not yet verified" : `Local feedback; no ${provider.name} API key saved`;
+    if ($("aiConnectionStatus")) $("aiConnectionStatus").textContent = statusEl.title;
   }
-  if (inputEl) {
+  if (inputEl && refreshInput) {
     inputEl.value = getApiKey();
+    inputEl.placeholder = `${provider.name} API key`;
+    inputEl.setAttribute("aria-label", `${provider.name} API key`);
   }
   if (clearBtn) {
     clearBtn.style.display = hasKey ? "inline-flex" : "none";
   }
+  $("aiKeyHelp").innerHTML = `Create an API key in <a href="${provider.keyUrl}" target="_blank" rel="noopener">${provider.consoleName}</a>, paste it above, and select Save.
+    With a key saved, ${provider.name} explains the selected move using the position and Stockfish analysis sent to ${provider.recipient}.
+    Without a key for the selected provider, local feedback remains available. Keys are saved separately in this browser profile and sent only to their provider.
+    Use Clear API key to remove the selected provider's key. The provider's usage limits and pricing apply.`;
+
 }
 
-function openGeminiSettings() {
+function openAiSettings() {
   if (hamburgerMenu) hamburgerMenu.style.display = "block";
   if (hamburgerBtn) {
     hamburgerBtn.classList.add("active");
     hamburgerBtn.setAttribute("aria-expanded", "true");
   }
-  $("geminiApiKey")?.focus();
+  $("aiApiKey")?.focus();
 }
 
-const saveGeminiKeyBtn = $("saveGeminiKey");
-if (saveGeminiKeyBtn) {
-  saveGeminiKeyBtn.addEventListener("click", () => {
-    const val = $("geminiApiKey")?.value || "";
+$("aiProvider").addEventListener("change", event => {
+  setProvider(event.target.value);
+  updateAiUi();
+  renderFeedback(state.tree?.current?.result || null);
+});
+
+const saveAiKeyBtn = $("saveAiKey");
+if (saveAiKeyBtn) {
+  saveAiKeyBtn.addEventListener("click", () => {
+    const val = $("aiApiKey")?.value || "";
     setApiKey(val);
-    updateGeminiUi();
+    updateAiUi();
     if (val.trim()) {
-      setStatus("Gemini API key saved! AI Coach is active.");
+      setStatus(`${PROVIDERS[getProvider()].name} API key saved. Select an analyzed move to verify the connection.`);
     } else {
-      setStatus("Gemini API key removed.");
+      setStatus(`${PROVIDERS[getProvider()].name} API key removed.`);
     }
-    if (state.cursor > 0 && state.results[state.cursor - 1]) {
-      renderFeedback(state.results[state.cursor - 1]);
-    }
+    renderFeedback(state.tree?.current?.result || null);
   });
 }
 
-const clearGeminiKeyBtn = $("clearGeminiKey");
-if (clearGeminiKeyBtn) {
-  clearGeminiKeyBtn.addEventListener("click", () => {
+const clearAiKeyBtn = $("clearAiKey");
+if (clearAiKeyBtn) {
+  clearAiKeyBtn.addEventListener("click", () => {
     setApiKey("");
-    updateGeminiUi();
-    setStatus("Gemini API key cleared.");
-    if (state.cursor > 0 && state.results[state.cursor - 1]) {
-      renderFeedback(state.results[state.cursor - 1]);
-    }
+    updateAiUi();
+    setStatus(`${PROVIDERS[getProvider()].name} API key cleared.`);
+    renderFeedback(state.tree?.current?.result || null);
   });
 }
 
-const geminiApiKeyInput = $("geminiApiKey");
-if (geminiApiKeyInput) {
-  geminiApiKeyInput.addEventListener("keydown", (e) => {
+const aiApiKeyInput = $("aiApiKey");
+if (aiApiKeyInput) {
+  aiApiKeyInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
-      saveGeminiKeyBtn?.click();
+      saveAiKeyBtn?.click();
     }
   });
 }
@@ -796,14 +812,16 @@ function updateEvaluationDisplay() {
     if (currentPos) {
       try {
         const ch = new Chess(currentPos.fen);
-        if (ch.isCheckmate()) {
-          whiteScore = ch.turn() === "w" ? -10 : 10;
-        }
+        if (ch.isGameOver()) whiteScore = ch.isCheckmate() ? (ch.turn() === "w" ? -10 : 10) : 0;
       } catch {}
     }
   }
 
-  const hasScore = whiteScore !== undefined && Number.isFinite(whiteScore);
+  // Retain the last visible evaluation until this position has a real score.
+  // This is presentation state only; never cache it as this node's analysis.
+  if (Number.isFinite(whiteScore)) state.displayedWhiteScore = whiteScore;
+  else whiteScore = state.displayedWhiteScore;
+  const hasScore = Number.isFinite(whiteScore);
   const effectiveScore = hasScore ? whiteScore : 0;
   const scoreText = hasScore ? formatScore(effectiveScore) : "—";
 
@@ -987,6 +1005,7 @@ window.addEventListener("keydown", e => {
     return;
   }
   if (["TEXTAREA", "INPUT", "SELECT"].includes(e.target.tagName) || e.target.isContentEditable || $("promotionDialog").open) return;
+  if (e.target.closest?.("#feedbackContainer") && ["ArrowUp", "ArrowDown"].includes(e.key)) return;
   if (e.key === "ArrowLeft") {
     e.preventDefault();
     renderBoard(state.cursor - 1);
@@ -1219,112 +1238,82 @@ function getLocalDetailedFeedback(result) {
   return { whyText, tipText, concept };
 }
 
-function renderAiCoachCardHtml(coaching) {
-  if (!coaching) return "";
-  const conceptHtml = coaching.concept
-    ? `<span class="ai-concept-badge">⚡ ${esc(coaching.concept)}</span>`
-    : "";
+let feedbackTarget = null;
 
-  return `
-    <div id="aiCoachSection" class="ai-coach-card">
-      <div class="ai-coach-header">
-        <div class="ai-coach-title">
-          <span class="ai-sparkle-icon">✦</span>
-          <span>Gemini AI Coach</span>
-        </div>
-        ${conceptHtml}
-      </div>
-      <p class="ai-coach-why">${esc(coaching.why || "")}</p>
-    </div>`;
+function feedbackBlock(title, text) {
+  return `<div class="feedback-block"><h3>${esc(title)}</h3><p>${esc(text)}</p></div>`;
 }
 
 function renderFeedback(result) {
+  const tree = state.tree;
+  const node = tree?.current;
+  if (!feedbackTarget || feedbackTarget.tree !== tree || feedbackTarget.node !== node || feedbackTarget.result !== result) {
+    cancelPendingCoaching();
+    feedbackTarget = { tree, node, result };
+  }
+  const target = feedbackTarget;
   if (!result) {
-    const node = state.tree?.current;
     const message = node?.analysisStatus === "pending" ? "Analyzing this move with Stockfish..."
       : node?.analysisStatus === "error" ? `Analysis failed: ${node.error}. Use Retry beside the move.`
       : "Select a move after analysis to view its evaluation, classification, and coaching notes.";
-    $("feedbackContent").innerHTML = `
-      <div class="feedback-empty">
-        ${esc(message)}
-      </div>`;
+    $("feedbackContent").innerHTML = `<div class="feedback-empty">${esc(message)}</div>`;
     return;
   }
 
+  const beforeFen = result.beforeFen;
+  const hasKey = hasApiKey();
+  const providerId = getProvider();
+  const provider = PROVIDERS[providerId];
+  const ai = getCoachingState(result, beforeFen);
   const local = getLocalDetailedFeedback(result);
-  const beforeFen = result.beforeFen || (state.cursor > 0 ? state.positions[state.cursor - 1]?.fen : "");
-  const cachedAi = getCachedCoaching(result, beforeFen);
-
-  let aiSectionHtml = "";
-  if (hasApiKey()) {
-    if (cachedAi) {
-      aiSectionHtml = renderAiCoachCardHtml(cachedAi);
-    } else {
-      aiSectionHtml = `
-        <div id="aiCoachSection" class="ai-coach-loading">
-          <div class="ai-loading-spinner"></div>
-          <span>Analyzing position with Gemini AI Coach...</span>
-        </div>`;
-    }
-  } else {
-    aiSectionHtml = `
-      <div class="ai-coach-banner">
-        <div class="ai-banner-left">
-          <span class="ai-banner-icon">✦</span>
-          <div class="ai-banner-text">
-            <strong>Unlock Grandmaster AI Explanations</strong>
-            Connect free Google Gemini for deep natural-language move coaching.
-          </div>
-        </div>
-        <button id="openAiSettingsBtn" class="ai-banner-btn" type="button">Connect AI</button>
-      </div>`;
-  }
+  const coaching = ai?.status === "ready" ? ai.coaching : null;
+  const continuation = `<div class="feedback-block"><h3>Stockfish recommended continuation</h3>
+    <p class="pv-line">${esc(result.pv || result.bestSan || "No continuation reported.")}</p></div>`;
+  const body = coaching
+    ? `<div class="feedback-block"><div class="feedback-block-header"><h3>Move explanation</h3>
+        <span class="feedback-concept-pill">${esc(coaching.concept)}</span></div><p>${esc(coaching.why)}</p></div>
+      ${feedbackBlock("Tactical breakdown", coaching.tactical)}
+      ${feedbackBlock("Positional breakdown", coaching.positional)}
+      ${feedbackBlock("Why Stockfish recommends this", coaching.recommendation)}
+      ${continuation}${feedbackBlock("Practical takeaway", coaching.tip)}`
+    : `<div class="feedback-block"><div class="feedback-block-header"><h3>Feedback</h3>
+        <span class="feedback-concept-pill">${esc(local.concept)}</span></div><p>${local.whyText}</p></div>${continuation}`;
+  const guidance = hasKey
+    ? `<strong>AI explanations enabled</strong>${provider.name} explains this move using the selected position and Stockfish analysis sent to ${provider.recipient}.`
+    : `<strong>About move explanations</strong>You're viewing local Stockfish-based feedback. Choose Gemini or Groq and add its API key in Settings to get tactical and positional explanations based on the board and Stockfish's recommended lines.`;
+  const status = !hasKey ? "" : ai?.status === "error"
+    ? `<div id="aiCoachStatus" class="ai-feedback-status error" role="status">${esc(ai.error)} Local feedback is shown below.
+        <button id="retryAiCoaching" type="button" class="ai-banner-btn">Retry AI</button></div>`
+    : coaching ? `<div id="aiCoachStatus" class="ai-feedback-status" role="status">Explained by ${provider.name} using Stockfish analysis.</div>`
+    : `<div id="aiCoachStatus" class="ai-coach-loading" role="status"><div class="ai-loading-spinner"></div>
+        <span>${provider.name} is explaining this position. Local feedback remains available below.</span></div>`;
 
   $("feedbackContent").innerHTML = `
-    <div class="feedback-header-box ${result.key}">
-      <div class="feedback-title-group">
-        <span class="feedback-badge" style="background-color: ${result.color}; color: ${result.textColor};">
-          ${esc(result.sign)} ${esc(result.label)}
-        </span>
-        <span class="feedback-move-text">${esc(result.moveNo)} ${esc(result.san)}</span>
-      </div>
-    </div>
+    <div class="feedback-header-box ${esc(result.key)}"><div class="feedback-title-group">
+      <span class="feedback-badge" style="background-color: ${result.color}; color: ${result.textColor};">${esc(result.sign)} ${esc(result.label)}</span>
+      <span class="feedback-move-text">${esc(result.moveNo)} ${esc(result.san)}</span></div></div>
+    <div class="ai-coach-banner"><div class="ai-banner-text">${guidance}</div>
+      <button id="openAiSettingsBtn" class="ai-banner-btn" type="button">Settings</button></div>
+    ${status}<div id="positionFeedback" data-source="${coaching ? providerId : "local"}">${body}</div>`;
+  $("openAiSettingsBtn").addEventListener("click", event => {
+    event.stopPropagation();
+    openAiSettings();
+  });
 
-    ${aiSectionHtml}
-
-    <div class="feedback-block">
-      <div class="feedback-block-header">
-        <h3>Tactical & Positional Breakdown</h3>
-        <span class="feedback-concept-pill">${esc(local.concept)}</span>
-      </div>
-      <p>${local.whyText}</p>
-    </div>
-
-    <div class="feedback-block">
-      <h3>Engine’s recommended continuation</h3>
-      <p class="pv-line">${esc(result.pv || "No continuation reported.")}</p>
-    </div>`;
-
-  const openAiBtn = $("openAiSettingsBtn");
-  if (openAiBtn) {
-    openAiBtn.addEventListener("click", openGeminiSettings);
-  }
-
-  if (hasApiKey() && !cachedAi) {
-    const targetTree = state.tree;
-    const targetNode = state.tree?.current;
-    generateCoaching(result, beforeFen).then(coaching => {
-      const currentActive = state.cursor > 0 ? state.results[state.cursor - 1] : null;
-      if (state.tree === targetTree && state.tree.current === targetNode && currentActive === result) {
-        const aiSec = $("aiCoachSection");
-        if (aiSec && coaching) {
-          aiSec.outerHTML = renderAiCoachCardHtml(coaching);
-        } else if (aiSec && !coaching) {
-          aiSec.style.display = "none";
-        }
-      }
+  const request = (retry = false) => {
+    const key = getApiKey();
+    const selectedProvider = getProvider();
+    const promise = generateCoaching(result, beforeFen, { retry });
+    // Render pending state immediately when retrying, without attaching a second request.
+    if (retry) renderFeedback(result);
+    promise.then(() => {
+      if (getProvider() !== selectedProvider || getApiKey() !== key) return;
+      updateAiUi(false);
+      if (feedbackTarget === target) renderFeedback(result);
     });
-  }
+  };
+  $("retryAiCoaching")?.addEventListener("click", () => request(true));
+  if (hasKey && !ai) request();
 }
 
 function updateAnalysisProgress(current, total, statusText, isDone = false, isStopped = false) {
@@ -1517,5 +1506,5 @@ async function autoImportPendingGame() {
   }
 }
 updatePlayerHeaders();
-updateGeminiUi();
+updateAiUi();
 autoImportPendingGame();

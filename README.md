@@ -8,7 +8,7 @@ A free Firefox/Zen WebExtension starter for reviewing **completed** Chess.com ga
 - PGN import by file or pasted text.
 - Local Stockfish integration (lite, single-threaded build) and adjustable per-position time.
 - Heuristic move labels based on evaluation changes.
-- No paid APIs or cloud analysis.
+- Local Stockfish analysis works without an API key. Optional Gemini or Groq explanations use your selected provider's API key and usage limits.
 
 ## Important limitations of this first MVP
 
@@ -76,6 +76,8 @@ Click a piece and its destination, or drag it onto a legal square. Legal destina
 
 The engine's best-move arrow is translucent light blue. Selecting pieces leaves its analysis request running. If the engine cannot provide a legal suggestion, use **Retry** beside its status; terminal positions have no best-move arrow.
 
+The board uses Lichess's default cream and brown colors. When a new variation position is still being analyzed, the evaluation bar holds its last score and moves to the new evaluation when available. Loading another game resets the display.
+
 Right-drag between any two squares to draw a planning arrow, or right-click a square to add a circle. Repeat an annotation to remove it. Drawing over the same endpoints with another color changes its color:
 
 | Modifier with right-click/drag | Color |
@@ -86,6 +88,16 @@ Right-drag between any two squares to draw a planning arrow, or right-click a sq
 | Ctrl + Alt | Yellow |
 
 Planning annotations remain visible while the engine updates and when you flip the board. Left-clicking the board, making a move, navigating to another position, or loading a game clears them. The best-move arrow toggle affects only the engine suggestion. Planning arrows do not change the game or start engine analysis.
+
+## Optional Gemini or Groq explanations
+
+Without an API key for the selected provider, move feedback and Stockfish analysis run locally as before. Open **Menu > AI Coach**, choose **Gemini** or **Groq**, create a key in [Google AI Studio](https://aistudio.google.com/app/apikey) or [Groq Console](https://console.groq.com/keys), paste it, and select **Save**. Select an analyzed move to verify the connection. The status distinguishes a saved key from a successful connection. Each provider's pricing, access requirements, and quota limits apply.
+
+With a working key, the feedback panel explains the move, tactics, positional considerations, Stockfish's recommendation, and a practical takeaway. It uses the before/after positions, board facts, and legally replayed Stockfish lines for the selected original-game or variation move. Scores and classifications remain Stockfish-based; the selected AI provider supplies language, which can still contain mistakes. The local explanation remains available while loading or when a request fails. **Retry AI** retries that position; otherwise failed requests are not repeatedly sent on each render.
+
+Keys are saved separately in this browser profile. Existing Gemini keys continue to work. Gemini authenticates only with Google using `x-goog-api-key`; Groq uses `Authorization: Bearer` only at `api.groq.com`. Only the selected provider receives the position, played move, board facts, and engine evidence. Player names and the full PGN are not included. Switching providers cancels pending requests and retains both saved keys; it does not automatically try another provider after a failure. **Clear API key** removes only the selected provider's key and returns its feedback to local mode, even if the other provider has a saved key. The selected provider is remembered after reloading.
+
+Explanations are cached in memory by provider, model, position, and engine evidence. The Groq adapter uses `openai/gpt-oss-120b` with strict JSON schema output; the Gemini adapter uses `gemini-3.8-flash`.
 
 ## Development checks
 
@@ -99,10 +111,18 @@ npm run test:browser
 
 Unit tests cover branching, return positions, special moves, board coordinates, suggestion validation, and engine queue cancellation/recovery. Browser tests exercise the generated review page in Chromium and Firefox with the packaged Stockfish worker and WASM, including drag-and-drop, planning annotations, gesture cancellation, variations, and game summaries. Controlled delayed-worker tests also verify suggestion recovery and uninterrupted requests during piece selection.
 
+Gemini and Groq client checks use local HTTP contract simulations, require Postman CLI 1.75+, and need no real API key or Postman login:
+
+```powershell
+npm run test:coaching
+```
+
+These checks exercise success, caching, deeper Stockfish analysis, key removal, late responses, explicit retry, invalid keys, quota limits, server failures, invalid/blocked responses, safe text rendering, and timeouts in both browsers. They establish client behavior against fixtures; live provider access and chess explanation quality require a separate manual check with your own key. See [simulation details](postman/README.md).
+
 To load the extension itself in Firefox/Zen, run `npm run build`, open `about:debugging`, select **This Firefox > Load Temporary Add-on**, and choose `dist/manifest.json`.
 
 ## Privacy and fair play
 
-- PGN and analysis stay in the browser after dependencies are installed; no game data is sent to a server by this extension.
+- With no key for the selected AI provider, PGN and chess analysis stay in the browser after dependencies are installed. With a key saved, the selected position and engine context are sent only to that provider for explanations, as described above.
 - Use this only for completed games or independent study. Do not use engine analysis during live games.
 - Stockfish is GPL-licensed. Keep the upstream license notice with the distributed engine and comply with its license if redistributing builds.

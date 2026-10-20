@@ -277,3 +277,69 @@ test("touch gestures move a piece without a second synthetic click", async ({ pa
   await expect(page.locator("#moveList .move-chip")).toHaveCount(6);
   await expect(page.locator(".drag-piece")).toHaveCount(0);
 });
+
+test("new variation moves hold the displayed evaluation until calculated, including when flipped", async ({ page }) => {
+  // Manually release searches so pending states are deterministic, independent
+  // of the browser's speed or how quickly Stockfish would finish a position.
+  await page.addInitScript(() => {
+    window.pendingSearch = null;
+    window.Worker = class extends EventTarget {
+      emit(data) { this.dispatchEvent(new MessageEvent("message", { data })); }
+      postMessage(command) {
+        if (command === "uci") queueMicrotask(() => this.emit("uciok"));
+        if (command === "isready") queueMicrotask(() => this.emit("readyok"));
+        if (command.startsWith("position fen ")) this.fen = command.slice(13);
+        if (command.startsWith("go ")) {
+          window.pendingSearch = { worker: this, finish: () => {
+            window.pendingSearch = null;
+            const black = this.fen.split(" ")[1] === "b";
+            const score = window.zeroEvaluation ? 0 : black ? 150 : 300;
+            this.emit(`info depth 12 score cp ${score}`);
+            this.emit(`bestmove ${black ? "e7e5" : "g1f3"}`);
+          } };
+        }
+      }
+      terminate() { if (window.pendingSearch?.worker === this) window.pendingSearch = null; }
+    };
+  });
+  await load(page);
+  async function releaseUntil(score) {
+    for (let i = 0; i < 8 && await page.locator("#evalBarScore").textContent() !== score; i++) {
+      await expect.poll(() => page.evaluate(() => Boolean(window.pendingSearch))).toBe(true);
+      await page.evaluate(() => window.pendingSearch.finish());
+    }
+    await expect(page.locator("#evalBarScore")).toHaveText(score);
+  }
+  await releaseUntil("3.0");
+  const fill = page.locator("#evalBarWhite");
+  await expect(fill).toHaveAttribute("style", /height: 69\.5%/);
+  await page.evaluate(() => {
+    window.fillChanges = [];
+    new MutationObserver(() => window.fillChanges.push(document.getElementById("evalBarWhite").style.height))
+      .observe(document.getElementById("evalBarWhite"), { attributes: true, attributeFilter: ["style"] });
+  });
+  await page.locator('[data-square="e2"]').click();
+  await page.locator('[data-square="e3"]').click();
+  await expect(page.locator("#moveCounter")).toHaveText("1. e3");
+  await expect(page.locator("#evalBarScore")).toHaveText("3.0");
+  await expect(fill).toHaveAttribute("style", /height: 69\.5%/);
+  await page.keyboard.press("f");
+  await expect(fill).toHaveAttribute("style", /height: 69\.5%/);
+  await releaseUntil("1.5");
+  await expect(fill).toHaveAttribute("style", /height: 40\.25%/);
+  expect(await page.evaluate(() => window.fillChanges)).not.toContain("50%");
+  // A genuine equal evaluation must still replace the held score.
+  await page.evaluate(() => { window.zeroEvaluation = true; });
+  await page.locator('[data-square="c7"]').click();
+  await page.locator('[data-square="c5"]').click();
+  await expect(page.locator("#evalBarScore")).toHaveText("1.5");
+  await expect(fill).toHaveAttribute("style", /height: 40\.25%/);
+  await releaseUntil("0.0");
+  await expect(fill).toHaveAttribute("style", /height: 50%/);
+  // Importing another game resets the held value rather than leaking it.
+  await page.locator("#resetVariationBtn").click();
+  await expect(page.locator("#evalBarScore")).toHaveText("3.0");
+  await page.locator("#pgnFile").setInputFiles({ name: "next.pgn", mimeType: "text/plain", buffer: Buffer.from("1. d4 d5 *") });
+  await expect(fill).toHaveAttribute("style", /height: 50%/);
+  await expect(page.locator("#evalBarScore")).toHaveText("0.0");
+});

@@ -1,0 +1,10 @@
+version: 1
+name: groq-coaching
+slug: groq-coaching
+protocol: http
+port: 4902
+interceptRequests: true
+scenarios:
+  - name: default
+    path: ./default.js
+    default: true

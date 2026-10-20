@@ -88,7 +88,7 @@
     <!-- RIGHT: ANALYSIS & MOVE LIST SIDEBAR -->
     <aside class="sidebar-panel">
       <!-- MOVE FEEDBACK & COACHING CARD -->
-      <div id="feedbackContainer" class="feedback-container">
+      <div id="feedbackContainer" class="feedback-container" tabindex="0" aria-label="Move feedback">
         <div id="feedbackContent" class="feedback-content">
           <div class="feedback-empty">
             <p>Select any move or start analysis to inspect move classifications, evaluation changes, and coaching notes.</p>
@@ -292,7 +292,7 @@
                   </label>
                 </div>
 
-                <!-- AI COACHING (GEMINI API KEY) -->
+                <!-- OPTIONAL AI COACHING -->
                 <div class="menu-speed-row" style="border-top: 1px solid var(--line-subtle); margin-top: 4px; padding-top: 8px;">
                   <span class="menu-speed-label">
                     <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
@@ -300,16 +300,19 @@
                     </svg>
                     <span>AI Coach</span>
                   </span>
-                  <span id="geminiStatus" class="gemini-status-dot off" title="Gemini AI coaching disabled"></span>
+                  <span id="aiStatus" class="ai-status-dot off" title="Gemini AI coaching disabled"></span>
+                </div>
+                <div class="menu-speed-row">
+                  <label for="aiProvider" class="menu-speed-label">Provider</label>
+                  <select id="aiProvider" class="menu-select"><option value="gemini">Gemini</option><option value="groq">Groq</option></select>
                 </div>
                 <div class="menu-api-row">
-                  <input id="geminiApiKey" type="password" class="menu-api-input" placeholder="Gemini API key" autocomplete="off" spellcheck="false" />
-                  <button id="saveGeminiKey" class="dock-btn primary-sm" type="button" style="flex-shrink:0;">Save</button>
-                  <button id="clearGeminiKey" class="sidebar-nav-btn" type="button" title="Clear API key" style="width:28px;height:28px;font-size:11px;display:none;padding:0;">✕</button>
+                  <input id="aiApiKey" type="password" class="menu-api-input" placeholder="Gemini API key" autocomplete="off" spellcheck="false" />
+                  <button id="saveAiKey" class="dock-btn primary-sm" type="button" style="flex-shrink:0;">Save</button>
+                  <button id="clearAiKey" class="sidebar-nav-btn" type="button" title="Clear API key" style="width:28px;height:28px;font-size:11px;display:none;padding:0;">✕</button>
                 </div>
-                <div class="menu-api-help">
-                  Free at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio ↗</a>
-                </div>
+                <div id="aiKeyHelp" class="menu-api-help"></div>
+                <div class="menu-api-help"><span id="aiConnectionStatus" role="status">Local feedback; no Gemini API key saved</span></div>
               </div>
 
               <!-- COLLAPSIBLE PASTE DRAWER INSIDE MENU -->

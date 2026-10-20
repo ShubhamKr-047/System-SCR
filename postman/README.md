@@ -1,0 +1,13 @@
+# AI coaching simulations
+
+The Gemini mock follows Google's [generateContent structured-output REST contract](https://ai.google.dev/gemini-api/docs/generate-content/structured-output). It accepts `POST /v1beta/models/gemini-3.8-flash:generateContent` with `x-goog-api-key`, `contents`, `systemInstruction`, and a JSON schema under `generationConfig.responseFormat.text`. Successful responses contain JSON text in `candidates[0].content.parts`, with `finishReason: STOP`; error responses use Google's `error` envelope.
+
+The Groq mock follows the [Groq chat completions API](https://console.groq.com/docs/api-reference) and [structured-output contract](https://console.groq.com/docs/structured-outputs). It accepts `POST /openai/v1/chat/completions` with `Authorization: Bearer`, model `openai/gpt-oss-120b`, system/user `messages`, and `response_format.json_schema` with `strict: true`. Responses contain JSON text in `choices[0].message.content` with `finish_reason: stop`; refusals, malformed output, truncation, and HTTP errors retain local feedback. The initial API discovery result incorrectly described this operation as GET, so the adapter and simulation use Groq's official POST documentation instead.
+
+The six explanation fields and their descriptions are defined in `COACHING_SCHEMA` in `src/coaching.js`. The mock checks the request structure and returns illustrative fixtures. Neither mock calls a live provider or evaluates chess quality. The initial provider-workspace search required a Postman login, so no owner-maintained mock was available for comparison. Provider behavior was checked against official documentation instead; the older Gemini model returned by API discovery was not reused.
+
+Run `npm run test:coaching` with Postman CLI 1.75+ installed. Playwright starts the production preview on port 4173 and the simulation on port 4900, proxies Gemini and Groq HTTP requests to the simulation, and stops both afterward. The production API URL and request code remain in use. No real key is needed and no resources are published. Simulation `request` events show the exercised POSTs and status codes.
+
+Fixtures use test keys: `test-success`, `test-delayed`, `test-invalid` (Gemini 403 / Groq 401), `test-quota` (429), `test-unavailable` (503), `test-malformed`, `test-blocked`, `test-html`, and `test-timeout`. They must never be used with live providers. The local `/health` route is only a readiness probe. Unmodeled routes return 501.
+
+The suite proves request construction, response validation, local fallback, retries, cache invalidation, cancellation, and browser rendering against these fixtures. Live tests with actual provider keys are still needed to verify project/model access and explanation quality.

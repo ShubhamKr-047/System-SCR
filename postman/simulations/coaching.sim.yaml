@@ -1,0 +1,7 @@
+simulation: chess-coaching
+routing: path
+mocks:
+  - routeKey: gemini
+    path: ../mocks/gemini/config.yaml
+  - routeKey: groq
+    path: ../mocks/groq/config.yaml
