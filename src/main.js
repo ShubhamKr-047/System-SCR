@@ -1412,15 +1412,32 @@ function renderFeedback(result) {
 
   $("feedbackContent").innerHTML = `
     <div class="feedback-header-box ${esc(result.key)}">
-      ${result.key === "brilliant" ? `<svg class="brilliant-flames" viewBox="0 0 600 80" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-        <defs><linearGradient id="brilliantFlameGradient" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0%" stop-color="#159ddd" stop-opacity=".55" />
-          <stop offset="55%" stop-color="#36d9f5" stop-opacity=".28" />
-          <stop offset="100%" stop-color="#a3f4ff" stop-opacity="0" />
-        </linearGradient></defs>
-        <path class="brilliant-flame-layer" d="M0 80V58C18 63 26 43 20 22C51 41 37 63 65 68C89 70 81 29 106 8C95 43 131 37 125 66C155 77 161 53 158 37C184 48 178 70 210 64C233 58 216 28 243 10C231 48 272 42 265 69C301 78 298 40 319 23C310 50 338 56 346 69C372 63 360 29 389 5C376 39 414 41 408 66C438 77 443 50 438 32C469 50 456 69 488 66C514 60 502 28 529 13C518 47 551 47 551 69C576 71 580 52 600 43V80Z" />
-        <path class="brilliant-flame-layer" d="M0 80V72C35 76 33 43 58 25C46 57 79 56 79 73C111 81 117 56 112 40C143 56 132 77 167 70C187 65 183 42 202 23C194 55 229 55 231 74C264 80 269 45 292 14C278 51 309 54 316 72C349 80 351 56 349 40C376 54 374 76 404 71C425 66 422 42 446 21C434 55 470 56 473 73C502 79 510 57 505 40C535 51 531 75 561 69C577 64 579 56 600 52V80Z" />
-        <path class="brilliant-flame-layer" d="M0 80V76C54 66 55 78 88 74C117 70 120 53 136 36C129 64 160 66 183 75C220 79 231 64 258 57C247 76 288 77 321 73C344 71 333 46 360 26C347 61 383 69 407 76C446 78 451 61 472 49C465 71 502 74 526 76C551 77 564 62 577 40C570 66 587 72 600 72V80Z" />
+      ${result.key === "brilliant" ? `<svg class="brilliant-flames" viewBox="0 0 600 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+        <defs>
+          <linearGradient id="brilliantFire" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0" stop-color="#ebffff" stop-opacity=".95" />
+            <stop offset=".2" stop-color="#68efff" stop-opacity=".85" />
+            <stop offset=".55" stop-color="#00aaff" stop-opacity=".65" />
+            <stop offset="1" stop-color="#168bff" stop-opacity="0" />
+          </linearGradient>
+          <linearGradient id="brilliantCore" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0" stop-color="#ffffff" stop-opacity=".95" />
+            <stop offset=".45" stop-color="#a0f7ff" stop-opacity=".7" />
+            <stop offset="1" stop-color="#43dfff" stop-opacity="0" />
+          </linearGradient>
+          <radialGradient id="brilliantHeat">
+            <stop stop-color="#00bfff" stop-opacity=".4" />
+            <stop offset="1" stop-color="#007bff" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+        <ellipse class="brilliant-heat" cx="310" cy="105" rx="350" ry="105" fill="url(#brilliantHeat)" />
+        ${Array.from({ length: 16 }, (_, i) => `<g transform="translate(${i * 40 - 18} ${[12, 0, 24, 8, 17, -12, 20][i % 7]}) scale(${[.9, 1.25, 1.05][i % 3]} 1)">
+          <g class="brilliant-flame" style="--flicker:${1.1 + (i % 5) * .19}s;--delay:${-i * .37}s;--lean:${i % 2 ? -1 : 1}">
+            <path fill="url(#brilliantFire)" d="M0 108C-5 87 0 72 10 57C20 42 24 25 17 3C42 23 40 42 29 59C42 53 45 41 43 32C64 59 47 77 51 108Z" />
+            <path class="brilliant-flame-core" fill="url(#brilliantCore)" d="M10 108C3 91 14 79 21 65C26 55 27 47 26 42C43 65 26 79 36 88C37 81 40 77 43 75C40 90 49 98 46 108Z" />
+          </g>
+        </g>`).join("")}
+        ${Array.from({ length: 12 }, (_, i) => `<circle class="brilliant-ember" cx="${18 + i * 51}" cy="95" r="${i % 3 === 0 ? 1.8 : 1}" style="--delay:${-i * .43}s;--drift:${i % 2 ? 12 : -18}px;--rise:${1.8 + (i % 4) * .35}s" />`).join("")}
       </svg>` : ""}
       <div class="feedback-title-group">
       <span class="feedback-badge" style="background-color: ${result.color}; color: ${result.textColor};">${esc(result.sign)} ${esc(result.label)}</span>
