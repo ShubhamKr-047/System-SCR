@@ -16,6 +16,9 @@ async function key(page, value) {
   await page.locator("#saveAiKey").click();
   await page.locator("#hamburgerBtn").click();
 }
+async function askAi(page) {
+  await page.locator("#askAiCoachingBtn").click();
+}
 const local = page => page.locator('#positionFeedback[data-source="local"]');
 const ai = page => page.locator(`#positionFeedback[data-source="${provider}"]`);
 
@@ -58,6 +61,10 @@ test("no key preserves local feedback, explains setup, and sends no requests", a
 
 test("AI replaces generic feedback with engine-grounded breakdown and caches each variation", async ({ page }) => {
   await key(page, "test-success");
+  expect(requests.get(page)).toHaveLength(0);
+  await expect(page.locator("#askAiCoachingBtn")).toBeVisible();
+  await expect(page.locator(".ai-prompt-question")).toContainText("Want to know why this move was");
+  await askAi(page);
   await expect(ai(page)).toContainText("Explanation for e3");
   await page.locator("#feedbackContainer").focus();
   await page.locator("#feedbackContainer").press("ArrowDown");
@@ -84,6 +91,8 @@ test("AI replaces generic feedback with engine-grounded breakdown and caches eac
   expect(context.stockfish.opponentLine.length).toBeGreaterThan(0);
   await expect(page.locator("#aiStatus")).toHaveAttribute("title", `${name} connection verified`);
   await play(page, "c7", "c5");
+  await expect(page.locator("#askAiCoachingBtn")).toBeVisible();
+  await askAi(page);
   await expect(ai(page)).toContainText("Explanation for c5");
   const count = requests.get(page).length;
   await page.locator('.move-chip[title="1. e3"]').click();
@@ -92,6 +101,8 @@ test("AI replaces generic feedback with engine-grounded breakdown and caches eac
   await page.locator("#openAiSettingsBtn").click();
   await page.locator("#moveTime").selectOption("1000");
   await page.locator("#hamburgerBtn").click();
+  await expect(page.locator("#askAiCoachingBtn")).toBeVisible();
+  await askAi(page);
   await expect.poll(() => requests.get(page).length).toBe(count + 1);
   await expect(ai(page)).toContainText("Explanation for e3");
   const body = requests.get(page).at(-1).body;
@@ -108,6 +119,7 @@ for (const [value, message] of [
 ]) {
   test(`${value} retains local feedback and offers explicit retry`, async ({ page }) => {
     await key(page, value);
+    await askAi(page);
     await expect(page.locator("#aiCoachStatus")).toContainText(message);
     await expect(local(page)).toBeVisible();
     const count = requests.get(page).length;
@@ -120,17 +132,20 @@ for (const [value, message] of [
 
 test("local feedback stays while loading and an old response cannot replace another move", async ({ page }) => {
   await key(page, "test-delayed");
+  await askAi(page);
   await expect(page.locator("#aiCoachStatus")).toContainText(`${name} is explaining`);
   await expect(local(page)).toBeVisible();
   await page.locator("body").press("f");
   expect(requests.get(page)).toHaveLength(1);
   await play(page, "c7", "c5");
+  await askAi(page);
   await expect(ai(page)).toContainText("Explanation for c5");
   await expect(ai(page)).not.toContainText("Explanation for e3");
 });
 
 test("removing a key during a request keeps local feedback and discards the response", async ({ page }) => {
   await key(page, "test-delayed");
+  await askAi(page);
   await expect.poll(() => requests.get(page).length).toBe(1);
   await page.locator("#openAiSettingsBtn").click();
   await page.locator("#clearAiKey").click();
@@ -146,6 +161,7 @@ test("removing a key during a request keeps local feedback and discards the resp
 
 test("AI text is rendered as text, never executable HTML", async ({ page }) => {
   await key(page, "test-html");
+  await askAi(page);
   await expect(ai(page)).toContainText("<img src=x");
   await expect(ai(page).locator("img")).toHaveCount(0);
   expect(await page.evaluate(() => window.aiInjected)).toBeUndefined();
@@ -153,6 +169,7 @@ test("AI text is rendered as text, never executable HTML", async ({ page }) => {
 
 test("timeout ends loading and preserves local feedback", async ({ page }) => {
   await key(page, "test-timeout");
+  await askAi(page);
   await expect(page.locator("#aiCoachStatus")).toContainText("took too long", { timeout: 30000 });
   await expect(local(page)).toBeVisible();
   await expect(page.locator("#retryAiCoaching")).toBeVisible();
@@ -160,11 +177,14 @@ test("timeout ends loading and preserves local feedback", async ({ page }) => {
 
 test("original game and nested variations each retain their own explanation", async ({ page }) => {
   await key(page, "test-success");
+  await askAi(page);
   await expect(ai(page)).toContainText("Explanation for e3");
   await play(page, "c7", "c5");
+  await askAi(page);
   await expect(ai(page)).toContainText("Explanation for c5");
   await page.locator('.move-chip[title="1. e3"]').click();
   await play(page, "d7", "d5");
+  await askAi(page);
   await expect(ai(page)).toContainText("Explanation for d5");
   await page.locator("#parentVariationBtn").click();
   await expect(ai(page)).toContainText("Explanation for e3");
@@ -172,26 +192,28 @@ test("original game and nested variations each retain their own explanation", as
   await expect(page.locator("#startReviewText")).toHaveText("Start", { timeout: 30000 });
   await page.locator("#tabMoves").click();
   await page.locator('.move-chip[title="1. e4"]').click();
-  await expect(ai(page)).toContainText("Explanation for e4");
-  await page.locator('.move-chip[title="1... d5"]').click();
-  await expect(ai(page)).toContainText("Explanation for d5");
+  // 1. e4 is a book move: no prompt question and no AI coaching requested
+  await expect(page.locator("#askAiCoachingBtn")).toHaveCount(0);
+  await expect(page.locator(".ai-prompt-card")).toHaveCount(0);
 });
 
 test("importing another game while AI is pending cannot attach the old explanation", async ({ page }) => {
   await key(page, "test-delayed");
+  await askAi(page);
   await expect.poll(() => requests.get(page).length).toBe(1);
   await page.locator("#pgnFile").setInputFiles({ name: "next.pgn", mimeType: "text/plain", buffer: Buffer.from("1. d4 d5 *") });
   await expect(page.locator("#moveCounter")).toHaveText("Start");
   await play(page, "c2", "c4");
+  await askAi(page);
   await expect(ai(page)).toContainText("Explanation for c4");
   await expect(ai(page)).not.toContainText("Explanation for e3");
 });
-
 
 test("switching providers isolates keys, cancels late results, restores caches, and remembers selection", async ({ page }) => {
   const other = provider === "gemini" ? "groq" : "gemini";
   const otherName = other === "groq" ? "Groq" : "Gemini";
   await key(page, "test-delayed");
+  await askAi(page);
   await expect.poll(() => requests.get(page).length).toBe(1);
   await page.locator("#openAiSettingsBtn").click();
   await page.locator("#aiProvider").selectOption(other);
@@ -201,14 +223,13 @@ test("switching providers isolates keys, cancels late results, restores caches, 
   await page.locator("#aiApiKey").fill("test-success");
   await page.locator("#saveAiKey").click();
   await page.locator("#hamburgerBtn").click();
+  await askAi(page);
   await expect(page.locator(`#positionFeedback[data-source="${other}"]`)).toContainText("Explanation for e3");
-  await expect(page.locator("#aiCoachStatus")).toContainText(`Explained by ${otherName}`);
   await page.locator("#openAiSettingsBtn").click();
   await page.locator("#aiProvider").selectOption(provider);
   await expect(page.locator("#aiApiKey")).toHaveValue("test-delayed");
   await page.locator("#hamburgerBtn").click();
   await expect(ai(page)).toContainText("Explanation for e3");
-  await expect(page.locator("#aiCoachStatus")).toContainText(`Explained by ${name}`);
   const count = requests.get(page).length;
   await page.locator("#openAiSettingsBtn").click();
   await page.locator("#aiProvider").selectOption(other);
@@ -223,6 +244,17 @@ test("switching providers isolates keys, cancels late results, restores caches, 
   await expect(page.locator("#aiProvider")).toHaveValue(other);
   await expect(page.locator("#aiApiKey")).toHaveValue("");
   await expect(page.locator("#aiConnectionStatus")).toContainText(`no ${otherName} API key`);
+});
+
+test("book moves and forced moves do not ask for AI coaching or send requests", async ({ page }) => {
+  await key(page, "test-success");
+  await page.locator("#startReview").click();
+  await expect(page.locator("#startReviewText")).toHaveText("Start", { timeout: 30000 });
+  await page.locator("#tabMoves").click();
+  await page.locator('.move-chip[title="1. e4"]').click();
+  await expect(page.locator("#askAiCoachingBtn")).toHaveCount(0);
+  await expect(page.locator(".ai-prompt-card")).toHaveCount(0);
+  expect(requests.get(page)).toHaveLength(0);
 });
 
 });

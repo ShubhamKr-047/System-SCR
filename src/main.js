@@ -1,7 +1,7 @@
 import { Chess } from "chess.js";
 import { PIECE_IMAGES } from "./pieces.js";
 import { CLASSIFICATIONS, calculateAccuracy, calculateEstimatedRating } from "./classifications.js";
-import { getApiKey, setApiKey, hasApiKey, getCoachingState, generateCoaching, cancelPendingCoaching, getConnectionStatus, getProvider, setProvider, PROVIDERS } from "./coaching.js";
+import { getApiKey, setApiKey, hasApiKey, getCoachingState, generateCoaching, cancelPendingCoaching, getConnectionStatus, getProvider, setProvider, PROVIDERS, isCoachingEligible, getMoveQuestion } from "./coaching.js";
 import { GameTree, moveLabel } from "./game-tree.js";
 import { EngineQueue } from "./engine.js";
 import { analyzeMove } from "./analysis.js";
@@ -252,7 +252,11 @@ function updateAiUi(refreshInput = true) {
     statusEl.className = `ai-status-dot ${connection === "verified" ? "on" : connection === "error" ? "error" : "off"}`;
     statusEl.title = connection === "verified" ? `${provider.name} connection verified` : connection === "error"
       ? `${provider.name} request failed; local feedback remains available` : hasKey ? "API key saved; connection not yet verified" : `Local feedback; no ${provider.name} API key saved`;
-    if ($("aiConnectionStatus")) $("aiConnectionStatus").textContent = statusEl.title;
+    if ($("aiConnectionStatus")) {
+      $("aiConnectionStatus").textContent = connection === "error"
+        ? `${provider.name} request failed; local feedback remains available`
+        : !hasKey ? `Local feedback; no ${provider.name} API key saved` : "";
+    }
   }
   if (inputEl && refreshInput) {
     inputEl.value = getApiKey();
@@ -262,11 +266,9 @@ function updateAiUi(refreshInput = true) {
   if (clearBtn) {
     clearBtn.style.display = hasKey ? "inline-flex" : "none";
   }
-  $("aiKeyHelp").innerHTML = `Create an API key in <a href="${provider.keyUrl}" target="_blank" rel="noopener">${provider.consoleName}</a>, paste it above, and select Save.
-    With a key saved, ${provider.name} explains the selected move using the position and Stockfish analysis sent to ${provider.recipient}.
-    Without a key for the selected provider, local feedback remains available. Keys are saved separately in this browser profile and sent only to their provider.
-    Use Clear API key to remove the selected provider's key. The provider's usage limits and pricing apply.`;
-
+  if ($("aiKeyHelp")) {
+    $("aiKeyHelp").innerHTML = "";
+  }
 }
 
 function openAiSettings() {
@@ -1264,7 +1266,8 @@ function renderFeedback(result) {
   const hasKey = hasApiKey();
   const providerId = getProvider();
   const provider = PROVIDERS[providerId];
-  const ai = getCoachingState(result, beforeFen);
+  const isEligible = isCoachingEligible(result);
+  const ai = isEligible ? getCoachingState(result, beforeFen) : null;
   const local = getLocalDetailedFeedback(result);
   const coaching = ai?.status === "ready" ? ai.coaching : null;
   const continuation = `<div class="feedback-block"><h3>Stockfish recommended continuation</h3>
@@ -1278,24 +1281,79 @@ function renderFeedback(result) {
       ${continuation}${feedbackBlock("Practical takeaway", coaching.tip)}`
     : `<div class="feedback-block"><div class="feedback-block-header"><h3>Feedback</h3>
         <span class="feedback-concept-pill">${esc(local.concept)}</span></div><p>${local.whyText}</p></div>${continuation}`;
-  const guidance = hasKey
-    ? `<strong>AI explanations enabled</strong>${provider.name} explains this move using the selected position and Stockfish analysis sent to ${provider.recipient}.`
-    : `<strong>About move explanations</strong>You're viewing local Stockfish-based feedback. Choose Gemini or Groq and add its API key in Settings to get tactical and positional explanations based on the board and Stockfish's recommended lines.`;
-  const status = !hasKey ? "" : ai?.status === "error"
-    ? `<div id="aiCoachStatus" class="ai-feedback-status error" role="status">${esc(ai.error)} Local feedback is shown below.
-        <button id="retryAiCoaching" type="button" class="ai-banner-btn">Retry AI</button></div>`
-    : coaching ? `<div id="aiCoachStatus" class="ai-feedback-status" role="status">Explained by ${provider.name} using Stockfish analysis.</div>`
-    : `<div id="aiCoachStatus" class="ai-coach-loading" role="status"><div class="ai-loading-spinner"></div>
+  const bannerHtml = !hasKey
+    ? `<div class="ai-coach-banner"><div class="ai-banner-text"><strong>About move explanations</strong>You're viewing local Stockfish-based feedback. Choose Gemini or Groq and add its API key in Settings to get tactical and positional explanations based on the board and Stockfish's recommended lines.</div>
+        <button id="openAiSettingsBtn" class="ai-banner-btn" type="button">Settings</button></div>`
+    : `<button id="openAiSettingsBtn" style="display:none;" type="button" aria-hidden="true"></button>`;
+
+  let promptHtml = "";
+  let status = "";
+
+  if (isEligible) {
+    if (ai?.status === "error") {
+      status = `<div id="aiCoachStatus" class="ai-feedback-status error" role="status">${esc(ai.error)} Local feedback is shown below.
+        <button id="retryAiCoaching" type="button" class="ai-banner-btn">Retry AI</button></div>`;
+    } else if (ai?.status === "pending") {
+      status = `<div id="aiCoachStatus" class="ai-coach-loading" role="status"><div class="ai-loading-spinner"></div>
         <span>${provider.name} is explaining this position. Local feedback remains available below.</span></div>`;
+    } else if (coaching) {
+      status = "";
+    } else if (hasKey) {
+      const question = getMoveQuestion(result);
+      promptHtml = `
+        <div class="ai-prompt-card ${esc(result.key)}">
+          <div class="ai-prompt-body">
+            <div class="ai-prompt-badge">
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+                <path d="M7.657 1.636a.75.75 0 0 1 .686 0l5.5 3a.75.75 0 0 1 0 1.328l-5.5 3a.75.75 0 0 1-.686 0l-5.5-3a.75.75 0 0 1 0-1.328l5.5-3z"/>
+              </svg>
+              <span>AI Coach</span>
+            </div>
+            <div class="ai-prompt-question">${esc(question)}</div>
+            <div class="ai-prompt-subtext">Get tactical and positional explanations from ${esc(provider.name)}.</div>
+          </div>
+          <button id="askAiCoachingBtn" type="button" class="ai-ask-btn" aria-label="${esc(question)}">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+              <path d="M12 2L14.4 8.6L21 11L14.4 13.4L12 20L9.6 13.4L3 11L9.6 8.6L12 2Z"/>
+            </svg>
+            <span>Ask AI</span>
+          </button>
+        </div>`;
+    } else {
+      const question = getMoveQuestion(result);
+      promptHtml = `
+        <div class="ai-prompt-card ${esc(result.key)}">
+          <div class="ai-prompt-body">
+            <div class="ai-prompt-badge">
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+                <path d="M7.657 1.636a.75.75 0 0 1 .686 0l5.5 3a.75.75 0 0 1 0 1.328l-5.5 3a.75.75 0 0 1-.686 0l-5.5-3a.75.75 0 0 1 0-1.328l5.5-3z"/>
+              </svg>
+              <span>AI Coach</span>
+            </div>
+            <div class="ai-prompt-question">${esc(question)}</div>
+            <div class="ai-prompt-subtext">Add a Gemini or Groq API key in Settings to get deep move explanations.</div>
+          </div>
+          <button id="openAiSettingsBtnPrompt" type="button" class="ai-ask-btn settings-prompt">
+            <span>Set Up AI</span>
+          </button>
+        </div>`;
+    }
+  }
 
   $("feedbackContent").innerHTML = `
     <div class="feedback-header-box ${esc(result.key)}"><div class="feedback-title-group">
       <span class="feedback-badge" style="background-color: ${result.color}; color: ${result.textColor};">${esc(result.sign)} ${esc(result.label)}</span>
       <span class="feedback-move-text">${esc(result.moveNo)} ${esc(result.san)}</span></div></div>
-    <div class="ai-coach-banner"><div class="ai-banner-text">${guidance}</div>
-      <button id="openAiSettingsBtn" class="ai-banner-btn" type="button">Settings</button></div>
+    ${promptHtml}
+    ${bannerHtml}
     ${status}<div id="positionFeedback" data-source="${coaching ? providerId : "local"}">${body}</div>`;
-  $("openAiSettingsBtn").addEventListener("click", event => {
+
+  $("openAiSettingsBtn")?.addEventListener("click", event => {
+    event.stopPropagation();
+    openAiSettings();
+  });
+
+  $("openAiSettingsBtnPrompt")?.addEventListener("click", event => {
     event.stopPropagation();
     openAiSettings();
   });
@@ -1304,16 +1362,17 @@ function renderFeedback(result) {
     const key = getApiKey();
     const selectedProvider = getProvider();
     const promise = generateCoaching(result, beforeFen, { retry });
-    // Render pending state immediately when retrying, without attaching a second request.
-    if (retry) renderFeedback(result);
+    // Render pending/loading state immediately when triggered
+    renderFeedback(result);
     promise.then(() => {
       if (getProvider() !== selectedProvider || getApiKey() !== key) return;
       updateAiUi(false);
       if (feedbackTarget === target) renderFeedback(result);
     });
   };
+
   $("retryAiCoaching")?.addEventListener("click", () => request(true));
-  if (hasKey && !ai) request();
+  $("askAiCoachingBtn")?.addEventListener("click", () => request());
 }
 
 function updateAnalysisProgress(current, total, statusText, isDone = false, isStopped = false) {

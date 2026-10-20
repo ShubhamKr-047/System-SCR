@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Chess } from "chess.js";
-import { buildCoachingContext, getProvider, getApiKey, hasApiKey, setProvider, setApiKey } from "../src/coaching.js";
+import { buildCoachingContext, getProvider, getApiKey, hasApiKey, setProvider, setApiKey, isCoachingEligible, getMoveQuestion } from "../src/coaching.js";
 
 function result() {
   const chess = new Chess();
@@ -66,4 +66,34 @@ test("provider settings preserve legacy Gemini keys and clear only the selected 
     if (previous) Object.defineProperty(globalThis, "localStorage", previous);
     else delete globalThis.localStorage;
   }
+});
+
+test("isCoachingEligible excludes book and forced moves, but allows all other tactical/positional moves", () => {
+  assert.equal(isCoachingEligible({ key: "book", label: "Book Move" }), false);
+  assert.equal(isCoachingEligible({ key: "forced", label: "Forced" }), false);
+  assert.equal(isCoachingEligible(null), false);
+  assert.equal(isCoachingEligible({}), false);
+
+  assert.equal(isCoachingEligible({ key: "blunder", label: "Blunder" }), true);
+  assert.equal(isCoachingEligible({ key: "mistake", label: "Mistake" }), true);
+  assert.equal(isCoachingEligible({ key: "inaccuracy", label: "Inaccuracy" }), true);
+  assert.equal(isCoachingEligible({ key: "miss", label: "Miss" }), true);
+  assert.equal(isCoachingEligible({ key: "brilliant", label: "Brilliant" }), true);
+  assert.equal(isCoachingEligible({ key: "great", label: "Great Move" }), true);
+  assert.equal(isCoachingEligible({ key: "best", label: "Best Move" }), true);
+  assert.equal(isCoachingEligible({ key: "excellent", label: "Excellent" }), true);
+  assert.equal(isCoachingEligible({ key: "good", label: "Good" }), true);
+});
+
+test("getMoveQuestion generates natural questions for every move classification", () => {
+  assert.equal(getMoveQuestion({ key: "blunder", label: "Blunder" }), "Want to know why this move was a blunder?");
+  assert.equal(getMoveQuestion({ key: "mistake", label: "Mistake" }), "Want to know why this move was a mistake?");
+  assert.equal(getMoveQuestion({ key: "inaccuracy", label: "Inaccuracy" }), "Want to know why this move was an inaccuracy?");
+  assert.equal(getMoveQuestion({ key: "miss", label: "Miss" }), "Want to know why this move was a miss?");
+  assert.equal(getMoveQuestion({ key: "brilliant", label: "Brilliant" }), "Want to know why this move was brilliant?");
+  assert.equal(getMoveQuestion({ key: "great", label: "Great Move" }), "Want to know why this move was a great move?");
+  assert.equal(getMoveQuestion({ key: "best", label: "Best Move" }), "Want to know why this move was the best move?");
+  assert.equal(getMoveQuestion({ key: "excellent", label: "Excellent" }), "Want to know why this move was an excellent move?");
+  assert.equal(getMoveQuestion({ key: "good", label: "Good" }), "Want to know why this move was a good move?");
+  assert.equal(getMoveQuestion({ key: "other", label: "Interesting" }), "Want to know why this move was interesting?");
 });

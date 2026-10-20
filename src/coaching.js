@@ -205,3 +205,35 @@ export function generateCoaching(result, fen, { retry = false, timeoutMs = 25000
   })();
   return entry.promise;
 }
+
+export function isCoachingEligible(result) {
+  if (!result || !result.key) return false;
+  return result.key !== "book" && result.key !== "forced";
+}
+
+export function getMoveQuestion(result) {
+  if (!result) return "";
+  const key = result.key?.toLowerCase();
+  switch (key) {
+    case "blunder":
+      return "Want to know why this move was a blunder?";
+    case "mistake":
+      return "Want to know why this move was a mistake?";
+    case "miss":
+      return "Want to know why this move was a miss?";
+    case "inaccuracy":
+      return "Want to know why this move was an inaccuracy?";
+    case "brilliant":
+      return "Want to know why this move was brilliant?";
+    case "great":
+      return "Want to know why this move was a great move?";
+    case "best":
+      return "Want to know why this move was the best move?";
+    case "excellent":
+      return "Want to know why this move was an excellent move?";
+    case "good":
+      return "Want to know why this move was a good move?";
+    default:
+      return `Want to know why this move was ${result.label ? result.label.toLowerCase() : "played"}?`;
+  }
+}
