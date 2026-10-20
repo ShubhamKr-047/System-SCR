@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 const PGN = "1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *";
-const engineArrow = page => page.locator('#boardArrows [data-layer="engine"] line');
+const engineArrow = page => page.locator('#boardArrows [data-layer="engine"] :is(line, path)');
 const plans = page => page.locator('#boardArrows [data-layer="planning"]');
 const preview = page => page.locator('#boardArrows [data-layer="preview"]');
 let errors;
@@ -84,45 +84,47 @@ test("illegal, outside-board, and wrong-side drops preserve the position", async
 test("right-drag previews, toggles, recolors, and preserves annotations during engine updates", async ({ page }) => {
   await load(page);
   await startDrag(page, "e2", "e4", "right");
-  await expect(preview(page).locator("line")).toHaveCount(1);
+  await expect(preview(page).locator(":is(line, path)")).toHaveCount(1);
   await page.mouse.up({ button: "right" });
-  await expect(plans(page).locator("line")).toHaveCount(1);
+  await expect(plans(page).locator(":is(line, path)")).toHaveCount(1);
   await expect(engineArrow(page)).toHaveCount(1);
-  await expect(plans(page).locator("line")).toHaveCount(1);
+  await expect(plans(page).locator(":is(line, path)")).toHaveCount(1);
   await drag(page, "g1", "f3", "right");
-  await expect(plans(page).locator("line")).toHaveCount(2);
+  await expect(plans(page).locator(":is(line, path)")).toHaveCount(2);
+  await expect(plans(page).locator("path")).toHaveCount(1); // Knight L-shaped arrow
   await drag(page, "e2", "e4", "right");
-  await expect(plans(page).locator("line")).toHaveCount(1);
+  await expect(plans(page).locator(":is(line, path)")).toHaveCount(1);
   await page.keyboard.down("Control");
   await drag(page, "g1", "f3", "right");
   await page.keyboard.up("Control");
-  await expect(plans(page).locator("line")).toHaveCount(1);
-  await expect(plans(page).locator("line")).toHaveAttribute("stroke", "#dd6666");
+  await expect(plans(page).locator(":is(line, path)")).toHaveCount(1);
+  await expect(plans(page).locator(":is(line, path)")).toHaveAttribute("stroke", "#ffa500");
   await page.keyboard.down("Alt");
   await drag(page, "c1", "h6", "right");
   await page.keyboard.up("Alt");
-  await expect(plans(page).locator('line[stroke="#6688cc"]')).toHaveCount(1);
+  await expect(plans(page).locator(':is(line, path)[stroke="#52b1ff"]')).toHaveCount(1);
   await page.keyboard.down("Control");
   await page.keyboard.down("Alt");
   await drag(page, "d1", "h5", "right");
   await page.keyboard.up("Alt");
   await page.keyboard.up("Control");
-  await expect(plans(page).locator('line[stroke="#e0b84d"]')).toHaveCount(1);
+  await expect(plans(page).locator(':is(line, path)[stroke="#f7c631"]')).toHaveCount(1);
   await expect(page.locator("#moveCounter")).toHaveText("Start");
   await page.locator('[data-square="c3"]').click({ button: "right" });
-  await expect(plans(page).locator("circle")).toHaveCount(1);
+  await expect(page.locator('[data-square="c3"]')).toHaveClass(/highlight-red/);
   await page.locator('[data-square="c3"]').click({ button: "right" });
-  await expect(plans(page).locator("circle")).toHaveCount(0);
+  await expect(page.locator('[data-square="c3"]')).not.toHaveClass(/highlight-red/);
   await page.screenshot({ path: test.info().outputPath("planning-arrows.png") });
   await page.locator('[data-square="a3"]').click();
-  await expect(plans(page).locator("line")).toHaveCount(0);
+  await expect(plans(page).locator(":is(line, path)")).toHaveCount(0);
+  await expect(page.locator(".highlight-red")).toHaveCount(0);
   await expect(engineArrow(page)).toHaveCount(1);
 });
 
 test("engine arrow uses translucent light blue and its toggle does not hide planning arrows", async ({ page }) => {
   await load(page);
   await expect(engineArrow(page)).toHaveCount(1);
-  await expect(engineArrow(page)).toHaveAttribute("stroke", "#75BFFF");
+  await expect(engineArrow(page)).toHaveAttribute("stroke", "#96bc4b");
   await expect(page.locator('#boardArrows [data-layer="engine"]')).toHaveAttribute("opacity", "0.55");
   await drag(page, "d2", "d4", "right");
   await toggleEngineArrow(page, false);
@@ -157,8 +159,8 @@ test("Escape, navigation, and flipping safely cancel unfinished gestures", async
   await startDrag(page, "e2", "e4", "right");
   await page.keyboard.press("Escape");
   await page.mouse.up({ button: "right" });
-  await expect(preview(page).locator("line")).toHaveCount(0);
-  await expect(plans(page).locator("line")).toHaveCount(0);
+  await expect(preview(page).locator(":is(line, path)")).toHaveCount(0);
+  await expect(plans(page).locator(":is(line, path)")).toHaveCount(0);
   await startDrag(page, "e2", "e4");
   await page.keyboard.press("ArrowRight");
   await page.mouse.up();

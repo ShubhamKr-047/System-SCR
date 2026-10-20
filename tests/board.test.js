@@ -26,10 +26,11 @@ test("outside-board releases never map to a legal square", () => {
   assert.equal(squareCenter("i9"), null);
 });
 
-test("annotation modifiers distinguish all four colors without Shift-right-click", () => {
-  assert.equal(annotationBrush({}), "green");
+test("annotation modifiers distinguish all five colors including Shift-right-click", () => {
+  assert.equal(annotationBrush({}), "orange");
   assert.equal(annotationBrush({ ctrlKey: true }), "red");
   assert.equal(annotationBrush({ altKey: true }), "blue");
+  assert.equal(annotationBrush({ shiftKey: true }), "green");
   assert.equal(annotationBrush({ ctrlKey: true, altKey: true }), "yellow");
   assert.equal(annotationBrush({ metaKey: true }), "blue");
 });

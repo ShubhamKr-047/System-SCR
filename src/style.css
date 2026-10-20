@@ -368,7 +368,7 @@ body.chesscom-theme {
 
 /* User Selection & Legal Move Hints */
 .square.selected {
-  background-color: rgba(247, 236, 90, 0.55) !important;
+  background-color: #CDD16A !important;
 }
 
 .square.legal-target {
@@ -423,12 +423,46 @@ body.chesscom-theme {
 
 /* CHESS PIECES (Chess.com Neo PNG/SVG) */
 .square img.piece {
+  position: relative;
   width: 100%;
   height: 100%;
   object-fit: contain;
   pointer-events: none;
   display: block;
   z-index: 2;
+}
+
+/* Right-click square highlights (Chess.com background highlight under pieces) */
+.square.highlight-red::before,
+.square.highlight-orange::before,
+.square.highlight-blue::before,
+.square.highlight-green::before,
+.square.highlight-yellow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.square.highlight-red::before {
+  background-color: rgba(250, 65, 45, 0.65);
+}
+
+.square.highlight-orange::before {
+  background-color: rgba(255, 165, 0, 0.65);
+}
+
+.square.highlight-blue::before {
+  background-color: rgba(82, 177, 255, 0.65);
+}
+
+.square.highlight-green::before {
+  background-color: rgba(129, 182, 76, 0.65);
+}
+
+.square.highlight-yellow::before {
+  background-color: rgba(247, 198, 49, 0.65);
 }
 
 .square:has(.piece) { cursor: grab; }
@@ -453,7 +487,7 @@ body.chesscom-theme {
   font-weight: 700;
   line-height: 1;
   pointer-events: none;
-  z-index: 1;
+  z-index: 3;
 }
 
 .coord-file {
@@ -464,7 +498,7 @@ body.chesscom-theme {
   font-weight: 700;
   line-height: 1;
   pointer-events: none;
-  z-index: 1;
+  z-index: 3;
 }
 
 .square.light .coord-rank,

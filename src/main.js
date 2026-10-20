@@ -404,7 +404,7 @@ function switchTab(tab) {
 $("tabMoves").addEventListener("click", () => switchTab("moves"));
 $("tabSummary").addEventListener("click", () => switchTab("summary"));
 
-const overlay = new BoardOverlay($("boardArrows"), () => state.flipped);
+const overlay = new BoardOverlay($("boardArrows"), () => state.flipped, $("board"));
 const boardInput = new BoardInput({
   board: $("board"), overlay,
   context: () => state.tree ? { key: state.tree.current, flipped: state.flipped, chess: new Chess(state.tree.current.fen) } : null,
