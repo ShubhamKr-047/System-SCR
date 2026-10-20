@@ -1310,10 +1310,6 @@ function getLocalDetailedFeedback(result) {
 
 let feedbackTarget = null;
 
-function feedbackBlock(title, text) {
-  return `<div class="feedback-block"><h3>${esc(title)}</h3><p>${esc(text)}</p></div>`;
-}
-
 function renderFeedback(result) {
   const tree = state.tree;
   const node = tree?.current;
@@ -1343,12 +1339,16 @@ function renderFeedback(result) {
   const continuation = `<div class="feedback-block"><h3>Stockfish recommended continuation</h3>
     <p class="pv-line">${esc(result.pv || result.bestSan || "No continuation reported.")}</p></div>`;
   const body = coaching
-    ? `<div class="feedback-block"><div class="feedback-block-header"><h3>Move explanation</h3>
-        <span class="feedback-concept-pill">${esc(coaching.concept)}</span></div><p>${esc(coaching.why)}</p></div>
-      ${feedbackBlock("Tactical breakdown", coaching.tactical)}
-      ${feedbackBlock("Positional breakdown", coaching.positional)}
-      ${feedbackBlock("Why Stockfish recommends this", coaching.recommendation)}
-      ${continuation}${feedbackBlock("Practical takeaway", coaching.tip)}`
+    ? `<article class="ai-guidance-card" aria-label="AI move guidance">
+        <div class="ai-guidance-label"><span aria-hidden="true">✦</span> Move insight</div>
+        <h3>${esc(coaching.concept)}</h3>
+        <p class="ai-guidance-summary">${esc(coaching.summary)}</p>
+        <p class="ai-guidance-tip"><span aria-hidden="true">↳</span><span>${esc(coaching.tip)}</span></p>
+        <div class="ai-guidance-continuation">
+          <span>Stockfish recommended continuation</span>
+          <p class="pv-line">${esc(result.pv || result.bestSan || "No continuation reported.")}</p>
+        </div>
+      </article>`
     : `<div class="feedback-block"><div class="feedback-block-header"><h3>Feedback</h3>
         <span class="feedback-concept-pill">${esc(local.concept)}</span></div><p>${local.whyText}</p></div>${continuation}`;
   const bannerHtml = !hasKey
@@ -1366,9 +1366,7 @@ function renderFeedback(result) {
     } else if (ai?.status === "pending") {
       status = `<div id="aiCoachStatus" class="ai-coach-loading" role="status"><div class="ai-loading-spinner"></div>
         <span>${provider.name} is explaining this position. Local feedback remains available below.</span></div>`;
-    } else if (coaching) {
-      status = `<div id="aiCoachStatus" class="ai-feedback-status">Explained by ${esc(provider.name)} using Stockfish analysis.</div>`;
-    } else if (hasKey) {
+    } else if (!coaching && hasKey) {
       const question = getMoveQuestion(result);
       promptHtml = `
         <div class="ai-prompt-card ${esc(result.key)}">
@@ -1380,7 +1378,7 @@ function renderFeedback(result) {
               <span>AI Coach</span>
             </div>
             <div class="ai-prompt-question">${esc(question)}</div>
-            <div class="ai-prompt-subtext">Get tactical and positional explanations from ${esc(provider.name)}.</div>
+            <div class="ai-prompt-subtext">Get the key idea and a practical next step.</div>
           </div>
           <button id="askAiCoachingBtn" type="button" class="ai-ask-btn" aria-label="${esc(question)}">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
@@ -1389,7 +1387,7 @@ function renderFeedback(result) {
             <span>Ask AI</span>
           </button>
         </div>`;
-    } else {
+    } else if (!coaching) {
       const question = getMoveQuestion(result);
       promptHtml = `
         <div class="ai-prompt-card ${esc(result.key)}">

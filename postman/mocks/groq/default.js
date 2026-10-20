@@ -19,29 +19,30 @@ http.createServer(async (req, res) => {
   if (!key?.startsWith("test-") || !context?.before?.fen || !context?.after?.fen ||
       !context.stockfish || body?.model !== "openai/gpt-oss-120b" || body.messages[0]?.role !== "system" ||
       body.response_format?.type !== "json_schema" || body.response_format.json_schema.strict !== true ||
-      body.response_format.json_schema.schema.required.length !== 6 || body.response_format.json_schema.schema.additionalProperties !== false) {
+      body.response_format.json_schema.schema.required.length !== 3 || body.response_format.json_schema.schema.additionalProperties !== false) {
     return send(400, { error: { message: "Invalid coaching contract", type: "invalid_request_error" } });
+  }
+  const schema = body.response_format.json_schema.schema;
+  if (["concept", "summary", "tip"].some(field => !schema.required.includes(field) || schema.properties[field]?.type !== "string")) {
+    return send(400, { error: { message: "Expected compact coaching fields" } });
   }
   if (key === "test-delayed") await new Promise(resolve => setTimeout(resolve, 2000));
   if (key === "test-timeout") await new Promise(resolve => setTimeout(resolve, 27000));
   const move = context.played.san;
   const coaching = {
-    why: `Explanation for ${move}: the ${context.played.piece} moved from ${context.played.from} to ${context.played.to}.`,
-    tactical: "The supplied engine line establishes the available replies; no additional forced tactic is assumed.",
-    positional: `Consider the activity of the ${context.played.piece} on ${context.played.to} and king safety before choosing a plan.`,
-    recommendation: `Stockfish recommends ${context.stockfish.recommendedMove || "no move in this terminal position"}. Compare its supplied continuation with the move played.`,
-    tip: "Check your opponent's best reply before committing to the move.",
-    concept: "Piece activity"
+    concept: "Keep central pawn breaks in mind",
+    summary: `Explanation for ${move}: consider how the ${context.played.piece} on ${context.played.to} affects central control. Stockfish recommends ${context.stockfish.recommendedMove || "no move in this terminal position"}; compare the supplied continuation before committing to a plan.`,
+    tip: "Check whether your opponent can challenge your central pawn before moving another piece."
   };
   if (key === "test-long") {
     await new Promise(resolve => setTimeout(resolve, 500));
     const paragraph = "The knight supports the central pawn and helps protect the king while the opponent prepares a reply. ";
-    for (const field of ["why", "tactical", "positional", "recommendation", "tip"]) coaching[field] = paragraph.repeat(10);
-    coaching.positional += " LongToken" + "x".repeat(250);
+    coaching.summary = paragraph.repeat(9) + " LongToken" + "x".repeat(250);
+    coaching.tip = paragraph.repeat(2);
     coaching.concept = "A detailed explanation of central pawn tension and piece activity in this position";
   }
-  if (key === "test-html") coaching.why = '<img src=x onerror="window.aiInjected=true">';
-  if (key === "test-malformed") coaching.tactical = { invalid: true };
+  if (key === "test-html") coaching.summary = '<img src=x onerror="window.aiInjected=true">';
+  if (key === "test-malformed") coaching.summary = { invalid: true };
   if (key === "test-blocked") return send(200, { choices: [{ message: { role: "assistant", content: null, refusal: "Simulated refusal" }, finish_reason: "stop" }] });
   return send(200, { choices: [{ index: 0, message: { role: "assistant", content: JSON.stringify(coaching) }, finish_reason: "stop" }] });
 }).listen(process.env.PORT || 4902);

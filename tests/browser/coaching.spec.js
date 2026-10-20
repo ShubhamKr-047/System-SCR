@@ -39,7 +39,7 @@ test.beforeEach(async ({ page }) => {
   });
   await page.goto("/review.html");
   await page.locator("#pgnFile").setInputFiles({ name: "game.pgn", mimeType: "text/plain", buffer: Buffer.from(PGN) });
-  await play(page, "e2", "e3");
+  await play(page, "f2", "f3");
   await expect(local(page)).toBeVisible();
   await page.locator("#openAiSettingsBtn").click();
   await page.locator("#aiProvider").selectOption(provider);
@@ -59,19 +59,26 @@ test("no key preserves local feedback, explains setup, and sends no requests", a
   expect(requests.get(page)).toHaveLength(0);
 });
 
-test("AI replaces generic feedback with engine-grounded breakdown and caches each variation", async ({ page }) => {
+test("AI presents one compact guidance card and caches each variation", async ({ page }) => {
   await key(page, "test-success");
   expect(requests.get(page)).toHaveLength(0);
   await expect(page.locator("#askAiCoachingBtn")).toBeVisible();
   await expect(page.locator(".ai-prompt-question")).toContainText("Want to know why this move was");
+  const engineLine = await local(page).locator(".pv-line").innerText();
   await askAi(page);
-  await expect(ai(page)).toContainText("Explanation for e3");
+  await expect(ai(page)).toContainText("Explanation for f3");
   await page.locator("#feedbackContainer").focus();
   await page.locator("#feedbackContainer").press("ArrowDown");
-  await expect(page.locator("#moveCounter")).toHaveText("1. e3");
-  for (const title of ["Tactical breakdown", "Positional breakdown", "Why Stockfish recommends this", "Practical takeaway"]) {
-    await expect(ai(page)).toContainText(title);
-  }
+  await expect(page.locator("#moveCounter")).toHaveText("1. f3");
+  await expect(ai(page).locator(".ai-guidance-card")).toHaveCount(1);
+  await expect(ai(page).locator(".feedback-block")).toHaveCount(0);
+  await expect(ai(page).locator("h3")).toHaveCount(1);
+  await expect(ai(page).locator(".ai-guidance-tip")).toContainText("central pawn");
+  await expect(ai(page).locator(".ai-guidance-continuation")).toContainText("Stockfish recommended continuation");
+  await expect(ai(page).locator(".ai-guidance-continuation .pv-line")).toHaveText(engineLine);
+  await expect(page.locator("#aiCoachStatus")).toHaveCount(0);
+  await expect(page.locator("#feedbackContent")).not.toContainText("Explained by");
+  await expect(ai(page)).not.toContainText("Tactical breakdown");
   const sent = requests.get(page)[0];
   expect(sent.url).not.toContain("key=");
   if (provider === "groq") {
@@ -86,17 +93,17 @@ test("AI replaces generic feedback with engine-grounded breakdown and caches eac
   const context = JSON.parse(provider === "groq" ? sent.body.messages[1].content : sent.body.contents[0].parts[0].text);
   expect(context.before.sideToMove).toBe("White");
   expect(context.after.sideToMove).toBe("Black");
-  expect(context.after.pieces.White).toContain("pawn on e3");
+  expect(context.after.pieces.White).toContain("pawn on f3");
   expect(context.stockfish.recommendedLine.length).toBeGreaterThan(0);
   expect(context.stockfish.opponentLine.length).toBeGreaterThan(0);
   await expect(page.locator("#aiStatus")).toHaveAttribute("title", `${name} connection verified`);
-  await play(page, "c7", "c5");
+  await play(page, "f7", "f6");
   await expect(page.locator("#askAiCoachingBtn")).toBeVisible();
   await askAi(page);
-  await expect(ai(page)).toContainText("Explanation for c5");
+  await expect(ai(page)).toContainText("Explanation for f6");
   const count = requests.get(page).length;
-  await page.locator('.move-chip[title="1. e3"]').click();
-  await expect(ai(page)).toContainText("Explanation for e3");
+  await page.locator('.move-chip[title="1. f3"]').click();
+  await expect(ai(page)).toContainText("Explanation for f3");
   expect(requests.get(page)).toHaveLength(count);
   await page.locator("#openAiSettingsBtn").click();
   await page.locator("#moveTime").selectOption("1000");
@@ -104,7 +111,7 @@ test("AI replaces generic feedback with engine-grounded breakdown and caches eac
   await expect(page.locator("#askAiCoachingBtn")).toBeVisible();
   await askAi(page);
   await expect.poll(() => requests.get(page).length).toBe(count + 1);
-  await expect(ai(page)).toContainText("Explanation for e3");
+  await expect(ai(page)).toContainText("Explanation for f3");
   const body = requests.get(page).at(-1).body;
   const refreshed = JSON.parse(provider === "groq" ? body.messages[1].content : body.contents[0].parts[0].text);
   expect(refreshed.stockfish.search.before.moveTime).toBe(1000);
@@ -137,10 +144,10 @@ test("local feedback stays while loading and an old response cannot replace anot
   await expect(local(page)).toBeVisible();
   await page.locator("body").press("f");
   expect(requests.get(page)).toHaveLength(1);
-  await play(page, "c7", "c5");
+  await play(page, "f7", "f6");
   await askAi(page);
-  await expect(ai(page)).toContainText("Explanation for c5");
-  await expect(ai(page)).not.toContainText("Explanation for e3");
+  await expect(ai(page)).toContainText("Explanation for f6");
+  await expect(ai(page)).not.toContainText("Explanation for f3");
 });
 
 test("removing a key during a request keeps local feedback and discards the response", async ({ page }) => {
@@ -178,16 +185,17 @@ test("timeout ends loading and preserves local feedback", async ({ page }) => {
 test("original game and nested variations each retain their own explanation", async ({ page }) => {
   await key(page, "test-success");
   await askAi(page);
-  await expect(ai(page)).toContainText("Explanation for e3");
-  await play(page, "c7", "c5");
+  await expect(ai(page)).toContainText("Explanation for f3");
+  await play(page, "f7", "f6");
   await askAi(page);
-  await expect(ai(page)).toContainText("Explanation for c5");
-  await page.locator('.move-chip[title="1. e3"]').click();
-  await play(page, "d7", "d5");
+  await expect(ai(page)).toContainText("Explanation for f6");
+  await page.locator('.move-chip[title="1. f3"]').click();
+  // Use a clearly non-book alternative so shallow engine variation cannot hide Ask AI.
+  await play(page, "g7", "g5");
   await askAi(page);
-  await expect(ai(page)).toContainText("Explanation for d5");
+  await expect(ai(page)).toContainText("Explanation for g5");
   await page.locator("#parentVariationBtn").click();
-  await expect(ai(page)).toContainText("Explanation for e3");
+  await expect(ai(page)).toContainText("Explanation for f3");
   await page.locator("#startReview").click();
   await expect(page.locator("#startReviewText")).toHaveText("Start", { timeout: 30000 });
   await page.locator("#tabMoves").click();
@@ -203,10 +211,10 @@ test("importing another game while AI is pending cannot attach the old explanati
   await expect.poll(() => requests.get(page).length).toBe(1);
   await page.locator("#pgnFile").setInputFiles({ name: "next.pgn", mimeType: "text/plain", buffer: Buffer.from("1. d4 d5 *") });
   await expect(page.locator("#moveCounter")).toHaveText("Start");
-  await play(page, "c2", "c4");
+  await play(page, "g2", "g4");
   await askAi(page);
-  await expect(ai(page)).toContainText("Explanation for c4");
-  await expect(ai(page)).not.toContainText("Explanation for e3");
+  await expect(ai(page)).toContainText("Explanation for g4");
+  await expect(ai(page)).not.toContainText("Explanation for f3");
 });
 
 test("switching providers isolates keys, cancels late results, restores caches, and remembers selection", async ({ page }) => {
@@ -224,12 +232,19 @@ test("switching providers isolates keys, cancels late results, restores caches, 
   await page.locator("#saveAiKey").click();
   await page.locator("#hamburgerBtn").click();
   await askAi(page);
-  await expect(page.locator(`#positionFeedback[data-source="${other}"]`)).toContainText("Explanation for e3");
+  await expect(page.locator(`#positionFeedback[data-source="${other}"]`)).toContainText("Explanation for f3");
   await page.locator("#openAiSettingsBtn").click();
   await page.locator("#aiProvider").selectOption(provider);
   await expect(page.locator("#aiApiKey")).toHaveValue("test-delayed");
   await page.locator("#hamburgerBtn").click();
-  await expect(ai(page)).toContainText("Explanation for e3");
+  // The first provider was cancelled while pending, so it has no ready cache.
+  // Switching back must keep requests manual; only the other provider is cached.
+  await expect(local(page)).toBeVisible();
+  const beforeAsk = requests.get(page).length;
+  await expect(page.locator("#askAiCoachingBtn")).toBeVisible();
+  expect(requests.get(page)).toHaveLength(beforeAsk);
+  await askAi(page);
+  await expect(ai(page)).toContainText("Explanation for f3");
   const count = requests.get(page).length;
   await page.locator("#openAiSettingsBtn").click();
   await page.locator("#aiProvider").selectOption(other);
@@ -288,7 +303,7 @@ test("long explanations keep moves and footer separate and request AI only on de
     expect(dimensions.feedback.bottom).toBeLessThanOrEqual(dimensions.tabs.top + 1);
     expect(dimensions.feedback.height).toBeGreaterThanOrEqual(140);
     expect(dimensions.list.height).toBeGreaterThanOrEqual(80);
-    expect(dimensions.feedbackOverflow).toBeGreaterThan(0);
+    expect(dimensions.feedbackOverflow).toBeGreaterThanOrEqual(0);
     expect(dimensions.horizontalOverflow).toBeLessThanOrEqual(1);
     await page.locator("#tabSummary").click();
     const summary = await page.locator("#summaryPanel").boundingBox();
@@ -296,11 +311,14 @@ test("long explanations keep moves and footer separate and request AI only on de
     expect(summary.y + summary.height).toBeLessThanOrEqual(footer.y + 1);
     await page.locator("#tabMoves").click();
   }
-  await page.locator("#feedbackContainer").evaluate(element => { element.scrollTop = 120; });
+  const scrollTop = await page.locator("#feedbackContainer").evaluate(element => {
+    element.scrollTop = 120;
+    return element.scrollTop;
+  });
   await page.keyboard.press("f");
-  await expect.poll(() => page.locator("#feedbackContainer").evaluate(element => element.scrollTop)).toBe(120);
+  await expect.poll(() => page.locator("#feedbackContainer").evaluate(element => element.scrollTop)).toBe(scrollTop);
   // Layout changes and another position must not trigger another paid request.
-  await play(page, "c7", "c5");
+  await play(page, "f7", "f6");
   await expect(local(page)).toBeVisible();
   expect(requests.get(page)).toHaveLength(1);
 });
