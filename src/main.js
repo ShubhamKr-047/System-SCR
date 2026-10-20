@@ -20,7 +20,14 @@ const state = {
   stopRequested: false,
   pending: null,
   timer: null,
-  headers: {}
+  headers: {},
+  selectedSquare: null,
+  legalMoves: [],
+  showBestMoveArrow: localStorage.getItem("zen-chess-show-arrow") !== "false",
+  originalPgn: "",
+  originalAnalyses: null,
+  originalResults: null,
+  isVariation: false
 };
 
 function setStatus(message, error = false) {
@@ -67,6 +74,13 @@ function readImport() {
   try {
     const parsed = parsePgn(pgn);
     state.pgn = pgn;
+    state.originalPgn = pgn;
+    state.originalAnalyses = null;
+    state.originalResults = null;
+    state.isVariation = false;
+    state.selectedSquare = null;
+    state.legalMoves = [];
+    if ($("resetVariationBtn")) $("resetVariationBtn").style.display = "none";
     state.headers = parsed.headers;
     state.moves = parsed.moves;
     state.positions = parsed.positions;
@@ -312,6 +326,56 @@ $("flipBoard").addEventListener("click", () => {
   renderSummary();
 });
 
+// Toggle Best Move Arrow Switch in Hamburger
+const arrowToggle = $("toggleBestMoveArrow");
+if (arrowToggle) {
+  arrowToggle.checked = state.showBestMoveArrow;
+  arrowToggle.addEventListener("change", (e) => {
+    state.showBestMoveArrow = e.target.checked;
+    localStorage.setItem("zen-chess-show-arrow", state.showBestMoveArrow ? "true" : "false");
+    drawBestMoveArrow();
+  });
+}
+
+// Reset Variation / Revert to Main Game
+const resetVariationBtn = $("resetVariationBtn");
+if (resetVariationBtn) {
+  resetVariationBtn.addEventListener("click", () => {
+    if (!state.originalPgn) return;
+    try {
+      const parsed = parsePgn(state.originalPgn);
+      state.pgn = state.originalPgn;
+      state.isVariation = false;
+      state.selectedSquare = null;
+      state.legalMoves = [];
+      resetVariationBtn.style.display = "none";
+      state.headers = parsed.headers;
+      state.moves = parsed.moves;
+      state.positions = parsed.positions;
+      if (state.originalAnalyses && state.originalResults) {
+        state.analyses = [...state.originalAnalyses];
+        state.results = [...state.originalResults];
+        state.isAnalyzed = true;
+        if ($("startReviewText")) $("startReviewText").textContent = "Start";
+        $("startReview").classList.add("review-mode");
+      } else {
+        state.analyses = [];
+        state.results = [];
+        state.isAnalyzed = false;
+        if ($("startReviewText")) $("startReviewText").textContent = "Analyze game";
+        $("startReview").classList.remove("review-mode");
+      }
+      updatePlayerHeaders();
+      renderMoves();
+      renderBoard(0);
+      renderSummary();
+      setStatus(`Reverted to main game (${state.moves.length} moves).`);
+    } catch (e) {
+      setStatus(`Error reverting to main game: ${e.message}`, true);
+    }
+  });
+}
+
 // Tab Switching
 function switchTab(tab) {
   if (tab === "moves") {
@@ -329,6 +393,378 @@ function switchTab(tab) {
 }
 $("tabMoves").addEventListener("click", () => switchTab("moves"));
 $("tabSummary").addEventListener("click", () => switchTab("summary"));
+
+function getSquareCenter(sq) {
+  if (!sq || sq.length < 2) return null;
+  const fileChar = sq[0].toLowerCase();
+  const rankChar = sq[1];
+  const file = fileChar.charCodeAt(0) - 97; // 0..7
+  const rank = parseInt(rankChar, 10);      // 1..8
+  if (file < 0 || file > 7 || rank < 1 || rank > 8) return null;
+
+  const col = state.flipped ? 7 - file : file;
+  const row = state.flipped ? rank - 1 : 8 - rank;
+
+  return {
+    x: (col + 0.5) * 12.5,
+    y: (row + 0.5) * 12.5
+  };
+}
+
+function drawBestMoveArrow() {
+  const svg = $("boardArrows");
+  if (!svg) return;
+  if (!state.showBestMoveArrow) {
+    svg.innerHTML = "";
+    return;
+  }
+
+  // Look up engine recommendation for current position
+  const currentAnalysis = state.analyses[state.cursor];
+  const bestmove = currentAnalysis?.bestmove;
+  if (!bestmove || bestmove.length < 4 || bestmove === "(none)") {
+    svg.innerHTML = "";
+    return;
+  }
+
+  const fromSq = bestmove.slice(0, 2);
+  const toSq = bestmove.slice(2, 4);
+  const c1 = getSquareCenter(fromSq);
+  const c2 = getSquareCenter(toSq);
+  if (!c1 || !c2) {
+    svg.innerHTML = "";
+    return;
+  }
+
+  const dx = c2.x - c1.x;
+  const dy = c2.y - c1.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist === 0) {
+    svg.innerHTML = "";
+    return;
+  }
+
+  // Calculate direction vector and trim slightly for marker head
+  const ux = dx / dist;
+  const uy = dy / dist;
+  const startX = (c1.x + ux * 1.5).toFixed(2);
+  const startY = (c1.y + uy * 1.5).toFixed(2);
+  const endX = (c2.x - ux * 2.2).toFixed(2);
+  const endY = (c2.y - uy * 2.2).toFixed(2);
+
+  svg.innerHTML = `
+    <defs>
+      <marker id="bestMoveArrowHead" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10b981" />
+      </marker>
+      <filter id="arrowShadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1" stdDeviation="0.8" flood-color="#000000" flood-opacity="0.5" />
+      </filter>
+    </defs>
+    <line x1="${startX}" y1="${startY}" x2="${endX}" y2="${endY}"
+          stroke="#10b981" stroke-width="2.6" stroke-linecap="round"
+          opacity="0.9" filter="url(#arrowShadow)"
+          marker-end="url(#bestMoveArrowHead)" />
+  `;
+}
+
+let quickAnalysisTimer = null;
+function requestQuickAnalysisForCurrentPosition() {
+  if (state.running) return;
+  clearTimeout(quickAnalysisTimer);
+  const cursor = state.cursor;
+  if (state.analyses[cursor]?.bestmove) {
+    drawBestMoveArrow();
+    return;
+  }
+  quickAnalysisTimer = setTimeout(async () => {
+    if (state.running || state.cursor !== cursor) return;
+    const pos = state.positions[cursor];
+    if (!pos) return;
+    try {
+      const res = await analyzeFen(pos.fen, 200);
+      if (state.cursor === cursor) {
+        const whiteScore = scoreWhite(res.score, pos.fen);
+        state.analyses[cursor] = { whiteScore, bestmove: res.bestmove, pv: res.pv };
+        updateEvaluationDisplay();
+        drawBestMoveArrow();
+      }
+    } catch {}
+  }, 140);
+}
+
+function handleSquareClick(sqName) {
+  if (!state.positions.length) return;
+  const currentPos = state.positions[state.cursor];
+  if (!currentPos) return;
+
+  const chess = new Chess(currentPos.fen);
+  if (chess.isGameOver()) return;
+  const turn = chess.turn();
+
+  // If a piece is already selected and user clicked a legal target square
+  if (state.selectedSquare && state.legalMoves.some(m => m.to === sqName)) {
+    const fromSq = state.selectedSquare;
+    const toSq = sqName;
+    state.selectedSquare = null;
+    state.legalMoves = [];
+    executeUserMove(fromSq, toSq);
+    return;
+  }
+
+  // If user clicked on a piece belonging to the side to move
+  const pieceOnSq = chess.get(sqName);
+  if (pieceOnSq && pieceOnSq.color === turn) {
+    if (state.selectedSquare === sqName) {
+      state.selectedSquare = null;
+      state.legalMoves = [];
+    } else {
+      state.selectedSquare = sqName;
+      state.legalMoves = chess.moves({ square: sqName, verbose: true });
+    }
+    renderBoard(state.cursor);
+    return;
+  }
+
+  // Clicked elsewhere -> deselect
+  if (state.selectedSquare) {
+    state.selectedSquare = null;
+    state.legalMoves = [];
+    renderBoard(state.cursor);
+  }
+}
+
+function executeUserMove(fromSq, toSq) {
+  const currentPos = state.positions[state.cursor];
+  if (!currentPos) return;
+
+  if (state.running) {
+    state.stopRequested = true;
+    if (state.worker && state.pending) {
+      state.worker.postMessage("stop");
+    }
+  }
+
+  const chess = new Chess(currentPos.fen);
+  const moveObj = chess.move({ from: fromSq, to: toSq, promotion: "q" });
+  if (!moveObj) return;
+
+  // If user played the identical move already in the main game
+  if (state.cursor < state.moves.length && state.moves[state.cursor].san === moveObj.san) {
+    renderBoard(state.cursor + 1);
+    return;
+  }
+
+  // Branching / continuing variation
+  if (!state.isVariation) {
+    state.isVariation = true;
+    if (!state.originalAnalyses && state.isAnalyzed) {
+      state.originalAnalyses = [...state.analyses];
+      state.originalResults = [...state.results];
+    }
+  }
+
+  if ($("resetVariationBtn")) {
+    $("resetVariationBtn").style.display = "inline-flex";
+  }
+
+  // Truncate following moves
+  state.moves = state.moves.slice(0, state.cursor);
+  state.positions = state.positions.slice(0, state.cursor + 1);
+  state.analyses = state.analyses.slice(0, state.cursor + 1);
+  state.results = state.results.slice(0, state.cursor);
+
+  const newPly = state.cursor;
+  state.moves.push(moveObj);
+  state.positions.push({ fen: chess.fen(), move: moveObj });
+  state.cursor = newPly + 1;
+
+  switchTab("moves");
+  renderMoves();
+  renderBoard(state.cursor);
+  renderSummary();
+
+  classifyAndFeedbackNewMove(newPly);
+}
+
+function scoreFromWhite(whiteScore, fen) {
+  if (whiteScore === undefined || !Number.isFinite(whiteScore)) return 0;
+  const turn = fen.split(" ")[1];
+  return turn === "w" ? whiteScore : -whiteScore;
+}
+
+async function classifyAndFeedbackNewMove(newPly) {
+  const playedMove = state.moves[newPly];
+  if (!playedMove) return;
+  const beforeFen = state.positions[newPly].fen;
+  const afterFen = state.positions[newPly + 1].fen;
+  const moveTime = Number($("moveTime")?.value) || 250;
+
+  $("engineStatus").textContent = `Analyzing variation move ${newPly + 1}…`;
+  $("engineStatus").previousElementSibling?.classList.add("running");
+
+  try {
+    let before = null;
+    if (state.analyses[newPly] && state.analyses[newPly].bestmove) {
+      before = {
+        score: scoreFromWhite(state.analyses[newPly].whiteScore, beforeFen),
+        bestmove: state.analyses[newPly].bestmove,
+        pv: state.analyses[newPly].pv || ""
+      };
+    } else {
+      before = await analyzeFen(beforeFen, moveTime);
+    }
+
+    const after = await analyzeFen(afterFen, moveTime);
+
+    const beforeWhite = scoreWhite(before.score, beforeFen);
+    let afterWhite = scoreWhite(after.score, afterFen);
+    const mover = playedMove.color;
+
+    let isDeliveringMate = false;
+    try {
+      const afterChess = new Chess(afterFen);
+      isDeliveringMate = afterChess.isCheckmate() || playedMove.san.endsWith("#");
+    } catch {
+      isDeliveringMate = playedMove.san.endsWith("#");
+    }
+
+    if (isDeliveringMate) {
+      afterWhite = mover === "w" ? 10 : -10;
+    }
+
+    const beforePlayer = mover === "w" ? beforeWhite : -beforeWhite;
+    const afterPlayer = mover === "w" ? afterWhite : -afterWhite;
+
+    let lossCp = isDeliveringMate ? 0 : Math.max(0, Math.min(1000, (beforePlayer - afterPlayer) * 100));
+
+    const playedUci = `${playedMove.from}${playedMove.to}${playedMove.promotion || ""}`;
+    const isBest = isDeliveringMate || before.bestmove === playedUci || lossCp <= 10;
+    const isSacrifice = isMaterialSacrifice(beforeFen, afterFen, playedMove);
+
+    let legalMovesCount = 10;
+    try {
+      legalMovesCount = new Chess(beforeFen).moves().length;
+    } catch {}
+
+    const classificationObj = classifyMove({
+      lossCp,
+      ply: newPly,
+      isBest,
+      beforePlayerScore: beforePlayer,
+      afterPlayerScore: afterPlayer,
+      legalMovesCount,
+      capturedPiece: playedMove.captured,
+      playedPiece: playedMove.piece,
+      isSacrifice
+    });
+
+    const bestSan = convertPvToSan(beforeFen, before.bestmove);
+
+    let punishSan = "";
+    let punishPv = "";
+    let punishDetails = null;
+    if (after?.bestmove) {
+      punishSan = convertPvToSan(afterFen, after.bestmove);
+      punishPv = after.pv ? convertPvToSan(afterFen, after.pv) : "";
+      try {
+        const ch = new Chess(afterFen);
+        const u = after.bestmove;
+        if (u && u.length >= 4) {
+          punishDetails = ch.move({
+            from: u.slice(0, 2),
+            to: u.slice(2, 4),
+            promotion: u[4] || "q"
+          });
+        }
+      } catch {}
+    }
+
+    let bestDetails = null;
+    if (before?.bestmove) {
+      try {
+        const ch = new Chess(beforeFen);
+        const u = before.bestmove;
+        if (u && u.length >= 4) {
+          bestDetails = ch.move({
+            from: u.slice(0, 2),
+            to: u.slice(2, 4),
+            promotion: u[4] || "q"
+          });
+        }
+      } catch {}
+    }
+
+    let coachingTip = "";
+    if (classificationObj.key === "brilliant") {
+      coachingTip = `Brilliant play! You found a sharp tactical idea, sacrificing material to seize a decisive advantage.`;
+    } else if (classificationObj.key === "great") {
+      coachingTip = `Great find! You found the critical move to keep the upper hand or turn the tide.`;
+    } else if (classificationObj.key === "miss") {
+      coachingTip = `You had an opportunity to capitalize decisively. The engine prefers ${bestSan || "a sharper line"}.`;
+    } else if (classificationObj.key === "blunder") {
+      coachingTip = `Severe evaluation swing. Check for hanging pieces, unguarded squares, and forcing tactics before moving.`;
+    } else if (classificationObj.key === "mistake") {
+      coachingTip = `This gave away a chunk of your advantage. Compare your move with ${bestSan || "the engine suggestion"}.`;
+    } else if (classificationObj.key === "inaccuracy") {
+      coachingTip = `A slight concession. Notice how ${bestSan || "the engine line"} maintains more control and pressure.`;
+    } else if (classificationObj.key === "best") {
+      coachingTip = `Top-notch calculation. This is the optimal continuation that maximizes piece activity.`;
+    } else {
+      coachingTip = `Good practical choice. Continues developing and preserving a healthy position.`;
+    }
+
+    const result = {
+      ply: newPly,
+      san: playedMove.san,
+      color: mover,
+      moveColor: mover,
+      moveNo: `${Math.floor(newPly / 2) + 1}${mover === "w" ? "." : "…"}` ,
+      beforeWhite,
+      afterWhite,
+      lossCp,
+      key: classificationObj.key,
+      label: classificationObj.name,
+      sign: classificationObj.sign,
+      color: classificationObj.color,
+      textColor: classificationObj.textColor,
+      explanation: classificationObj.description,
+      coachingTip,
+      pv: before.pv ? convertPvToSan(beforeFen, before.pv) : "",
+      bestUci: before.bestmove,
+      bestSan,
+      bestDetails,
+      punishSan,
+      punishPv,
+      punishDetails,
+      playedPiece: playedMove.piece,
+      capturedPiece: playedMove.captured,
+      from: playedMove.from,
+      to: playedMove.to,
+      isSacrifice,
+      beforeFen,
+      afterFen,
+      playedUci
+    };
+
+    state.analyses[newPly] = { whiteScore: beforeWhite, bestmove: before.bestmove, pv: before.pv };
+    state.analyses[newPly + 1] = { whiteScore: afterWhite, bestmove: after.bestmove, pv: after.pv };
+    state.results[newPly] = result;
+
+    $("engineStatus").textContent = "Variation move analyzed";
+    $("engineStatus").previousElementSibling?.classList.remove("running");
+
+    renderMoves();
+    renderSummary();
+    if (state.cursor === newPly + 1) {
+      renderBoard(state.cursor);
+    }
+  } catch (err) {
+    console.error("Variation analysis error:", err);
+    $("engineStatus").textContent = "Engine idle";
+    $("engineStatus").previousElementSibling?.classList.remove("running");
+  }
+}
 
 function renderBoard(index) {
   state.cursor = Math.max(0, Math.min(index, state.positions.length - 1));
@@ -376,6 +812,9 @@ function renderBoard(index) {
 
       const isLast = lastSquares.includes(sqName);
       const isCheck = sqName === checkSquare;
+      const isSelected = sqName === state.selectedSquare;
+      const legalMove = state.legalMoves.find(m => m.to === sqName);
+      const isLegalTarget = Boolean(legalMove);
 
       // Piece Image
       let pieceHtml = "";
@@ -385,9 +824,17 @@ function renderBoard(index) {
         pieceHtml = `<img class="piece" src="${pieceSrc}" alt="${sq.color === 'w' ? 'White' : 'Black'} ${sq.type}" draggable="false" />`;
       }
 
+      // Legal move hints
+      let legalHintHtml = "";
+      if (isLegalTarget) {
+        if (legalMove.captured || sq || (legalMove.flags && legalMove.flags.includes('e'))) {
+          legalHintHtml = '<div class="legal-capture-ring"></div>';
+        } else {
+          legalHintHtml = '<div class="legal-hint-dot"></div>';
+        }
+      }
+
       // Coordinates (Chess.com style)
-      // Rank coordinates on left column (c === 0)
-      // File coordinates on bottom row (r === 7)
       let coordRank = "";
       let coordFile = "";
       if (c === 0) {
@@ -404,11 +851,19 @@ function renderBoard(index) {
         badgeHtml = `<div class="square-badge ${currentResult.key}" style="background-color: ${currentResult.color}; color: ${currentResult.textColor};" title="${esc(currentResult.label)}: ${esc(currentResult.sign)}">${esc(currentResult.sign)}</div>`;
       }
 
-      html += `<div class="square ${shade} ${isLast ? 'last-move' : ''} ${isCheck ? 'in-check' : ''} ${isBrilliant ? 'brilliant-move' : ''}" data-square="${sqName}">${pieceHtml}${coordRank}${coordFile}${badgeHtml}</div>`;
+      html += `<div class="square ${shade} ${isLast ? 'last-move' : ''} ${isCheck ? 'in-check' : ''} ${isBrilliant ? 'brilliant-move' : ''} ${isSelected ? 'selected' : ''} ${isLegalTarget ? 'legal-target' : ''}" data-square="${sqName}">${pieceHtml}${coordRank}${coordFile}${badgeHtml}${legalHintHtml}</div>`;
     }
   }
 
   $("board").innerHTML = html;
+
+  // Attach click listeners to board squares
+  $("board").querySelectorAll(".square").forEach(el => {
+    el.addEventListener("click", () => handleSquareClick(el.dataset.square));
+  });
+
+  // Draw best move arrow if available
+  drawBestMoveArrow();
 
   // Update Move Counter
   const moveNo = Math.ceil(state.cursor / 2);
@@ -426,6 +881,9 @@ function renderBoard(index) {
   renderFeedback(currentResult);
   highlightActiveMoveInList();
   setNavEnabled();
+
+  // If position has no engine evaluation yet, request quick analysis
+  requestQuickAnalysisForCurrentPosition();
 }
 
 function updateEvaluationDisplay() {
@@ -1298,8 +1756,8 @@ async function startReview() {
         playedUci
       };
 
-      state.analyses[i] = { whiteScore: beforeWhite };
-      state.analyses[i + 1] = { whiteScore: afterWhite };
+      state.analyses[i] = { whiteScore: beforeWhite, bestmove: before.bestmove, pv: before.pv };
+      state.analyses[i + 1] = { whiteScore: afterWhite, bestmove: after.bestmove, pv: after.pv };
       state.results[i] = result;
 
       renderMoves();
@@ -1335,6 +1793,8 @@ async function startReview() {
     const completed = state.results.filter(Boolean).length;
     if (!state.stopRequested && completed === state.moves.length && state.moves.length > 0) {
       state.isAnalyzed = true;
+      state.originalAnalyses = [...state.analyses];
+      state.originalResults = [...state.results];
       if ($("startReviewText")) $("startReviewText").textContent = "Start";
       $("startReview").title = "Start Review (Move 1)";
       $("startReview").classList.add("review-mode");

@@ -64,6 +64,7 @@
             <div id="board" class="board chesscom-board" aria-label="Chessboard">
               <div class="board-placeholder">Import a PGN to see the board</div>
             </div>
+            <svg id="boardArrows" class="board-arrows" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
           </div>
 
           <!-- BOTTOM PLAYER BAR (WHITE BY DEFAULT) -->
@@ -168,7 +169,10 @@
             <span class="engine-dot"></span>
             <span id="engineStatus">Engine idle</span>
           </div>
-          <span id="moveCounter" class="move-counter-badge">Start</span>
+          <div class="move-counter-group" style="display: flex; align-items: center; gap: 6px;">
+            <button id="resetVariationBtn" class="reset-variation-btn" type="button" style="display:none;" title="Revert to original game">↺ Main Game</button>
+            <span id="moveCounter" class="move-counter-badge">Start</span>
+          </div>
         </div>
 
         <!-- PROGRESS BAR TRACK -->
@@ -270,6 +274,21 @@
                     <option value="500">Balanced · 0.5s</option>
                     <option value="1000">Deep · 1.0s</option>
                   </select>
+                </div>
+
+                <!-- BEST MOVE ARROW TOGGLE -->
+                <div class="menu-speed-row">
+                  <span class="menu-speed-label">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                      <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                    <span>Best Move Arrow</span>
+                  </span>
+                  <label class="toggle-switch">
+                    <input id="toggleBestMoveArrow" type="checkbox" checked />
+                    <span class="toggle-slider"></span>
+                  </label>
                 </div>
 
                 <!-- AI COACHING (GEMINI API KEY) -->

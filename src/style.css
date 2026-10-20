@@ -365,6 +365,61 @@ body.chesscom-theme {
   background: radial-gradient(circle at center, var(--badge-brilliant) 0%, rgba(27, 172, 166, 0.6) 55%, transparent 100%) !important;
 }
 
+/* User Selection & Legal Move Hints */
+.square.selected {
+  background-color: rgba(247, 236, 90, 0.55) !important;
+}
+
+.square.legal-target {
+  cursor: pointer;
+}
+
+.legal-hint-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 28%;
+  height: 28%;
+  background-color: rgba(0, 0, 0, 0.22);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 4;
+  transition: transform 0.12s ease;
+}
+
+.square:hover .legal-hint-dot {
+  transform: translate(-50%, -50%) scale(1.22);
+  background-color: rgba(0, 0, 0, 0.32);
+}
+
+.legal-capture-ring {
+  position: absolute;
+  inset: 4px;
+  border: 4px solid rgba(0, 0, 0, 0.28);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 4;
+  transition: all 0.12s ease;
+}
+
+.square:hover .legal-capture-ring {
+  border-color: rgba(0, 0, 0, 0.45);
+  transform: scale(1.04);
+}
+
+/* BEST MOVE ARROW SVG LAYER */
+.board-arrows {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 6;
+  overflow: visible;
+}
+
 /* CHESS PIECES (Chess.com Neo PNG/SVG) */
 .square img.piece {
   width: 100%;
@@ -863,6 +918,73 @@ body.chesscom-theme {
 
 .menu-api-help a:hover {
   text-decoration: underline;
+}
+
+/* TOGGLE SWITCH (FOR HAMBURGER BEST MOVE ARROW) */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 32px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #2b2824;
+  transition: .18s ease;
+  border-radius: 18px;
+  border: 1px solid var(--line-subtle);
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 12px;
+  width: 12px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #8b8884;
+  transition: .18s ease;
+  border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--chess-green);
+  border-color: #69923e;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(14px);
+  background-color: #ffffff;
+}
+
+/* RESET VARIATION BUTTON */
+.reset-variation-btn {
+  background: rgba(220, 53, 69, 0.18);
+  border: 1px solid rgba(220, 53, 69, 0.45);
+  color: #ff7b72;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.reset-variation-btn:hover {
+  background: rgba(220, 53, 69, 0.35);
+  color: #ffffff;
+  border-color: #ff7b72;
 }
 
 /* COLLAPSIBLE PASTE DRAWER */
