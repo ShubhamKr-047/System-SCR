@@ -18,6 +18,10 @@ export class EngineQueue {
     this.sort();
   }
 
+  invalidate(fen, time) {
+    this.cache.delete(`${fen}|${time}`);
+  }
+
   sort() {
     const rank = job => job.priority + (this.focused.has(job.fen) ? 10 : 0);
     this.queue.sort((a, b) => rank(b) - rank(a));

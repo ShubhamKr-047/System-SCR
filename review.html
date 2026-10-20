@@ -61,10 +61,10 @@
 
           <!-- CHESSBOARD CONTAINER -->
           <div class="board-container">
-            <div id="board" class="board chesscom-board" aria-label="Chessboard">
+            <div id="board" class="board chesscom-board" aria-label="Chessboard" title="Click or drag to move. Right-drag to draw arrows; right-click for circles. Ctrl: red, Alt: blue, Ctrl+Alt: yellow.">
               <div class="board-placeholder">Import a PGN to see the board</div>
             </div>
-            <svg id="boardArrows" class="board-arrows" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+            <svg id="boardArrows" class="board-arrows" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
           </div>
 
           <!-- BOTTOM PLAYER BAR (WHITE BY DEFAULT) -->
@@ -166,6 +166,7 @@
           <div class="engine-state">
             <span class="engine-dot"></span>
             <span id="engineStatus">Engine idle</span>
+            <button id="retryPositionAnalysis" class="retry-analysis" type="button" hidden>Retry</button>
           </div>
           <div class="move-counter-group" style="display: flex; align-items: center; gap: 6px;">
             <span id="variationIndicator" class="variation-indicator" hidden>Exploring variation</span>
@@ -286,7 +287,7 @@
                     <span>Best Move Arrow</span>
                   </span>
                   <label class="toggle-switch">
-                    <input id="toggleBestMoveArrow" type="checkbox" checked />
+                    <input id="toggleBestMoveArrow" type="checkbox" aria-label="Best move arrow" checked />
                     <span class="toggle-slider"></span>
                   </label>
                 </div>

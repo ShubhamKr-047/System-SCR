@@ -5,6 +5,9 @@ import { getApiKey, setApiKey, hasApiKey, getCachedCoaching, generateCoaching } 
 import { GameTree, moveLabel } from "./game-tree.js";
 import { EngineQueue } from "./engine.js";
 import { analyzeMove } from "./analysis.js";
+import { BoardOverlay } from "./board-overlay.js";
+import { BoardInput } from "./board-input.js";
+import { evaluatePosition, legalBestMove } from "./position-analysis.js";
 import "./style.css";
 
 const $ = (id) => document.getElementById(id);
@@ -57,8 +60,11 @@ function readImport() {
     state.session.abort();
     state.reviewController?.abort();
     engine.clear();
-    clearTimeout(quickAnalysisTimer);
-    quickController?.abort();
+    cancelQuickAnalysis();
+    boardInput.cancel();
+    overlay.clear();
+    $("promotionDialog").close();
+    $("retryPositionAnalysis").hidden = true;
     state.session = new AbortController();
     state.tree = tree;
     state.headers = tree.headers;
@@ -312,6 +318,7 @@ if (arrowToggle) {
     state.showBestMoveArrow = e.target.checked;
     localStorage.setItem("zen-chess-show-arrow", state.showBestMoveArrow ? "true" : "false");
     drawBestMoveArrow();
+    if (state.showBestMoveArrow) requestQuickAnalysisForCurrentPosition({ retry: true });
   });
 }
 
@@ -379,78 +386,46 @@ function switchTab(tab) {
 $("tabMoves").addEventListener("click", () => switchTab("moves"));
 $("tabSummary").addEventListener("click", () => switchTab("summary"));
 
-function getSquareCenter(sq) {
-  if (!sq || sq.length < 2) return null;
-  const fileChar = sq[0].toLowerCase();
-  const rankChar = sq[1];
-  const file = fileChar.charCodeAt(0) - 97; // 0..7
-  const rank = parseInt(rankChar, 10);      // 1..8
-  if (file < 0 || file > 7 || rank < 1 || rank > 8) return null;
+const overlay = new BoardOverlay($("boardArrows"), () => state.flipped);
+const boardInput = new BoardInput({
+  board: $("board"), overlay,
+  context: () => state.tree ? { key: state.tree.current, flipped: state.flipped, chess: new Chess(state.tree.current.fen) } : null,
+  click: handleSquareClick,
+  select: square => {
+    state.selectedSquare = square;
+    state.legalMoves = new Chess(state.tree.current.fen).moves({ square, verbose: true });
+    updateSelectionHints();
+  },
+  move: executeUserMove,
+  clearSelection: clearBoardSelection
+});
+let displayedNode = null;
+let displayedFlipped = state.flipped;
 
-  const col = state.flipped ? 7 - file : file;
-  const row = state.flipped ? rank - 1 : 8 - rank;
+function clearBoardSelection() {
+  state.selectedSquare = null;
+  state.legalMoves = [];
+  updateSelectionHints();
+}
 
-  return {
-    x: (col + 0.5) * 12.5,
-    y: (row + 0.5) * 12.5
-  };
+function updateSelectionHints() {
+  $("board").querySelectorAll(".legal-hint-dot, .legal-capture-ring").forEach(hint => hint.remove());
+  $("board").querySelectorAll("[data-square]").forEach(square => {
+    const move = state.legalMoves.find(move => move.to === square.dataset.square);
+    square.classList.toggle("selected", square.dataset.square === state.selectedSquare);
+    square.classList.toggle("legal-target", Boolean(move));
+    if (move) {
+      const hint = document.createElement("div");
+      hint.className = move.captured ? "legal-capture-ring" : "legal-hint-dot";
+      square.append(hint);
+    }
+  });
 }
 
 function drawBestMoveArrow() {
-  const svg = $("boardArrows");
-  if (!svg) return;
-  if (!state.showBestMoveArrow) {
-    svg.innerHTML = "";
-    return;
-  }
-
-  // Look up engine recommendation for current position
-  const currentAnalysis = state.analyses[state.cursor];
-  const bestmove = currentAnalysis?.bestmove;
-  if (!bestmove || bestmove.length < 4 || bestmove === "(none)") {
-    svg.innerHTML = "";
-    return;
-  }
-
-  const fromSq = bestmove.slice(0, 2);
-  const toSq = bestmove.slice(2, 4);
-  const c1 = getSquareCenter(fromSq);
-  const c2 = getSquareCenter(toSq);
-  if (!c1 || !c2) {
-    svg.innerHTML = "";
-    return;
-  }
-
-  const dx = c2.x - c1.x;
-  const dy = c2.y - c1.y;
-  const dist = Math.hypot(dx, dy);
-  if (dist === 0) {
-    svg.innerHTML = "";
-    return;
-  }
-
-  // Calculate direction vector and trim slightly for marker head
-  const ux = dx / dist;
-  const uy = dy / dist;
-  const startX = (c1.x + ux * 1.5).toFixed(2);
-  const startY = (c1.y + uy * 1.5).toFixed(2);
-  const endX = (c2.x - ux * 2.2).toFixed(2);
-  const endY = (c2.y - uy * 2.2).toFixed(2);
-
-  svg.innerHTML = `
-    <defs>
-      <marker id="bestMoveArrowHead" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-        <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10b981" />
-      </marker>
-      <filter id="arrowShadow" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="1" stdDeviation="0.8" flood-color="#000000" flood-opacity="0.5" />
-      </filter>
-    </defs>
-    <line x1="${startX}" y1="${startY}" x2="${endX}" y2="${endY}"
-          stroke="#10b981" stroke-width="2.6" stroke-linecap="round"
-          opacity="0.9" filter="url(#arrowShadow)"
-          marker-end="url(#bestMoveArrowHead)" />
-  `;
+  const node = state.tree?.current;
+  overlay.bestmove = state.showBestMoveArrow && node ? legalBestMove(node.fen, node.analysis) : "";
+  overlay.render();
 }
 
 const engine = new EngineQueue(() => {
@@ -462,31 +437,27 @@ const engine = new EngineQueue(() => {
 });
 
 let quickAnalysisTimer = null;
-let quickController = null;
+let quickRequest = null;
 
-async function evaluateNode(node, { moveTime, priority = 0, signal }) {
-  if (signal?.aborted) throw new DOMException("Analysis cancelled", "AbortError");
-  if (node.analysis?.moveTime >= moveTime) return node.analysis;
-  const chess = new Chess(node.fen);
-  let result;
-  if (chess.isGameOver()) {
-    result = { score: chess.isCheckmate() ? -10 : 0, bestmove: "", pv: "", moveTime };
-  } else {
-    result = await engine.evaluate(node.fen, moveTime, { priority, signal });
-  }
-  if (signal?.aborted) throw new DOMException("Analysis cancelled", "AbortError");
-  const whiteScore = node.fen.split(" ")[1] === "w" ? result.score : -result.score;
-  const analysis = { ...result, whiteScore };
-  if (!node.analysis || node.analysis.moveTime <= moveTime) node.analysis = analysis;
-  return analysis;
+function cancelQuickAnalysis() {
+  clearTimeout(quickAnalysisTimer);
+  quickRequest?.controller.abort();
+  quickRequest = null;
+}
+
+function evaluateNode(node, options) {
+  return evaluatePosition(node, engine, options);
 }
 
 function refreshPositionAnalysis() {
   const node = state.tree?.current;
   if (!node) return;
-  $("engineStatus").previousElementSibling?.classList.toggle("running", state.running || node.analysisStatus === "pending");
-  if (state.running) return;
-  $("engineStatus").textContent = node.analysisStatus === "pending" ? "Analyzing move..."
+  const findingMove = quickRequest?.node === node && quickRequest.status === "pending";
+  $("retryPositionAnalysis").hidden = !node.positionError;
+  $("engineStatus").previousElementSibling?.classList.toggle("running", state.running || node.analysisStatus === "pending" || findingMove);
+  if (node.positionError) $("engineStatus").textContent = `Analysis failed: ${node.positionError}`;
+  else if (findingMove) $("engineStatus").textContent = "Finding best move...";
+  else if (!state.running) $("engineStatus").textContent = node.analysisStatus === "pending" ? "Analyzing move..."
     : node.analysisStatus === "error" ? `Analysis failed: ${node.error}`
     : node.result ? "Move analyzed" : "Engine idle";
 }
@@ -558,38 +529,48 @@ async function ensureMoveAnalysis(node, { moveTime, priority = 1, signal = state
   }
 }
 
-function requestQuickAnalysisForCurrentPosition() {
-  clearTimeout(quickAnalysisTimer);
-  quickController?.abort();
+function requestQuickAnalysisForCurrentPosition({ retry = false } = {}) {
   const tree = state.tree;
   const node = tree?.current;
   if (!node) return;
+  if (quickRequest && (quickRequest.tree !== tree || quickRequest.node !== node || retry)) cancelQuickAnalysis();
   engine.focus([node.fen, node.parent?.fen].filter(Boolean));
-  refreshPositionAnalysis();
-  // Every explored move gets full feedback, including after a cancelled review.
   const moveTime = Number($("moveTime")?.value) || 250;
   if (!node.mainline && node.analysisStatus !== "pending" && node.resultTime < moveTime && node.analysisStatus !== "error") {
     ensureMoveAnalysis(node, { moveTime, priority: 3 }).catch(() => {});
+  }
+  if (retry) node.positionError = "";
+  const terminal = new Chess(node.fen).isGameOver();
+  const ready = node.analysis && (terminal || legalBestMove(node.fen, node.analysis));
+  // Selecting pieces or redrawing this position must not cancel its request.
+  if (ready || quickRequest?.status === "pending" || node.positionError) {
+    refreshPositionAnalysis();
     return;
   }
-  if (node.analysis || node.analysisStatus === "pending" || state.running) return;
-  quickController = new AbortController();
-  const signal = AbortSignal.any([quickController.signal, state.session.signal]);
+  const controller = new AbortController();
+  const signal = AbortSignal.any([controller.signal, state.session.signal]);
+  const request = { tree, node, controller, status: "pending" };
+  quickRequest = request;
+  refreshPositionAnalysis();
   quickAnalysisTimer = setTimeout(async () => {
     try {
       await evaluateNode(node, { moveTime: 200, priority: 4, signal });
-      if (state.tree === tree && tree.current === node) {
+      request.status = "complete";
+      if (state.tree === tree && tree.current === node && quickRequest === request) {
         syncActiveLine();
         updateEvaluationDisplay();
         drawBestMoveArrow();
       }
     } catch (error) {
-      if (error.name !== "AbortError" && state.tree === tree && tree.current === node) {
-        $("engineStatus").textContent = `Analysis failed: ${error.message}`;
-      }
+      request.status = "error";
+      if (error.name !== "AbortError") node.positionError = error.message;
+    } finally {
+      if (state.tree === tree && tree.current === node && quickRequest === request) refreshPositionAnalysis();
     }
-  }, 140);
+  }, 100);
 }
+
+$("retryPositionAnalysis").addEventListener("click", () => requestQuickAnalysisForCurrentPosition({ retry: true }));
 
 function handleSquareClick(sqName) {
   if (!state.positions.length) return;
@@ -620,7 +601,7 @@ function handleSquareClick(sqName) {
       state.selectedSquare = sqName;
       state.legalMoves = chess.moves({ square: sqName, verbose: true });
     }
-    renderBoard(state.cursor);
+    updateSelectionHints();
     return;
   }
 
@@ -628,7 +609,7 @@ function handleSquareClick(sqName) {
   if (state.selectedSquare) {
     state.selectedSquare = null;
     state.legalMoves = [];
-    renderBoard(state.cursor);
+    updateSelectionHints();
   }
 }
 
@@ -688,6 +669,13 @@ function renderBoard(index) {
     state.tree.select(target);
   }
   syncActiveLine();
+  if (displayedNode !== state.tree.current || displayedFlipped !== state.flipped) {
+    boardInput.cancel();
+    clearBoardSelection();
+    if (displayedNode !== state.tree.current) overlay.clear();
+    displayedNode = state.tree.current;
+    displayedFlipped = state.flipped;
+  }
   const currentPos = state.positions[state.cursor];
   const fen = currentPos.fen;
   const chessInstance = new Chess(fen);
@@ -776,11 +764,6 @@ function renderBoard(index) {
   }
 
   $("board").innerHTML = html;
-
-  // Attach click listeners to board squares
-  $("board").querySelectorAll(".square").forEach(el => {
-    el.addEventListener("click", () => handleSquareClick(el.dataset.square));
-  });
 
   // Draw best move arrow if available
   drawBestMoveArrow();
@@ -998,6 +981,11 @@ $("lastMove").addEventListener("click", () => renderBoard(state.moves.length));
 
 // Global Keyboard Navigation
 window.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !$("promotionDialog").open) {
+    boardInput.cancel();
+    clearBoardSelection();
+    return;
+  }
   if (["TEXTAREA", "INPUT", "SELECT"].includes(e.target.tagName) || e.target.isContentEditable || $("promotionDialog").open) return;
   if (e.key === "ArrowLeft") {
     e.preventDefault();
@@ -1463,8 +1451,7 @@ async function startReview() {
   const signal = AbortSignal.any([controller.signal, state.session.signal]);
   const moveTime = Number($("moveTime").value);
   const nodes = tree.mainline.slice(1);
-  clearTimeout(quickAnalysisTimer);
-  quickController?.abort();
+  cancelQuickAnalysis();
   switchTab("summary");
   $("startReview").style.display = "none";
   $("stopReview").style.display = "inline-flex";

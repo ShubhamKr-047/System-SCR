@@ -315,6 +315,7 @@ body.chesscom-theme {
 
 /* CHESS.COM BOARD DESIGN */
 .board.chesscom-board {
+  touch-action: none;
   width: 100%;
   height: 100%;
   aspect-ratio: 1;
@@ -428,6 +429,19 @@ body.chesscom-theme {
   pointer-events: none;
   display: block;
   z-index: 2;
+}
+
+.square:has(.piece) { cursor: grab; }
+.board.dragging, .board.dragging .square { cursor: grabbing; }
+.square.drag-origin .piece { opacity: 0.2; }
+.square.drop-target { box-shadow: inset 0 0 0 4px #75bfff99; }
+.drag-piece {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  object-fit: contain;
+  z-index: 1000;
+  filter: drop-shadow(0 4px 3px #0005);
 }
 
 /* COORDINATES (Chess.com inside-square styling) */
