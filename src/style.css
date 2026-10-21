@@ -678,22 +678,17 @@ body.chesscom-theme {
 .sidebar-footer-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
   font-size: 11px;
 }
 
+.engine-state {
+  display: none !important;
+}
+
 .move-counter-badge {
-  font-family: 'Roboto Mono', monospace;
-  font-size: 11px;
-  font-weight: 700;
-  color: #ffffff;
-  background: #1c1b18;
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--line-subtle);
-  min-width: 50px;
-  text-align: center;
+  display: none !important;
 }
 
 .dock-progress-wrapper {
@@ -802,12 +797,12 @@ body.chesscom-theme {
 }
 
 .action-btn-primary.review-mode {
-  background-color: #2da44e;
-  box-shadow: 0 2px 0 #1b632f;
+  background-color: var(--chess-green);
+  box-shadow: 0 2px 0 #5b8433;
 }
 
 .action-btn-primary.review-mode:hover:not(:disabled) {
-  background-color: #38b85b;
+  background-color: var(--chess-green-hover);
 }
 
 .action-btn-stop {

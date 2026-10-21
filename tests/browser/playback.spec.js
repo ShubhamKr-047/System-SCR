@@ -47,12 +47,12 @@ test("AutoPlay advances original moves, pauses, restarts at the end and stops on
   await expect(page.locator("#startReviewText")).toHaveText("Pause");
   await expect(page.locator("#moveCounter")).toHaveText("1... e5");
   await page.locator("#startReview").click();
-  await expect(page.locator("#startReviewText")).toHaveText("AutoPlay");
+  await expect(page.locator("#startReviewText")).toHaveText("Play");
   await page.waitForTimeout(1250);
   await expect(page.locator("#moveCounter")).toHaveText("1... e5");
   await page.locator("#startReview").click();
   await expect(page.locator("#moveCounter")).toHaveText("2... Nc6", { timeout: 6000 });
-  await expect(page.locator("#startReviewText")).toHaveText("AutoPlay");
+  await expect(page.locator("#startReviewText")).toHaveText("Play");
   await page.locator("#startReview").click();
   await expect(page.locator("#moveCounter")).toHaveText("1. e4");
   await page.locator("#prevMove").click();
@@ -103,5 +103,5 @@ test("new imports cancel playback and Summary retains game analysis", async ({ p
   await expect(page.locator("#summaryStartBtn")).toBeVisible({ timeout: 20000 });
   await page.locator("#summaryStartBtn").click();
   await expect(page.locator("#gameMovesView")).toBeVisible();
-  await expect(page.locator("#startReviewText")).toHaveText("AutoPlay");
+  await expect(page.locator("#startReviewText")).toHaveText("Play");
 });

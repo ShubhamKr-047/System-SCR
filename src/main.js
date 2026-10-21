@@ -93,10 +93,10 @@ function readImport() {
     state.legalMoves = [];
     syncActiveLine();
 
-    if ($("startReviewText")) $("startReviewText").textContent = "AutoPlay";
+    if ($("startReviewText")) $("startReviewText").textContent = "Play";
     if ($("startReview")) {
       $("startReview").disabled = false;
-      $("startReview").title = "Autoplay original game";
+      $("startReview").title = "Play original game";
       $("startReview").classList.remove("review-mode");
       $("startReview").style.display = "inline-flex";
     }
@@ -155,10 +155,10 @@ function startFreshAnalysisBoard() {
   state.legalMoves = [];
   syncActiveLine();
 
-  if ($("startReviewText")) $("startReviewText").textContent = "AutoPlay";
+  if ($("startReviewText")) $("startReviewText").textContent = "Play";
   if ($("startReview")) {
     $("startReview").disabled = false;
-    $("startReview").title = "Autoplay original game";
+    $("startReview").title = "Play original game";
     $("startReview").classList.remove("review-mode");
     $("startReview").style.display = "inline-flex";
   }
@@ -476,17 +476,17 @@ function syncActiveLine() {
   $("variationIndicator").hidden = !state.isVariation;
   if (!state.running) {
     updateSummaryActionButtons();
-    $("startReviewText").textContent = state.autoPlaying ? "Pause" : "AutoPlay";
+    $("startReviewText").textContent = state.autoPlaying ? "Pause" : "Play";
     $("startReview").classList.toggle("review-mode", state.isAnalyzed);
-    $("startReview").title = state.autoPlaying ? "Pause autoplay" : "Autoplay original game";
+    $("startReview").title = state.autoPlaying ? "Pause play" : "Play original game";
   }
 }
 
 function stopAutoplay() {
   clearInterval(state.autoplayTimer);
   state.autoPlaying = false;
-  $("startReviewText").textContent = "AutoPlay";
-  $("startReview").title = "Autoplay original game";
+  $("startReviewText").textContent = "Play";
+  $("startReview").title = "Play original game";
   $("startReview").setAttribute("aria-pressed", "false");
 }
 
@@ -2112,7 +2112,7 @@ async function startReview() {
       $("stopReview").style.display = "none";
       $("stopReview").disabled = true;
       $("startReview").style.display = "inline-flex";
-      $("startReviewText").textContent = state.autoPlaying ? "Pause" : "AutoPlay";
+      $("startReviewText").textContent = state.autoPlaying ? "Pause" : "Play";
       refreshAnalysisView();
       setNavEnabled();
       renderEvalGraph();
@@ -2127,7 +2127,7 @@ $("stopReview").addEventListener("click", stopReview);
 $("moveTime").addEventListener("change", () => {
   stopPlayback();
   state.isAnalyzed = false;
-  if ($("startReviewText")) $("startReviewText").textContent = "AutoPlay";
+  if ($("startReviewText")) $("startReviewText").textContent = "Play";
   updateSummaryActionButtons();
 });
 
