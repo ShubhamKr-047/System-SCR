@@ -1685,6 +1685,23 @@ body.resizing-feedback {
   word-break: normal;
 }
 
+.pv-move {
+  color: #b4d995;
+  transition: color .2s ease;
+}
+
+.pv-move.is-played { color: #5b8433; }
+
+.continuation-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pv-move { transition: none; }
+}
+
 .continuation-heading {
   display: flex;
   align-items: center;

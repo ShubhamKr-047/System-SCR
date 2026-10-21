@@ -78,7 +78,7 @@ Playing a move opens the Moves view automatically. Game options, PGN import, eng
 
 Stockfish's recommendation and **Show Move** are always shown in their own card as soon as a move is analyzed, without an API key or clicking **Explain**. The card remains available while AI loads, after AI finishes, and if a provider fails.
 
-**Show Move**, beside **Stockfish recommended continuation**, previews the displayed engine line on the board from the position before the reviewed move. This works with local feedback and Gemini/Groq coaching. **Back to move** or Escape restores the exact selected position. The preview does not add moves or variations, change the original game, or make another AI request. Board moves are disabled during the preview; exit it before exploring another line.
+The centered **Show Move** button below **Stockfish recommended continuation** previews the displayed engine line on the board from the position before the reviewed move. Moves start light green and turn dark green individually as they play. This works with local feedback and Gemini/Groq coaching. **Back to move** or Escape restores the exact selected position and resets the move colors. The preview does not add moves or variations, change the original game, or make another AI request. Board moves are disabled during the preview; exit it before exploring another line.
 
 ## Moving pieces and planning on the board
 
