@@ -66,11 +66,12 @@ test("Show Move plays a separate Stockfish preview and restores the exact origin
   page.on("pageerror", error => errors.push(error.message));
   await load(page);
   await play(page, "f2", "f3");
-  await page.locator("#askAiCoachingBtn").click(); // No key: reveal local Stockfish feedback.
+  await expect(page.locator("#askAiCoachingBtn")).toBeVisible();
+  await expect(page.locator("#positionFeedback")).toHaveCount(0);
   await expect(page.locator("#showContinuationBtn")).toHaveText("Show Move");
   const original = await pieces(page);
   const chips = await page.locator("#moveList .move-chip").count();
-  const line = await page.locator("#positionFeedback .pv-line").innerText();
+  const line = await page.locator(".stockfish-continuation .pv-line").innerText();
   await page.locator("#showContinuationBtn").click();
   await expect(page.locator("#continuationPreview")).toBeVisible();
   await expect(page.locator("#startReview")).toBeDisabled();
@@ -82,7 +83,12 @@ test("Show Move plays a separate Stockfish preview and restores the exact origin
   expect(await pieces(page)).toEqual(original);
   await expect(page.locator("#moveCounter")).toHaveText("1. f3");
   await expect(page.locator("#moveList .move-chip")).toHaveCount(chips);
-  await expect(page.locator("#positionFeedback .pv-line")).toHaveText(line);
+  await expect(page.locator(".stockfish-continuation .pv-line")).toHaveText(line);
+  // Revealing local coaching must not duplicate or hide the independent line.
+  await page.locator("#askAiCoachingBtn").click();
+  await expect(page.locator("#positionFeedback")).toBeVisible();
+  await expect(page.locator(".stockfish-continuation")).toHaveCount(1);
+  await expect(page.locator("#positionFeedback .stockfish-continuation")).toHaveCount(0);
   await page.locator("#showContinuationBtn").click();
   await page.keyboard.press("Escape");
   await expect(page.locator("#continuationPreview")).toBeHidden();
