@@ -1676,13 +1676,36 @@ body.resizing-feedback {
 
 .stockfish-continuation {
   margin: 10px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
+
+.continuation-copy { flex: 1; min-width: 0; }
 
 .stockfish-continuation .pv-line {
   margin: 0;
   line-height: 1.6;
   overflow-wrap: anywhere;
   word-break: normal;
+}
+
+.pv-move {
+  color: #5b8433;
+  transition: color .2s ease;
+}
+
+.pv-move.is-played { color: #b4d995; }
+
+.continuation-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pv-move { transition: none; }
 }
 
 .continuation-heading {

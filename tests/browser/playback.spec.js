@@ -72,11 +72,19 @@ test("Show Move plays a separate Stockfish preview and restores the exact origin
   const original = await pieces(page);
   const chips = await page.locator("#moveList .move-chip").count();
   const line = await page.locator(".stockfish-continuation .pv-line").innerText();
+  await expect(page.locator(".pv-move.is-played")).toHaveCount(0);
+  const initialColor = await page.locator(".pv-move").first().evaluate(element => getComputedStyle(element).color);
+  const card = await page.locator(".stockfish-continuation").boundingBox();
+  const button = await page.locator("#showContinuationBtn").boundingBox();
+  expect(button.x).toBeGreaterThan(card.x + card.width / 2);
+  expect(Math.abs(button.y + button.height / 2 - card.y - card.height / 2)).toBeLessThan(1);
   await page.locator("#showContinuationBtn").click();
   await expect(page.locator("#continuationPreview")).toBeVisible();
   await expect(page.locator("#startReview")).toBeDisabled();
   await expect(page.locator("#nextMove")).toBeDisabled();
   await expect(page.locator("#continuationPreviewStatus")).toContainText(line.split(/\s+/)[0], { timeout: 5000 });
+  await expect.poll(() => page.locator(".pv-move.is-played").count()).toBeGreaterThan(0);
+  await expect.poll(() => page.locator(".pv-move").first().evaluate(element => getComputedStyle(element).color)).not.toBe(initialColor);
   expect(await pieces(page)).not.toEqual(original);
   await page.screenshot({ path: info.outputPath("stockfish-preview.png") });
   await page.locator("#returnFromPreview").click();
@@ -84,6 +92,7 @@ test("Show Move plays a separate Stockfish preview and restores the exact origin
   await expect(page.locator("#moveCounter")).toHaveText("1. f3");
   await expect(page.locator("#moveList .move-chip")).toHaveCount(chips);
   await expect(page.locator(".stockfish-continuation .pv-line")).toHaveText(line);
+  await expect(page.locator(".pv-move.is-played")).toHaveCount(0);
   // Revealing local coaching must not duplicate or hide the independent line.
   await page.locator("#askAiCoachingBtn").click();
   await expect(page.locator("#positionFeedback")).toBeVisible();
