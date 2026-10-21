@@ -76,7 +76,8 @@ test("Show Move plays a separate Stockfish preview and restores the exact origin
   const initialColor = await page.locator(".pv-move").first().evaluate(element => getComputedStyle(element).color);
   const card = await page.locator(".stockfish-continuation").boundingBox();
   const button = await page.locator("#showContinuationBtn").boundingBox();
-  expect(Math.abs(button.x + button.width / 2 - card.x - card.width / 2)).toBeLessThan(1);
+  expect(button.x).toBeGreaterThan(card.x + card.width / 2);
+  expect(Math.abs(button.y + button.height / 2 - card.y - card.height / 2)).toBeLessThan(1);
   await page.locator("#showContinuationBtn").click();
   await expect(page.locator("#continuationPreview")).toBeVisible();
   await expect(page.locator("#startReview")).toBeDisabled();

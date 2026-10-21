@@ -1676,7 +1676,13 @@ body.resizing-feedback {
 
 .stockfish-continuation {
   margin: 10px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
+
+.continuation-copy { flex: 1; min-width: 0; }
 
 .stockfish-continuation .pv-line {
   margin: 0;
@@ -1686,16 +1692,16 @@ body.resizing-feedback {
 }
 
 .pv-move {
-  color: #b4d995;
+  color: #5b8433;
   transition: color .2s ease;
 }
 
-.pv-move.is-played { color: #5b8433; }
+.pv-move.is-played { color: #b4d995; }
 
 .continuation-actions {
   display: flex;
-  justify-content: center;
-  margin-top: 10px;
+  flex-shrink: 0;
+  align-items: center;
 }
 
 @media (prefers-reduced-motion: reduce) {

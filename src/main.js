@@ -538,8 +538,8 @@ function continuationMarkup(result) {
   const played = state.preview?.index || 0;
   const line = moves.map((move, index) => `<span class="pv-move${index < played ? " is-played" : ""}" title="${index < played ? "Played in preview" : "Not yet played"}"${index === played - 1 ? ' aria-current="step"' : ""}>${esc(move)}</span>`).join(" ");
   return `<div class="feedback-block stockfish-continuation" aria-label="Stockfish recommendation">
-    <div class="continuation-heading"><span>Stockfish recommended continuation</span></div>
-    <p class="pv-line">${line || "No continuation reported."}</p>
+    <div class="continuation-copy"><div class="continuation-heading"><span>Stockfish recommended continuation</span></div>
+    <p class="pv-line">${line || "No continuation reported."}</p></div>
     <div class="continuation-actions"><button id="showContinuationBtn" type="button" class="show-move-btn" ${playable ? "" : "disabled"}>${state.preview ? "Back to move" : "Show Move"}</button></div></div>`;
 }
 
