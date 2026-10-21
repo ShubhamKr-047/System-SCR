@@ -1093,24 +1093,74 @@ body.chesscom-theme {
   background-color: #ffffff;
 }
 
-/* RESET VARIATION BUTTON */
-.reset-variation-btn {
-  background: rgba(220, 53, 69, 0.18);
-  border: 1px solid rgba(220, 53, 69, 0.45);
-  color: #ff7b72;
-  padding: 2px 7px;
-  border-radius: 4px;
+/* Give variation navigation its own space above the move counter. */
+.variation-navigation {
+  padding: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--line-subtle);
+  border-radius: 8px;
+}
+
+.variation-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+  color: var(--chess-green);
+}
+
+.variation-heading .variation-indicator {
+  color: var(--text-muted);
   font-size: 10px;
   font-weight: 700;
+  letter-spacing: .3px;
+}
+
+.variation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reset-variation-btn {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
+  transition: background .15s ease, border-color .15s ease;
 }
 
 .reset-variation-btn:hover {
-  background: rgba(220, 53, 69, 0.35);
-  color: #ffffff;
-  border-color: #ff7b72;
+  background: var(--bg-hover);
+  border-color: var(--chess-green);
+}
+
+.reset-variation-btn:focus-visible {
+  outline: 2px solid var(--chess-green);
+  outline-offset: 2px;
+}
+
+.return-to-game { justify-content: space-between; border-color: #526640; }
+.variation-return-label { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.variation-return-move {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(129, 182, 76, .12);
+  color: #c4dea8;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 [hidden] { display: none !important; }
@@ -1583,9 +1633,9 @@ body.resizing-feedback {
 
 .ai-guidance-card {
   padding: 14px 15px;
-  border: 1px solid rgba(116, 183, 213, .2);
+  border: 1px solid var(--move-accent, var(--chess-green));
   border-radius: 9px;
-  background: linear-gradient(135deg, rgba(76, 139, 170, .1), rgba(76, 139, 170, .02)), var(--bg-card);
+  background: var(--bg-card);
   overflow-wrap: anywhere;
 }
 
@@ -1593,7 +1643,7 @@ body.resizing-feedback {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #92c4d9;
+  color: var(--move-accent, var(--chess-green));
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .6px;
@@ -1649,9 +1699,9 @@ body.resizing-feedback {
 
 .show-move-btn {
   padding: 5px 9px;
-  border: 1px solid rgba(129, 182, 76, .45);
+  border: 1px solid transparent;
   border-radius: 5px;
-  background: rgba(129, 182, 76, .1);
+  background: var(--chess-green);
   color: var(--text-main);
   font: inherit;
   font-size: 11px;
@@ -1659,7 +1709,8 @@ body.resizing-feedback {
   cursor: pointer;
 }
 
-.show-move-btn:hover { background: rgba(129, 182, 76, .25); }
+.show-move-btn:hover:not(:disabled) { background: var(--chess-green-hover); }
+.show-move-btn:active:not(:disabled) { background: var(--chess-green-active); }
 .show-move-btn:disabled { opacity: .4; cursor: default; }
 .show-move-btn:focus-visible { outline: 2px solid var(--chess-green); outline-offset: 2px; }
 .continuation-preview:not([hidden]) { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -1693,7 +1744,7 @@ body.resizing-feedback {
   color: #79c0ff;
   background: rgba(88, 166, 255, 0.08);
   border-radius: 7px;
-  border: 1px dashed rgba(88, 166, 255, 0.35);
+  border: 1px dashed var(--move-accent, var(--chess-green));
 }
 
 .ai-loading-spinner {
@@ -1714,8 +1765,8 @@ body.resizing-feedback {
 .ai-prompt-card {
   margin-top: 10px;
   padding: 12px 14px;
-  background: linear-gradient(135deg, rgba(30, 36, 48, 0.95) 0%, rgba(20, 24, 34, 0.98) 100%);
-  border: 1px solid rgba(88, 166, 255, 0.3);
+  background: var(--bg-card);
+  border: 1px solid var(--move-accent, var(--chess-green));
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -1734,7 +1785,7 @@ body.resizing-feedback {
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, #58a6ff, #a371f7, #58a6ff);
+  background: linear-gradient(90deg, var(--move-accent, var(--chess-green)), transparent, var(--move-accent, var(--chess-green)));
   background-size: 200% 100%;
   animation: aiPromptShimmer 4s ease infinite;
 }
@@ -1743,55 +1794,6 @@ body.resizing-feedback {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
-}
-
-.ai-prompt-card.blunder {
-  border-color: rgba(250, 65, 45, 0.4);
-}
-.ai-prompt-card.blunder::before {
-  background: linear-gradient(90deg, #fa412d, #ff7b72, #fa412d);
-}
-
-.ai-prompt-card.mistake {
-  border-color: rgba(250, 140, 53, 0.4);
-}
-.ai-prompt-card.mistake::before {
-  background: linear-gradient(90deg, #fa8c35, #f0883e, #fa8c35);
-}
-
-.ai-prompt-card.miss {
-  border-color: rgba(219, 74, 56, 0.4);
-}
-.ai-prompt-card.miss::before {
-  background: linear-gradient(90deg, #db4a38, #f85149, #db4a38);
-}
-
-.ai-prompt-card.inaccuracy {
-  border-color: rgba(247, 198, 49, 0.4);
-}
-.ai-prompt-card.inaccuracy::before {
-  background: linear-gradient(90deg, #f7c631, #d29922, #f7c631);
-}
-
-.ai-prompt-card.brilliant {
-  border-color: rgba(27, 172, 166, 0.4);
-}
-.ai-prompt-card.brilliant::before {
-  background: linear-gradient(90deg, #1baca6, #39c5bb, #1baca6);
-}
-
-.ai-prompt-card.great {
-  border-color: rgba(92, 139, 176, 0.4);
-}
-.ai-prompt-card.great::before {
-  background: linear-gradient(90deg, #5c8bb0, #79b8ff, #5c8bb0);
-}
-
-.ai-prompt-card.best {
-  border-color: rgba(129, 182, 76, 0.4);
-}
-.ai-prompt-card.best::before {
-  background: linear-gradient(90deg, #81b64c, #96bc4b, #81b64c);
 }
 
 .ai-prompt-body {
@@ -1835,7 +1837,7 @@ body.resizing-feedback {
 }
 
 .ai-ask-btn {
-  background: linear-gradient(135deg, #1f6feb 0%, #238636 100%);
+  background: var(--chess-green);
   border: 1px solid rgba(255, 255, 255, 0.18);
   color: #ffffff;
   padding: 7px 13px;
@@ -1848,20 +1850,20 @@ body.resizing-feedback {
   align-items: center;
   gap: 6px;
   white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(31, 111, 235, 0.35);
+  box-shadow: 0 2px 0 #5b8433;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   flex-shrink: 0;
 }
 
 .ai-ask-btn:hover {
-  background: linear-gradient(135deg, #388bfd 0%, #2ea043 100%);
-  box-shadow: 0 4px 14px rgba(56, 139, 253, 0.5);
+  background: var(--chess-green-hover);
+  box-shadow: 0 3px 0 #5b8433;
   transform: translateY(-1px);
 }
 
 .ai-ask-btn:active {
   transform: translateY(1px);
-  box-shadow: 0 1px 4px rgba(31, 111, 235, 0.3);
+  box-shadow: none;
 }
 
 .ai-ask-btn svg {
@@ -1885,7 +1887,7 @@ body.resizing-feedback {
   margin-top: 10px;
   padding: 9px 12px;
   background: linear-gradient(135deg, rgba(28, 34, 46, 0.8) 0%, rgba(20, 24, 32, 0.95) 100%);
-  border: 1px dashed rgba(88, 166, 255, 0.35);
+  border: 1px dashed var(--move-accent, var(--chess-green));
   border-radius: 7px;
   display: flex;
   align-items: center;
