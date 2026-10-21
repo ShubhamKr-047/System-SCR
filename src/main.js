@@ -531,9 +531,9 @@ function toggleAutoplay() {
   if (state.autoPlaying) state.autoplayTimer = setInterval(advance, 1100);
 }
 
-function continuationMarkup(result, compact = false) {
+function continuationMarkup(result) {
   const playable = !state.running && continuationFrames(result).length > 0;
-  return `<div class="${compact ? "ai-guidance-continuation" : "feedback-block stockfish-continuation"}">
+  return `<div class="feedback-block stockfish-continuation" aria-label="Stockfish recommendation">
     <div class="continuation-heading"><span>Stockfish recommended continuation</span>
       <button id="showContinuationBtn" type="button" class="show-move-btn" ${playable ? "" : "disabled"}>${state.preview ? "Back to move" : "Show Move"}</button>
     </div><p class="pv-line">${esc(result.pv || result.bestSan || "No continuation reported.")}</p></div>`;
@@ -1575,14 +1575,13 @@ function renderFeedback(result) {
   const coaching = ai?.status === "ready" ? ai.coaching : null;
   const continuation = continuationMarkup(result);
   const genericBody = `<div class="feedback-block"><div class="feedback-block-header"><h3>Feedback</h3>
-      <span class="feedback-concept-pill">${esc(local.concept)}</span></div><p>${local.whyText}</p></div>${continuation}`;
+      <span class="feedback-concept-pill">${esc(local.concept)}</span></div><p>${local.whyText}</p></div>`;
   const coachingBody = coaching
     ? `<article class="ai-guidance-card" aria-label="AI move guidance">
         <div class="ai-guidance-label"><span aria-hidden="true">✦</span> Move insight</div>
         <h3>${esc(coaching.concept)}</h3>
         <p class="ai-guidance-summary">${esc(coaching.summary)}</p>
         <p class="ai-guidance-tip"><span aria-hidden="true">↳</span><span>${esc(coaching.tip)}</span></p>
-        ${continuationMarkup(result, true)}
       </article>`
     : "";
 
@@ -1648,7 +1647,8 @@ function renderFeedback(result) {
       <span class="feedback-move-text">${esc(result.moveNo)} ${esc(result.san)}</span></div>
       </div>
     ${promptHtml}
-    ${statusHtml}${feedbackBody ? `<div id="positionFeedback" data-source="${coaching ? providerId : "local"}" aria-busy="${ai?.status === "pending"}">${feedbackBody}</div>` : ""}`;
+    ${statusHtml}${feedbackBody ? `<div id="positionFeedback" data-source="${coaching ? providerId : "local"}" aria-busy="${ai?.status === "pending"}">${feedbackBody}</div>` : ""}
+    ${continuation}`;
   $("feedbackContainer").scrollTop = scrollTop;
 
   $("showContinuationBtn")?.addEventListener("click", () => {

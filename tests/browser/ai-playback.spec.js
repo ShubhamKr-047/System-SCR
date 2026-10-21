@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 for (const provider of ["gemini", "groq"]) {
-  test(`${provider}: Show Move preserves the AI explanation, engine line and original game`, async ({ page }) => {
+  test(`${provider}: Stockfish stays independent before, during and after AI explanations`, async ({ page }) => {
     const errors = [];
     let requests = 0;
     page.on("pageerror", error => errors.push(error.message));
@@ -22,23 +22,41 @@ for (const provider of ["gemini", "groq"]) {
     await expect(page.locator("#askAiCoachingBtn")).toBeVisible();
     await page.locator("#topbarMenuBtn").click();
     await page.locator("#aiProvider").selectOption(provider);
-    await page.locator("#aiApiKey").fill("test-success");
+    await page.locator("#aiApiKey").fill("test-delayed");
     await page.locator("#saveAiKey").click();
     await page.locator("#closeHamburgerBtn").click();
     expect(requests).toBe(0);
+    const line = await page.locator(".stockfish-continuation .pv-line").innerText();
+    await expect(page.locator("#showContinuationBtn")).toBeEnabled();
+    await expect(page.locator("#positionFeedback")).toHaveCount(0);
     await page.locator("#askAiCoachingBtn").click();
-    await expect(page.locator(".ai-guidance-card")).toContainText("Explanation for f3");
-    const line = await page.locator(".ai-guidance-continuation .pv-line").innerText();
+    await expect(page.locator("#aiCoachStatus")).toContainText("is explaining");
+    await expect(page.locator(".stockfish-continuation .pv-line")).toHaveText(line);
+    await expect(page.locator("#showContinuationBtn")).toBeEnabled();
     const chips = await page.locator("#moveList .move-chip").count();
     await page.locator("#showContinuationBtn").click();
     await expect(page.locator("#continuationPreviewStatus")).toContainText(line.split(/\s+/)[0]);
+    await expect(page.locator(".ai-guidance-card")).toContainText("Explanation for f3");
+    await expect(page.locator(".ai-guidance-card .pv-line")).toHaveCount(0);
+    await expect(page.locator(".stockfish-continuation")).toHaveCount(1);
     await page.locator("#returnFromPreview").click();
     await expect(page.locator("#moveCounter")).toHaveText("1. f3");
     await expect(page.locator('[data-square="f3"] img')).toHaveAttribute("alt", "White p");
     await expect(page.locator(".ai-guidance-card")).toContainText("Explanation for f3");
-    await expect(page.locator(".ai-guidance-continuation .pv-line")).toHaveText(line);
+    await expect(page.locator(".stockfish-continuation .pv-line")).toHaveText(line);
     await expect(page.locator("#moveList .move-chip")).toHaveCount(chips);
     expect(requests).toBe(1);
+    // Provider failures must not hide or duplicate the local engine card.
+    await page.locator("#topbarMenuBtn").click();
+    await page.locator("#aiApiKey").fill("test-quota");
+    await page.locator("#saveAiKey").click();
+    await page.locator("#closeHamburgerBtn").click();
+    await page.locator("#askAiCoachingBtn").click();
+    await expect(page.locator("#aiCoachStatus")).toContainText("quota or rate limit");
+    await expect(page.locator(".stockfish-continuation .pv-line")).toHaveText(line);
+    await expect(page.locator(".stockfish-continuation")).toHaveCount(1);
+    await expect(page.locator("#showContinuationBtn")).toBeEnabled();
+    expect(requests).toBe(2);
     expect(errors).toEqual([]);
   });
 }

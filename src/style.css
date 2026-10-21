@@ -1624,21 +1624,11 @@ body.resizing-feedback {
   line-height: 1.5;
 }
 
-.ai-guidance-continuation {
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line-subtle);
+.stockfish-continuation {
+  margin: 10px 0 0;
 }
 
-.ai-guidance-continuation > span {
-  display: block;
-  margin-bottom: 5px;
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.ai-guidance-continuation .pv-line {
+.stockfish-continuation .pv-line {
   margin: 0;
   line-height: 1.6;
   overflow-wrap: anywhere;
