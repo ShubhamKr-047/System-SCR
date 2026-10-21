@@ -1646,9 +1646,9 @@ function renderFeedback(result) {
       <span class="feedback-badge" style="background-color: ${result.color}; color: ${result.textColor};">${esc(result.sign)} ${esc(result.label)}</span>
       <span class="feedback-move-text">${esc(result.moveNo)} ${esc(result.san)}</span></div>
       </div>
-    ${continuation}
     ${promptHtml}
-    ${statusHtml}${feedbackBody ? `<div id="positionFeedback" data-source="${coaching ? providerId : "local"}" aria-busy="${ai?.status === "pending"}">${feedbackBody}</div>` : ""}`;
+    ${statusHtml}${feedbackBody ? `<div id="positionFeedback" data-source="${coaching ? providerId : "local"}" aria-busy="${ai?.status === "pending"}">${feedbackBody}</div>` : ""}
+    ${continuation}`;
   $("feedbackContainer").scrollTop = scrollTop;
 
   $("showContinuationBtn")?.addEventListener("click", () => {
