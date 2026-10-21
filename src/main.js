@@ -1310,10 +1310,6 @@ function getLocalDetailedFeedback(result) {
 
 let feedbackTarget = null;
 
-function feedbackBlock(title, text) {
-  return `<div class="feedback-block"><h3>${esc(title)}</h3><p>${esc(text)}</p></div>`;
-}
-
 function renderFeedback(result) {
   const tree = state.tree;
   const node = tree?.current;
@@ -1343,12 +1339,16 @@ function renderFeedback(result) {
   const continuation = `<div class="feedback-block"><h3>Stockfish recommended continuation</h3>
     <p class="pv-line">${esc(result.pv || result.bestSan || "No continuation reported.")}</p></div>`;
   const body = coaching
-    ? `<div class="feedback-block"><div class="feedback-block-header"><h3>Move explanation</h3>
-        <span class="feedback-concept-pill">${esc(coaching.concept)}</span></div><p>${esc(coaching.why)}</p></div>
-      ${feedbackBlock("Tactical breakdown", coaching.tactical)}
-      ${feedbackBlock("Positional breakdown", coaching.positional)}
-      ${feedbackBlock("Why Stockfish recommends this", coaching.recommendation)}
-      ${continuation}${feedbackBlock("Practical takeaway", coaching.tip)}`
+    ? `<article class="ai-guidance-card" aria-label="AI move guidance">
+        <div class="ai-guidance-label"><span aria-hidden="true">✦</span> Move insight</div>
+        <h3>${esc(coaching.concept)}</h3>
+        <p class="ai-guidance-summary">${esc(coaching.summary)}</p>
+        <p class="ai-guidance-tip"><span aria-hidden="true">↳</span><span>${esc(coaching.tip)}</span></p>
+        <div class="ai-guidance-continuation">
+          <span>Stockfish recommended continuation</span>
+          <p class="pv-line">${esc(result.pv || result.bestSan || "No continuation reported.")}</p>
+        </div>
+      </article>`
     : `<div class="feedback-block"><div class="feedback-block-header"><h3>Feedback</h3>
         <span class="feedback-concept-pill">${esc(local.concept)}</span></div><p>${local.whyText}</p></div>${continuation}`;
   const bannerHtml = !hasKey
@@ -1366,9 +1366,7 @@ function renderFeedback(result) {
     } else if (ai?.status === "pending") {
       status = `<div id="aiCoachStatus" class="ai-coach-loading" role="status"><div class="ai-loading-spinner"></div>
         <span>${provider.name} is explaining this position. Local feedback remains available below.</span></div>`;
-    } else if (coaching) {
-      status = `<div id="aiCoachStatus" class="ai-feedback-status">Explained by ${esc(provider.name)} using Stockfish analysis.</div>`;
-    } else if (hasKey) {
+    } else if (!coaching && hasKey) {
       const question = getMoveQuestion(result);
       promptHtml = `
         <div class="ai-prompt-card ${esc(result.key)}">
@@ -1380,7 +1378,7 @@ function renderFeedback(result) {
               <span>AI Coach</span>
             </div>
             <div class="ai-prompt-question">${esc(question)}</div>
-            <div class="ai-prompt-subtext">Get tactical and positional explanations from ${esc(provider.name)}.</div>
+            <div class="ai-prompt-subtext">Get the key idea and a practical next step.</div>
           </div>
           <button id="askAiCoachingBtn" type="button" class="ai-ask-btn" aria-label="${esc(question)}">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
@@ -1389,7 +1387,7 @@ function renderFeedback(result) {
             <span>Ask AI</span>
           </button>
         </div>`;
-    } else {
+    } else if (!coaching) {
       const question = getMoveQuestion(result);
       promptHtml = `
         <div class="ai-prompt-card ${esc(result.key)}">
@@ -1411,7 +1409,35 @@ function renderFeedback(result) {
   }
 
   $("feedbackContent").innerHTML = `
-    <div class="feedback-header-box ${esc(result.key)}"><div class="feedback-title-group">
+    <div class="feedback-header-box ${esc(result.key)}">
+      ${result.key === "brilliant" ? `<svg class="brilliant-flames" viewBox="0 0 600 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+        <defs>
+          <linearGradient id="brilliantFire" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0" stop-color="#ebffff" stop-opacity=".95" />
+            <stop offset=".2" stop-color="#68efff" stop-opacity=".85" />
+            <stop offset=".55" stop-color="#00aaff" stop-opacity=".65" />
+            <stop offset="1" stop-color="#168bff" stop-opacity="0" />
+          </linearGradient>
+          <linearGradient id="brilliantCore" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0" stop-color="#ffffff" stop-opacity=".95" />
+            <stop offset=".45" stop-color="#a0f7ff" stop-opacity=".7" />
+            <stop offset="1" stop-color="#43dfff" stop-opacity="0" />
+          </linearGradient>
+          <radialGradient id="brilliantHeat">
+            <stop stop-color="#00bfff" stop-opacity=".4" />
+            <stop offset="1" stop-color="#007bff" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+        <ellipse class="brilliant-heat" cx="310" cy="105" rx="350" ry="105" fill="url(#brilliantHeat)" />
+        ${Array.from({ length: 16 }, (_, i) => `<g transform="translate(${i * 40 - 18} ${[12, 0, 24, 8, 17, -12, 20][i % 7]}) scale(${[.9, 1.25, 1.05][i % 3]} 1)">
+          <g class="brilliant-flame" style="--flicker:${1.1 + (i % 5) * .19}s;--delay:${-i * .37}s;--lean:${i % 2 ? -1 : 1}">
+            <path fill="url(#brilliantFire)" d="M0 108C-5 87 0 72 10 57C20 42 24 25 17 3C42 23 40 42 29 59C42 53 45 41 43 32C64 59 47 77 51 108Z" />
+            <path class="brilliant-flame-core" fill="url(#brilliantCore)" d="M10 108C3 91 14 79 21 65C26 55 27 47 26 42C43 65 26 79 36 88C37 81 40 77 43 75C40 90 49 98 46 108Z" />
+          </g>
+        </g>`).join("")}
+        ${Array.from({ length: 12 }, (_, i) => `<circle class="brilliant-ember" cx="${18 + i * 51}" cy="95" r="${i % 3 === 0 ? 1.8 : 1}" style="--delay:${-i * .43}s;--drift:${i % 2 ? 12 : -18}px;--rise:${1.8 + (i % 4) * .35}s" />`).join("")}
+      </svg>` : ""}
+      <div class="feedback-title-group">
       <span class="feedback-badge" style="background-color: ${result.color}; color: ${result.textColor};">${esc(result.sign)} ${esc(result.label)}</span>
       <span class="feedback-move-text">${esc(result.moveNo)} ${esc(result.san)}</span></div>
       ${hasKey ? '<button id="openAiSettingsBtn" class="ai-banner-btn" type="button">Settings</button>' : ""}</div>

@@ -6,7 +6,7 @@ export const PROVIDERS = {
   groq: { name: "Groq", recipient: "Groq", model: "openai/gpt-oss-120b",
     storageKey: "zen-chess-groq-key", keyUrl: "https://console.groq.com/keys", consoleName: "Groq Console" }
 };
-const PROMPT_VERSION = 2;
+const PROMPT_VERSION = 3;
 const entries = new Map();
 let revision = 0;
 const connections = { gemini: "saved", groq: "saved" };
@@ -105,12 +105,9 @@ export function buildCoachingContext(result, fen) {
 }
 
 const descriptions = {
-  why: "Two concise sentences explaining the played move and what changed on the board.",
-  tactical: "One or two sentences about concrete threats or defenses supported by the supplied lines. Say when no forcing tactic is established.",
-  positional: "Two concise sentences about relevant piece activity, pawn structure, king safety, or a practical plan, naming pieces and squares.",
-  recommendation: "One or two sentences explaining the supplied Stockfish recommendation and continuation, or terminal outcome.",
-  tip: "One actionable lesson for this position.",
-  concept: "A short accurate chess theme, without assuming a tactic."
+  concept: "A short, specific headline of at most 8 words describing the key idea, without assuming a tactic.",
+  summary: "One compact paragraph of 45-80 words. Explain the most important consequence of the played move, the concrete threat or positional change that matters, and why the supplied Stockfish move is preferable (or why the played move works). Name relevant pieces, squares and the recommended move. For terminal positions explain the outcome. Skip obvious piece relocation, generic praise, repeated facts and empty statements about there being no tactics.",
+  tip: "One practical next step or lesson specific to this position, at most 25 words. Do not repeat the summary or give generic advice."
 };
 export const COACHING_SCHEMA = {
   type: "object", additionalProperties: false,
@@ -128,7 +125,8 @@ function parseCoaching(data, provider) {
     : candidate?.content?.parts?.filter(part => !part.thought).map(part => part.text || "").join("");
   const parsed = JSON.parse(text);
   for (const key of COACHING_SCHEMA.required) {
-    if (typeof parsed?.[key] !== "string" || !parsed[key].trim() || parsed[key].length > (key === "concept" ? 100 : 1600)) {
+    const maxLength = key === "concept" ? 100 : key === "tip" ? 320 : 1200;
+    if (typeof parsed?.[key] !== "string" || !parsed[key].trim() || parsed[key].length > maxLength) {
       throw new Error("invalid explanation");
     }
   }

@@ -1372,6 +1372,84 @@ body.resizing-feedback {
 }
 
 .feedback-header-box.brilliant { border-left-color: var(--badge-brilliant); }
+
+/* Individual tongues, hot cores and embers give Brilliant moves a blue fire. */
+.feedback-header-box.brilliant {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 64px;
+  border: 1px solid rgba(53, 217, 255, .4);
+  border-left: 4px solid var(--badge-brilliant);
+  background: linear-gradient(110deg, #112830, #10212e 65%, #142b3b);
+  box-shadow: inset 0 -2px 12px rgba(0, 191, 255, .22), 0 0 14px rgba(0, 174, 255, .12);
+}
+
+.feedback-header-box.brilliant .feedback-title-group {
+  text-shadow: 0 1px 4px #00101c, 0 0 10px #00101c;
+}
+
+.feedback-header-box.brilliant .ai-banner-btn {
+  background: rgba(16, 35, 50, .88);
+}
+
+.brilliant-flames {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: -1;
+  /* Preserve the dark area behind the move while fire lights up the edges. */
+  opacity: .85;
+}
+
+.brilliant-flame {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  filter: drop-shadow(0 0 3px rgba(0, 183, 255, .7));
+  animation: brilliant-fire-flicker var(--flicker) var(--delay) ease-in-out infinite alternate;
+}
+
+.brilliant-flame-core {
+  opacity: .7;
+}
+
+.brilliant-heat {
+  animation: brilliant-heat-pulse 2.8s ease-in-out infinite alternate;
+}
+
+.brilliant-ember {
+  fill: #b0faff;
+  filter: drop-shadow(0 0 2px #1abfff);
+  opacity: 0;
+  animation: brilliant-ember-rise var(--rise) var(--delay) linear infinite;
+}
+
+@keyframes brilliant-fire-flicker {
+  0% { transform: skewX(calc(var(--lean) * -6deg)) scale(.92, .62); opacity: .55; }
+  35% { transform: skewX(calc(var(--lean) * 3deg)) scale(1.04, 1); opacity: .95; }
+  65% { transform: skewX(calc(var(--lean) * -3deg)) scale(.94, .8); opacity: .7; }
+  100% { transform: skewX(calc(var(--lean) * 6deg)) scale(1.02, 1.12); opacity: .85; }
+}
+
+@keyframes brilliant-ember-rise {
+  0% { transform: translate(0, 0) scale(.6); opacity: 0; }
+  20% { opacity: .9; }
+  75% { opacity: .55; }
+  100% { transform: translate(var(--drift), -90px) scale(.2); opacity: 0; }
+}
+
+@keyframes brilliant-heat-pulse {
+  from { opacity: .5; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brilliant-flame { animation: none; transform: scaleY(.75); opacity: .55; }
+  .brilliant-heat { animation: none; opacity: .65; }
+  .brilliant-ember { animation: none; opacity: 0; }
+}
 .feedback-header-box.great { border-left-color: var(--badge-great); }
 .feedback-header-box.best { border-left-color: var(--badge-best); }
 .feedback-header-box.excellent { border-left-color: var(--badge-excellent); }
@@ -1484,6 +1562,70 @@ body.resizing-feedback {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-muted);
   border: 1px solid var(--line-subtle);
+}
+
+.ai-guidance-card {
+  padding: 14px 15px;
+  border: 1px solid rgba(116, 183, 213, .2);
+  border-radius: 9px;
+  background: linear-gradient(135deg, rgba(76, 139, 170, .1), rgba(76, 139, 170, .02)), var(--bg-card);
+  overflow-wrap: anywhere;
+}
+
+.ai-guidance-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #92c4d9;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  margin-bottom: 7px;
+}
+
+.ai-guidance-card h3 {
+  margin: 0 0 8px;
+  color: var(--text-main);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.ai-guidance-summary {
+  margin: 0;
+  color: #dedcd8;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.ai-guidance-tip {
+  display: flex;
+  gap: 8px;
+  margin: 11px 0 0;
+  color: #a8ccdc;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ai-guidance-continuation {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-subtle);
+}
+
+.ai-guidance-continuation > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.ai-guidance-continuation .pv-line {
+  margin: 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .ai-feedback-status {
