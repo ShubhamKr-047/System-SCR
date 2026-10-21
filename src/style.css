@@ -257,24 +257,45 @@ body.chesscom-theme {
 }
 
 .accuracy-pill {
-  padding: 2px 7px;
-  border-radius: 10px;
-  background: #151413;
-  border: 1px solid var(--chess-green);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: 'Roboto Mono', monospace;
+}
+
+.accuracy-pill svg {
   color: var(--chess-green);
-  font-size: 10px;
-  font-weight: 800;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
 }
 
 .rating-pill {
-  padding: 2px 7px;
-  border-radius: 10px;
-  background: #252219;
-  border: 1px solid #d4a737;
-  color: #f3cf65;
-  font-size: 10px;
-  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
   font-family: 'Roboto Mono', monospace;
+}
+
+.rating-pill svg {
+  color: #f3cf65;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
 }
 
 .eval-pill {
@@ -1692,11 +1713,17 @@ body.resizing-feedback {
 }
 
 .pv-move {
-  color: #5b8433;
-  transition: color .2s ease;
+  color: #ffffff;
+  padding: 1px 3px;
+  border-radius: 3px;
+  transition: color .2s ease, background-color .2s ease;
 }
 
-.pv-move.is-played { color: #b4d995; }
+.pv-move.is-played {
+  color: #ffffff;
+  background-color: rgba(129, 182, 76, 0.35);
+  font-weight: 700;
+}
 
 .continuation-actions {
   display: flex;
@@ -1715,8 +1742,9 @@ body.resizing-feedback {
   flex-wrap: wrap;
   gap: 7px;
   margin-bottom: 7px;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
   color: var(--text-muted);
 }
 

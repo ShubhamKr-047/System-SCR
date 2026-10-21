@@ -38,7 +38,8 @@ const state = {
   session: new AbortController(),
   reviewController: null,
   isVariation: false,
-  hasReviewedPreviously: false
+  hasReviewedPreviously: false,
+  variationTimer: null
 };
 
 function setStatus(message, error = false) {
@@ -500,9 +501,18 @@ function stopPreview({ render = true } = {}) {
   if (render && state.tree) renderBoard(state.cursor);
 }
 
+function stopVariationAnimation() {
+  if (state.variationTimer) {
+    clearInterval(state.variationTimer);
+    state.variationTimer = null;
+  }
+  state.variationPlayback = null;
+}
+
 function stopPlayback() {
   stopAutoplay();
   stopPreview();
+  stopVariationAnimation();
 }
 
 function manualNavigate(index) {
@@ -515,7 +525,7 @@ function manualNavigate(index) {
 function toggleAutoplay() {
   if (state.autoPlaying) { stopAutoplay(); return; }
   if (!state.tree?.mainline[1] || state.running) return;
-  stopPreview();
+  stopPlayback();
   const tree = state.tree;
   let index = tree.mainline.indexOf(tree.current);
   if (index < 0 || index === tree.mainline.length - 1) index = 0;
@@ -535,37 +545,77 @@ function toggleAutoplay() {
 function continuationMarkup(result) {
   const playable = !state.running && continuationFrames(result).length > 0;
   const moves = (result.pv || result.bestSan || "").trim().split(/\s+/).filter(Boolean);
-  const played = state.preview?.index || 0;
-  const line = moves.map((move, index) => `<span class="pv-move${index < played ? " is-played" : ""}" title="${index < played ? "Played in preview" : "Not yet played"}"${index === played - 1 ? ' aria-current="step"' : ""}>${esc(move)}</span>`).join(" ");
+  const played = state.variationPlayback?.result === result ? state.variationPlayback.step : 0;
+  const line = moves.map((move, index) => `<span class="pv-move${index < played ? " is-played" : ""}" data-pv-index="${index}">${esc(move)}</span>`).join(" ");
   return `<div class="feedback-block stockfish-continuation" aria-label="Stockfish recommendation">
-    <div class="continuation-copy"><div class="continuation-heading"><span>Stockfish recommended continuation</span></div>
+    <div class="continuation-copy"><div class="continuation-heading"><span>STOCKFISH RECOMMENDATION</span></div>
     <p class="pv-line">${line || "No continuation reported."}</p></div>
-    <div class="continuation-actions"><button id="showContinuationBtn" type="button" class="show-move-btn" ${playable ? "" : "disabled"}>${state.preview ? "Back to move" : "Show Move"}</button></div></div>`;
+    <div class="continuation-actions"><button id="showContinuationBtn" type="button" class="show-move-btn" ${playable ? "" : "disabled"}>Show Move</button></div></div>`;
 }
 
-function showContinuation(result) {
+function updateContinuationMoveHighlights() {
+  const step = state.variationPlayback ? state.variationPlayback.step : 0;
+  const spans = $("feedbackContainer")?.querySelectorAll(".stockfish-continuation .pv-move");
+  if (!spans) return;
+  spans.forEach((span, idx) => {
+    span.classList.toggle("is-played", idx < step);
+  });
+}
+
+function playEngineVariation(result) {
   const frames = continuationFrames(result);
-  if (!frames.length || state.running) return;
+  if (!frames.length || state.running || !state.tree) return;
   stopPlayback();
   boardInput.cancel();
   clearBoardSelection();
   overlay.clear();
-  const preview = { frames, index: 0, fen: result.beforeFen, lastMove: null };
-  state.preview = preview;
-  $("continuationPreview").hidden = false;
-  $("board").classList.add("is-previewing");
-  $("continuationPreviewStatus").textContent = "Stockfish preview — starting position";
-  renderBoard(state.cursor);
-  preview.timer = setInterval(() => {
-    if (state.preview !== preview) { clearInterval(preview.timer); return; }
-    const frame = frames[preview.index++];
-    preview.fen = frame.fen;
-    preview.lastMove = frame.move;
-    renderBoard(state.cursor);
-    playSound(frame.move.captured ? "capture" : "move");
-    $("continuationPreviewStatus").textContent = `Stockfish preview ${preview.index}/${frames.length}: ${frame.move.san}`;
-    if (preview.index === frames.length) clearInterval(preview.timer);
-  }, 900);
+
+  const originNode = state.tree.nodes.get(result.nodeId) || state.tree.current;
+  const baseNode = originNode?.parent || originNode;
+
+  // Build the variation tree nodes upfront
+  state.tree.select(baseNode);
+  const variationNodes = [];
+  for (const frame of frames) {
+    try {
+      const node = state.tree.play({
+        from: frame.move.from,
+        to: frame.move.to,
+        promotion: frame.move.promotion
+      });
+      variationNodes.push(node);
+    } catch {
+      break;
+    }
+  }
+
+  if (!variationNodes.length) return;
+
+  // Start animation from the base position
+  state.tree.select(baseNode);
+  syncActiveLine();
+  switchTab("moves");
+  renderBoard(baseNode.ply);
+
+  state.variationPlayback = { result, step: 0, total: variationNodes.length };
+  updateContinuationMoveHighlights();
+
+  state.variationTimer = setInterval(() => {
+    if (!state.variationPlayback || state.variationPlayback.step >= variationNodes.length) {
+      stopVariationAnimation();
+      return;
+    }
+    const nextNode = variationNodes[state.variationPlayback.step++];
+    updateContinuationMoveHighlights();
+    navigateNode(nextNode, { automatic: true });
+    if (state.variationPlayback.step >= variationNodes.length) {
+      stopVariationAnimation();
+    }
+  }, 1100);
+}
+
+function showContinuation(result) {
+  playEngineVariation(result);
 }
 
 $("returnFromPreview").addEventListener("click", () => {
@@ -1980,41 +2030,44 @@ function renderSummary() {
     }
 
     // Show accuracy and estimated rating on player bars
+    const graphSvg = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 13h12M3 10l3.5-4 3 2.5L13 4M13 4h-3M13 4v3"/></svg>`;
+    const targetSvg = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><circle cx="8" cy="8" r="3.5"/><circle cx="8" cy="8" r="1" fill="currentColor"/><path d="M14 2l-6 6M14 2h-3.5M14 2v3.5"/></svg>`;
+
     if (state.flipped) {
       if ($("topPlayerAccuracy")) {
-        $("topPlayerAccuracy").textContent = `${whiteAcc}%`;
-        $("topPlayerAccuracy").style.display = "inline-block";
+        $("topPlayerAccuracy").innerHTML = `${targetSvg} <span class="pill-value">${whiteAcc}%</span>`;
+        $("topPlayerAccuracy").style.display = "inline-flex";
       }
       if ($("topPlayerRatingEstimate")) {
-        $("topPlayerRatingEstimate").textContent = `Est. ${whiteRating}`;
-        $("topPlayerRatingEstimate").style.display = "inline-block";
+        $("topPlayerRatingEstimate").innerHTML = `${graphSvg} <span class="pill-value">${whiteRating}</span>`;
+        $("topPlayerRatingEstimate").style.display = "inline-flex";
       }
 
       if ($("bottomPlayerAccuracy")) {
-        $("bottomPlayerAccuracy").textContent = `${blackAcc}%`;
-        $("bottomPlayerAccuracy").style.display = "inline-block";
+        $("bottomPlayerAccuracy").innerHTML = `${targetSvg} <span class="pill-value">${blackAcc}%</span>`;
+        $("bottomPlayerAccuracy").style.display = "inline-flex";
       }
       if ($("bottomPlayerRatingEstimate")) {
-        $("bottomPlayerRatingEstimate").textContent = `Est. ${blackRating}`;
-        $("bottomPlayerRatingEstimate").style.display = "inline-block";
+        $("bottomPlayerRatingEstimate").innerHTML = `${graphSvg} <span class="pill-value">${blackRating}</span>`;
+        $("bottomPlayerRatingEstimate").style.display = "inline-flex";
       }
     } else {
       if ($("topPlayerAccuracy")) {
-        $("topPlayerAccuracy").textContent = `${blackAcc}%`;
-        $("topPlayerAccuracy").style.display = "inline-block";
+        $("topPlayerAccuracy").innerHTML = `${targetSvg} <span class="pill-value">${blackAcc}%</span>`;
+        $("topPlayerAccuracy").style.display = "inline-flex";
       }
       if ($("topPlayerRatingEstimate")) {
-        $("topPlayerRatingEstimate").textContent = `Est. ${blackRating}`;
-        $("topPlayerRatingEstimate").style.display = "inline-block";
+        $("topPlayerRatingEstimate").innerHTML = `${graphSvg} <span class="pill-value">${blackRating}</span>`;
+        $("topPlayerRatingEstimate").style.display = "inline-flex";
       }
 
       if ($("bottomPlayerAccuracy")) {
-        $("bottomPlayerAccuracy").textContent = `${whiteAcc}%`;
-        $("bottomPlayerAccuracy").style.display = "inline-block";
+        $("bottomPlayerAccuracy").innerHTML = `${targetSvg} <span class="pill-value">${whiteAcc}%</span>`;
+        $("bottomPlayerAccuracy").style.display = "inline-flex";
       }
       if ($("bottomPlayerRatingEstimate")) {
-        $("bottomPlayerRatingEstimate").textContent = `Est. ${whiteRating}`;
-        $("bottomPlayerRatingEstimate").style.display = "inline-block";
+        $("bottomPlayerRatingEstimate").innerHTML = `${graphSvg} <span class="pill-value">${whiteRating}</span>`;
+        $("bottomPlayerRatingEstimate").style.display = "inline-flex";
       }
     }
   } else {
