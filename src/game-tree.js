@@ -4,14 +4,17 @@ export const moveUci = move => `${move.from}${move.to}${move.promotion || ""}`;
 
 // Nodes are positions; a node's result describes the move from its parent.
 export class GameTree {
-  constructor(pgn) {
+  constructor(pgn = "") {
     const chess = new Chess();
-    chess.loadPgn(pgn, { strict: false });
+    if (typeof pgn === "string" && pgn.trim()) {
+      chess.loadPgn(pgn, { strict: false });
+    }
     const history = chess.history({ verbose: true });
-    if (!history.length) throw new Error("No moves found in PGN.");
+    this.isAnalysisBoard = !history.length;
     this.headers = chess.getHeaders();
     this.nodes = new Map();
-    this.root = this.create(null, null, history[0].before, true);
+    const startFen = history.length ? history[0].before : chess.fen();
+    this.root = this.create(null, null, startFen, true);
     this.mainline = [this.root];
     let parent = this.root;
     for (const move of history) {
@@ -73,8 +76,12 @@ export class GameTree {
     const chess = new Chess(this.current.fen);
     const move = chess.move(input);
     const parent = this.current;
-    const node = parent.children.find(n => moveUci(n.move) === moveUci(move))
-      || this.create(parent, move, chess.fen());
+    const isExtendingMainline = Boolean(this.isAnalysisBoard && parent.mainline && parent === this.mainline.at(-1));
+    const existing = parent.children.find(n => moveUci(n.move) === moveUci(move));
+    const node = existing || this.create(parent, move, chess.fen(), isExtendingMainline);
+    if (!existing && isExtendingMainline) {
+      this.mainline.push(node);
+    }
     this.select(node);
     return node;
   }

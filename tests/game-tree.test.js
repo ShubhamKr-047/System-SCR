@@ -160,3 +160,22 @@ test("checkmating move gets zero loss and a winning score", async () => {
   assert.equal(result.lossCp, 0);
   assert.equal(result.moveNo, "2...");
 });
+
+test("fresh analysis board starts with empty moves and extends mainline as moves are played", () => {
+  const tree = new GameTree();
+  assert.equal(tree.isAnalysisBoard, true);
+  assert.equal(tree.mainline.length, 1);
+  assert.equal(tree.root.fen, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+  const m1 = tree.play("e4");
+  assert.equal(m1.mainline, true);
+  assert.equal(tree.mainline.length, 2);
+  const m2 = tree.play("e5");
+  assert.equal(m2.mainline, true);
+  assert.equal(tree.mainline.length, 3);
+  // Branch off move 1
+  tree.select(m1);
+  const branch = tree.play("c5");
+  assert.equal(branch.mainline, false);
+  assert.equal(tree.mainline.length, 3);
+  assert.equal(tree.continuation(m1), m2);
+});

@@ -49,3 +49,14 @@ test("paste imports directly on a small board with validation and keyboard loadi
   await page.locator("#nextMove").click();
   await expect(page.locator("#moveCounter")).toHaveText("1. d4");
 });
+
+test("clicking analysis board starts a fresh new position ready to play", async ({ page }) => {
+  await expect(page.getByRole("button", { name: "Analysis board", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Analysis board", exact: true }).click();
+  await expect(page.locator("#emptyBoardState")).toBeHidden();
+  await expect(page.locator("#board .square")).toHaveCount(64);
+  await expect(page.locator("#moveCounter")).toHaveText("Start");
+  await expect(page.locator("#bottomPlayerName")).toHaveText("White");
+  await expect(page.locator("#topPlayerName")).toHaveText("Black");
+  await expect(page.locator("#reviewProgress")).toHaveText("Analysis board");
+});

@@ -631,7 +631,29 @@ body.chesscom-theme {
 .board-import-card .board-import-status { margin: 12px 0 0; font-size: 11px; }
 .board-import-status:empty { display: none; }
 .board-import-card .board-import-status.error { color: #ffab9f; }
-.board-import-hint { display: block; margin-top: 18px; color: var(--text-dim); font-size: 10px; line-height: 1.5; }
+.board-import-secondary {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.board-import-file-link {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+}
+.board-import-file-link:hover {
+  color: var(--text-main);
+}
+.board-import-hint { display: block; color: var(--text-dim); font-size: 10px; line-height: 1.5; }
 
 @media (max-width: 600px) {
   .board-import-piece { display: none; }

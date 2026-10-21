@@ -66,6 +66,9 @@ function readImport() {
   }
   try {
     const tree = new GameTree(pgn);
+    if (tree.isAnalysisBoard) {
+      throw new Error("No moves found in PGN.");
+    }
     state.session.abort();
     state.reviewController?.abort();
     engine.clear();
@@ -121,6 +124,59 @@ function readImport() {
     setStatus(`Could not read PGN: ${e.message}`, true);
     return false;
   }
+}
+
+function startFreshAnalysisBoard() {
+  state.session.abort();
+  state.reviewController?.abort();
+  engine.clear();
+  cancelQuickAnalysis();
+  boardInput.cancel();
+  overlay.clear();
+  $("promotionDialog").close();
+  $("retryPositionAnalysis").hidden = true;
+  state.session = new AbortController();
+  const tree = new GameTree();
+  state.tree = tree;
+  state.displayedWhiteScore = null;
+  state.headers = { White: "White", Black: "Black", Event: "Analysis Board" };
+  state.running = false;
+  state.selectedSquare = null;
+  state.legalMoves = [];
+  syncActiveLine();
+
+  if ($("startReviewText")) $("startReviewText").textContent = "Analyze game";
+  if ($("startReview")) {
+    $("startReview").disabled = false;
+    $("startReview").title = "Analyze game";
+    $("startReview").classList.remove("review-mode");
+    $("startReview").style.display = "inline-flex";
+  }
+  if ($("stopReview")) $("stopReview").style.display = "none";
+
+  updatePlayerHeaders();
+
+  $("reviewProgress").textContent = "Analysis board";
+  setStatus("Analysis board ready. Play a move to begin.");
+  $("engineStatus").textContent = "Engine idle";
+  updateAnalysisProgress(0, 0, "Analysis board", false, false);
+
+  if ($("topPlayerRatingEstimate")) $("topPlayerRatingEstimate").style.display = "none";
+  if ($("bottomPlayerRatingEstimate")) $("bottomPlayerRatingEstimate").style.display = "none";
+  if ($("topPlayerAccuracy")) $("topPlayerAccuracy").style.display = "none";
+  if ($("bottomPlayerAccuracy")) $("bottomPlayerAccuracy").style.display = "none";
+  if ($("summaryWhiteRating")) $("summaryWhiteRating").textContent = "—";
+  if ($("summaryBlackRating")) $("summaryBlackRating").textContent = "—";
+  if ($("summaryWhiteAcc")) $("summaryWhiteAcc").textContent = "—";
+  if ($("summaryBlackAcc")) $("summaryBlackAcc").textContent = "—";
+
+  switchTab("moves");
+  renderMoves();
+  renderBoard(0);
+  renderFeedback(null);
+  setNavEnabled();
+  $("emptyBoardState").hidden = true;
+  $("board").classList.remove("is-empty");
 }
 
 function updatePlayerHeaders() {
@@ -216,7 +272,12 @@ $("pgnFile").addEventListener("change", async e => {
   }
 });
 
-$("emptyImportFile").addEventListener("click", () => $("pgnFile").click());
+$("emptyImportFile")?.addEventListener("click", () => $("pgnFile").click());
+$("emptyAnalysisBoard")?.addEventListener("click", () => startFreshAnalysisBoard());
+$("menuAnalysisBoard")?.addEventListener("click", () => {
+  startFreshAnalysisBoard();
+  closeHamburger();
+});
 $("emptyPasteToggle").addEventListener("click", () => {
   const open = $("emptyPasteForm").hidden;
   $("emptyPasteForm").hidden = !open;
@@ -593,7 +654,7 @@ function requestQuickAnalysisForCurrentPosition({ retry = false } = {}) {
   if (quickRequest && (quickRequest.tree !== tree || quickRequest.node !== node || retry)) cancelQuickAnalysis();
   engine.focus([node.fen, node.parent?.fen].filter(Boolean));
   const moveTime = Number($("moveTime")?.value) || 250;
-  if (!node.mainline && node.analysisStatus !== "pending" && node.resultTime < moveTime && node.analysisStatus !== "error") {
+  if ((!node.mainline || tree.isAnalysisBoard) && node.move && node.analysisStatus !== "pending" && node.resultTime < moveTime && node.analysisStatus !== "error") {
     ensureMoveAnalysis(node, { moveTime, priority: 3 }).catch(() => {});
   }
   if (retry) node.positionError = "";
@@ -1009,7 +1070,8 @@ function renderMoves() {
     return html;
   }
   const first = tree.root.children[0];
-  const html = first ? tree.root.children.slice(1).map(branch).join("") + branchLine(first) : "";
+  const html = first ? tree.root.children.slice(1).map(branch).join("") + branchLine(first)
+    : '<p class="muted empty-state">Play a move on the board to begin analysis.</p>';
   if (renderedTree === tree && renderedNodeCount === tree.nodes.size) {
     // Keep buttons stable while their results arrive, including between
     // pointerdown and click. Only adding a move changes the list structure.
@@ -1592,12 +1654,16 @@ function renderSummary() {
 async function startReview() {
   const tree = state.tree;
   if (!tree || state.running) return;
+  const nodes = tree.mainline.slice(1);
+  if (!nodes.length) {
+    setStatus("Play moves on the board first before analyzing the game.", true);
+    return;
+  }
   state.running = true;
   state.reviewController = new AbortController();
   const controller = state.reviewController;
   const signal = AbortSignal.any([controller.signal, state.session.signal]);
   const moveTime = Number($("moveTime").value);
-  const nodes = tree.mainline.slice(1);
   cancelQuickAnalysis();
   switchTab("summary");
   $("startReview").style.display = "none";
