@@ -5,8 +5,11 @@ export function initSidebarResize() {
   const panel = document.querySelector(".sidebar-panel");
   const feedback = document.getElementById("feedbackContainer");
   const splitter = document.getElementById("feedbackSplitter");
+  if (!panel || !feedback || !splitter) return;
+
   const tabs = panel.querySelector(".sidebar-tabs");
   const footer = panel.querySelector(".sidebar-footer");
+  const movesView = document.getElementById("gameMovesView");
   let ratio = null;
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -16,14 +19,16 @@ export function initSidebarResize() {
   } catch { /* Resizing still works when storage is unavailable. */ }
 
   const outerHeight = element => {
+    if (!element) return 0;
     const style = getComputedStyle(element);
     return element.getBoundingClientRect().height + (parseFloat(style.marginTop) || 0)
       + (parseFloat(style.marginBottom) || 0);
   };
   function limits() {
     const style = getComputedStyle(panel);
+    const header = panel.querySelector(".moves-view-header");
     const available = panel.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
-      - outerHeight(splitter) - outerHeight(tabs) - footer.getBoundingClientRect().height;
+      - outerHeight(header) - outerHeight(splitter) - outerHeight(tabs) - outerHeight(footer);
     const max = Math.max(0, available - 140);
     return { available, min: Math.min(100, max), max };
   }
@@ -98,6 +103,8 @@ export function initSidebarResize() {
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(update);
   });
-  for (const element of [panel, feedback, tabs, footer]) observer.observe(element);
+  for (const element of [panel, feedback, tabs, footer, movesView]) {
+    if (element) observer.observe(element);
+  }
   update();
 }

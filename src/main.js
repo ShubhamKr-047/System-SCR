@@ -13,7 +13,11 @@ import { initSidebarResize } from "./sidebar-resize.js";
 import "./style.css";
 
 const $ = (id) => document.getElementById(id);
-initSidebarResize();
+try {
+  initSidebarResize();
+} catch (e) {
+  console.warn("Sidebar resize init warning:", e);
+}
 
 const state = {
   moves: [],
@@ -32,7 +36,8 @@ const state = {
   line: [],
   session: new AbortController(),
   reviewController: null,
-  isVariation: false
+  isVariation: false,
+  hasReviewedPreviously: false
 };
 
 function setStatus(message, error = false) {
@@ -111,8 +116,10 @@ function readImport() {
     if ($("summaryWhiteAcc")) $("summaryWhiteAcc").textContent = "—";
     if ($("summaryBlackAcc")) $("summaryBlackAcc").textContent = "—";
 
-    // Switch back to moves tab
-    switchTab("moves");
+    // Start with Game Summary view when a game is loaded!
+    state.isAnalyzed = false;
+    state.hasReviewedPreviously = false;
+    showSummaryView();
     renderMoves();
     renderBoard(0);
     renderFeedback(null);
@@ -138,6 +145,7 @@ function startFreshAnalysisBoard() {
   state.session = new AbortController();
   const tree = new GameTree();
   state.tree = tree;
+  state.hasReviewedPreviously = false;
   state.displayedWhiteScore = null;
   state.headers = { White: "White", Black: "Black", Event: "Analysis Board" };
   state.running = false;
@@ -224,6 +232,7 @@ function updatePlayerHeaders() {
 
 // Hamburger Menu Wiring
 const hamburgerBtn = $("hamburgerBtn");
+const topbarMenuBtn = $("topbarMenuBtn");
 const hamburgerMenu = $("hamburgerMenu");
 const closeHamburgerBtn = $("closeHamburgerBtn");
 
@@ -233,31 +242,50 @@ function closeHamburger() {
     hamburgerBtn.classList.remove("active");
     hamburgerBtn.setAttribute("aria-expanded", "false");
   }
+  if (topbarMenuBtn) {
+    topbarMenuBtn.classList.remove("active");
+    topbarMenuBtn.setAttribute("aria-expanded", "false");
+  }
+}
+
+function toggleHamburgerMenu(triggerBtn) {
+  if (!hamburgerMenu) return;
+  const isHidden = hamburgerMenu.style.display === "none";
+  hamburgerMenu.style.display = isHidden ? "block" : "none";
+  if (triggerBtn) {
+    triggerBtn.classList.toggle("active", isHidden);
+    triggerBtn.setAttribute("aria-expanded", String(isHidden));
+  }
 }
 
 if (hamburgerBtn && hamburgerMenu) {
   hamburgerBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    const isHidden = hamburgerMenu.style.display === "none";
-    hamburgerMenu.style.display = isHidden ? "block" : "none";
-    hamburgerBtn.classList.toggle("active", isHidden);
-    hamburgerBtn.setAttribute("aria-expanded", String(isHidden));
-  });
-
-  if (closeHamburgerBtn) {
-    closeHamburgerBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      closeHamburger();
-    });
-  }
-
-  // Click outside to close
-  document.addEventListener("click", (e) => {
-    if (!hamburgerMenu.contains(e.target) && !hamburgerBtn.contains(e.target)) {
-      closeHamburger();
-    }
+    toggleHamburgerMenu(hamburgerBtn);
   });
 }
+
+if (topbarMenuBtn && hamburgerMenu) {
+  topbarMenuBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleHamburgerMenu(topbarMenuBtn);
+  });
+}
+
+if (closeHamburgerBtn) {
+  closeHamburgerBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeHamburger();
+  });
+}
+
+// Click outside to close
+document.addEventListener("click", (e) => {
+  if (!hamburgerMenu) return;
+  if (!hamburgerMenu.contains(e.target) && !hamburgerBtn?.contains(e.target) && !topbarMenuBtn?.contains(e.target)) {
+    closeHamburger();
+  }
+});
 
 $("pgnFile").addEventListener("change", async e => {
   const file = e.target.files?.[0];
@@ -467,6 +495,7 @@ function syncActiveLine() {
   $("parentVariationBtn").hidden = !state.isVariation || parent.mainline;
   $("variationIndicator").hidden = !state.isVariation;
   if (!state.running) {
+    updateSummaryActionButtons();
     $("startReviewText").textContent = state.isAnalyzed ? "Start" : "Analyze game";
     $("startReview").classList.toggle("review-mode", state.isAnalyzed);
     $("startReview").title = state.isAnalyzed ? "Start original game review" : "Analyze original game";
@@ -482,23 +511,85 @@ function navigateNode(node) {
   renderBoard(state.cursor);
 }
 
-// Tab Switching
+// View Switching (Game Summary View vs Moves & Ask AI View)
+function showSummaryView() {
+  const summaryView = $("gameSummaryView");
+  const movesView = $("gameMovesView");
+  if (summaryView) summaryView.style.display = "flex";
+  if (movesView) movesView.style.display = "none";
+  state.activeView = "summary";
+
+  $("tabSummary")?.classList.add("active");
+  $("tabMoves")?.classList.remove("active");
+
+  updateSummaryActionButtons();
+  renderSummary();
+  renderEvalGraph();
+}
+
+function showMovesReviewView() {
+  const summaryView = $("gameSummaryView");
+  const movesView = $("gameMovesView");
+  if (summaryView) summaryView.style.display = "none";
+  if (movesView) movesView.style.display = "flex";
+  state.activeView = "moves";
+
+  $("tabMoves")?.classList.add("active");
+  $("tabSummary")?.classList.remove("active");
+
+  renderFeedback(state.tree?.current?.result);
+  renderMoves();
+  setNavEnabled();
+}
+
 function switchTab(tab) {
   if (tab === "moves") {
-    $("tabMoves").classList.add("active");
-    $("tabSummary").classList.remove("active");
-    $("moveListWrapper").style.display = "flex";
-    $("summaryPanel").style.display = "none";
+    showMovesReviewView();
   } else {
-    $("tabSummary").classList.add("active");
-    $("tabMoves").classList.remove("active");
-    $("moveListWrapper").style.display = "none";
-    $("summaryPanel").style.display = "block";
-    renderSummary();
+    showSummaryView();
   }
 }
-$("tabMoves").addEventListener("click", () => switchTab("moves"));
-$("tabSummary").addEventListener("click", () => switchTab("summary"));
+
+function updateSummaryActionButtons() {
+  const reviewBtn = $("summaryReviewBtn");
+  const reviewBtnText = $("summaryReviewBtnText");
+  const progressBox = $("summaryProgressBox");
+  const startBtn = $("summaryStartBtn");
+
+  if (!reviewBtn || !progressBox || !startBtn) return;
+
+  if (state.running) {
+    reviewBtn.style.display = "none";
+    progressBox.style.display = "flex";
+    startBtn.style.display = "none";
+  } else if (state.isAnalyzed) {
+    reviewBtn.style.display = "none";
+    progressBox.style.display = "none";
+    startBtn.style.display = "inline-flex";
+  } else {
+    reviewBtn.style.display = "inline-flex";
+    progressBox.style.display = "none";
+    startBtn.style.display = "none";
+    if (reviewBtnText) {
+      reviewBtnText.textContent = state.hasReviewedPreviously ? "Review again" : "Review";
+    }
+  }
+}
+
+$("tabMoves")?.addEventListener("click", () => switchTab("moves"));
+$("tabSummary")?.addEventListener("click", () => switchTab("summary"));
+$("summaryReviewBtn")?.addEventListener("click", () => {
+  startReview();
+});
+$("summaryStartBtn")?.addEventListener("click", () => {
+  showMovesReviewView();
+  if (state.tree?.mainline?.[1]) {
+    navigateNode(state.tree.mainline[1]);
+  }
+});
+$("backToSummaryBtn")?.addEventListener("click", () => {
+  showSummaryView();
+});
 
 const overlay = new BoardOverlay($("boardArrows"), () => state.flipped, $("board"));
 const boardInput = new BoardInput({
@@ -924,6 +1015,7 @@ function renderBoard(index) {
 
   // Update Evaluation & Eval Bar
   updateEvaluationDisplay();
+  renderEvalGraph();
 
   renderFeedback(currentResult);
   renderMoves();
@@ -1400,7 +1492,9 @@ function renderFeedback(result) {
   const coaching = ai?.status === "ready" ? ai.coaching : null;
   const continuation = `<div class="feedback-block"><h3>Stockfish recommended continuation</h3>
     <p class="pv-line">${esc(result.pv || result.bestSan || "No continuation reported.")}</p></div>`;
-  const body = coaching
+  const genericBody = `<div class="feedback-block"><div class="feedback-block-header"><h3>Feedback</h3>
+      <span class="feedback-concept-pill">${esc(local.concept)}</span></div><p>${local.whyText}</p></div>${continuation}`;
+  const coachingBody = coaching
     ? `<article class="ai-guidance-card" aria-label="AI move guidance">
         <div class="ai-guidance-label"><span aria-hidden="true">✦</span> Move insight</div>
         <h3>${esc(coaching.concept)}</h3>
@@ -1411,63 +1505,34 @@ function renderFeedback(result) {
           <p class="pv-line">${esc(result.pv || result.bestSan || "No continuation reported.")}</p>
         </div>
       </article>`
-    : `<div class="feedback-block"><div class="feedback-block-header"><h3>Feedback</h3>
-        <span class="feedback-concept-pill">${esc(local.concept)}</span></div><p>${local.whyText}</p></div>${continuation}`;
-  const bannerHtml = !hasKey
-    ? `<div class="ai-coach-banner"><div class="ai-banner-text"><strong>About move explanations</strong>You're viewing local Stockfish-based feedback. Choose Gemini or Groq and add its API key in Settings to get tactical and positional explanations based on the board and Stockfish's recommended lines.</div>
-        <button id="openAiSettingsBtn" class="ai-banner-btn" type="button">Settings</button></div>`
     : "";
 
   let promptHtml = "";
-  let status = "";
+  let statusHtml = "";
+  let feedbackBody = "";
 
   if (isEligible) {
     if (ai?.status === "error") {
-      status = `<div id="aiCoachStatus" class="ai-feedback-status error" role="status">${esc(ai.error)} Local feedback is shown below.
-        <button id="retryAiCoaching" type="button" class="ai-banner-btn">Retry AI</button></div>`;
+      statusHtml = `<div id="aiCoachStatus" class="ai-feedback-status error" role="status">${esc(ai.error)} Local feedback is shown below.
+        <button id="retryAiCoaching" type="button" class="ai-banner-btn">Retry</button></div>`;
+      feedbackBody = genericBody;
     } else if (ai?.status === "pending") {
-      status = `<div id="aiCoachStatus" class="ai-coach-loading" role="status"><div class="ai-loading-spinner"></div>
-        <span>${provider.name} is explaining this position. Local feedback remains available below.</span></div>`;
-    } else if (!coaching && hasKey) {
+      statusHtml = `<div id="aiCoachStatus" class="ai-coach-loading" role="status"><div class="ai-loading-spinner"></div>
+        <span>${provider.name} is explaining this position...</span></div>`;
+    } else if (coaching) {
+      feedbackBody = coachingBody;
+    } else if (node?.genericFeedbackRevealed) {
+      feedbackBody = genericBody;
+    } else {
       const question = getMoveQuestion(result);
       promptHtml = `
         <div class="ai-prompt-card ${esc(result.key)}">
-          <div class="ai-prompt-body">
-            <div class="ai-prompt-badge">
-              <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
-                <path d="M7.657 1.636a.75.75 0 0 1 .686 0l5.5 3a.75.75 0 0 1 0 1.328l-5.5 3a.75.75 0 0 1-.686 0l-5.5-3a.75.75 0 0 1 0-1.328l5.5-3z"/>
-              </svg>
-              <span>AI Coach</span>
-            </div>
-            <div class="ai-prompt-question">${esc(question)}</div>
-            <div class="ai-prompt-subtext">Get the key idea and a practical next step.</div>
-          </div>
-          <button id="askAiCoachingBtn" type="button" class="ai-ask-btn" aria-label="${esc(question)}">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
-              <path d="M12 2L14.4 8.6L21 11L14.4 13.4L12 20L9.6 13.4L3 11L9.6 8.6L12 2Z"/>
-            </svg>
-            <span>Ask AI</span>
-          </button>
-        </div>`;
-    } else if (!coaching) {
-      const question = getMoveQuestion(result);
-      promptHtml = `
-        <div class="ai-prompt-card ${esc(result.key)}">
-          <div class="ai-prompt-body">
-            <div class="ai-prompt-badge">
-              <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
-                <path d="M7.657 1.636a.75.75 0 0 1 .686 0l5.5 3a.75.75 0 0 1 0 1.328l-5.5 3a.75.75 0 0 1-.686 0l-5.5-3a.75.75 0 0 1 0-1.328l5.5-3z"/>
-              </svg>
-              <span>AI Coach</span>
-            </div>
-            <div class="ai-prompt-question">${esc(question)}</div>
-            <div class="ai-prompt-subtext">Add a Gemini or Groq API key in Settings to get deep move explanations.</div>
-          </div>
-          <button id="openAiSettingsBtnPrompt" type="button" class="ai-ask-btn settings-prompt">
-            <span>Set Up AI</span>
-          </button>
+          <div class="ai-prompt-question">${esc(question)}</div>
+          <button id="askAiCoachingBtn" type="button" class="ai-ask-btn">Explain</button>
         </div>`;
     }
+  } else {
+    feedbackBody = genericBody;
   }
 
   $("feedbackContent").innerHTML = `
@@ -1504,16 +1569,10 @@ function renderFeedback(result) {
       <span class="feedback-move-text">${esc(result.moveNo)} ${esc(result.san)}</span></div>
       ${hasKey ? '<button id="openAiSettingsBtn" class="ai-banner-btn" type="button">Settings</button>' : ""}</div>
     ${promptHtml}
-    ${bannerHtml}
-    ${status}<div id="positionFeedback" data-source="${coaching ? providerId : "local"}" aria-busy="${ai?.status === "pending"}">${body}</div>`;
+    ${statusHtml}${feedbackBody ? `<div id="positionFeedback" data-source="${coaching ? providerId : "local"}" aria-busy="${ai?.status === "pending"}">${feedbackBody}</div>` : ""}`;
   $("feedbackContainer").scrollTop = scrollTop;
 
   $("openAiSettingsBtn")?.addEventListener("click", event => {
-    event.stopPropagation();
-    openAiSettings();
-  });
-
-  $("openAiSettingsBtnPrompt")?.addEventListener("click", event => {
     event.stopPropagation();
     openAiSettings();
   });
@@ -1533,7 +1592,272 @@ function renderFeedback(result) {
   };
 
   $("retryAiCoaching")?.addEventListener("click", () => request(true));
-  $("askAiCoachingBtn")?.addEventListener("click", () => request());
+  $("askAiCoachingBtn")?.addEventListener("click", () => {
+    if (hasApiKey()) {
+      request();
+    } else {
+      if (node) node.genericFeedbackRevealed = true;
+      renderFeedback(result);
+    }
+  });
+}
+
+function formatEvalScorePill(score) {
+  if (score === null || score === undefined || !Number.isFinite(score)) return "0.0";
+  if (Math.abs(score) >= 9) return score > 0 ? "+M" : "-M";
+  const sign = score > 0 ? "+" : "";
+  return `${sign}${score.toFixed(1)}`;
+}
+
+function renderEvalGraph() {
+  const svg = $("evalGraphSvg");
+  if (!svg) return;
+  const tree = state.tree;
+  const nodes = tree?.mainline || [];
+  const currentScorePill = $("evalGraphCurrentScore");
+
+  const width = 380;
+  const height = 110;
+  const padX = 14;
+  const padY = 12;
+  const midY = 55;
+  const usableW = width - 2 * padX;
+  const usableH = 43;
+
+  const totalMoves = Math.max(1, nodes.length - 1);
+
+  const scoreToY = (score) => {
+    if (score === null || score === undefined || !Number.isFinite(score)) return midY;
+    const norm = Math.tanh(score / 3.5);
+    return Math.max(padY, Math.min(height - padY, midY - (norm * usableH)));
+  };
+
+  const points = [];
+  let lastKnownScore = 0;
+  let hasAnyAnalysis = false;
+
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i];
+    const x = padX + (i * usableW / totalMoves);
+    let score = null;
+
+    if (i === 0) {
+      score = node.analysis?.whiteScore ?? 0.0;
+    } else if (node.result) {
+      score = node.result.afterWhite;
+      hasAnyAnalysis = true;
+    } else if (node.analysis && Number.isFinite(node.analysis.whiteScore)) {
+      score = node.analysis.whiteScore;
+      hasAnyAnalysis = true;
+    }
+
+    if (score !== null && Number.isFinite(score)) {
+      lastKnownScore = score;
+    }
+
+    points.push({
+      ply: i,
+      x,
+      score,
+      displayScore: score !== null ? score : (hasAnyAnalysis ? lastKnownScore : 0),
+      y: scoreToY(score !== null ? score : (hasAnyAnalysis ? lastKnownScore : 0)),
+      node,
+      result: node.result
+    });
+  }
+
+  // Update current score pill
+  if (currentScorePill) {
+    const currentPly = state.cursor ?? 0;
+    const currentPoint = points[currentPly] || points[points.length - 1];
+    const scoreVal = currentPoint?.score ?? (hasAnyAnalysis ? lastKnownScore : 0);
+    currentScorePill.textContent = formatEvalScorePill(scoreVal);
+    currentScorePill.className = `eval-graph-score-pill ${scoreVal > 0.3 ? "white-win" : scoreVal < -0.3 ? "black-win" : "equal"}`;
+  }
+
+  // If no moves or no analysis yet
+  if (!hasAnyAnalysis || nodes.length <= 1) {
+    svg.innerHTML = `
+      <defs>
+        <linearGradient id="evalZeroGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="rgba(129, 182, 76, 0.15)" />
+          <stop offset="100%" stop-color="rgba(129, 182, 76, 0.4)" />
+        </linearGradient>
+      </defs>
+      <line x1="${padX}" y1="${midY}" x2="${width - padX}" y2="${midY}" stroke="rgba(255, 255, 255, 0.2)" stroke-dasharray="4,4" stroke-width="1.2" />
+      <line x1="${padX}" y1="${midY}" x2="${width - padX}" y2="${midY}" stroke="url(#evalZeroGrad)" stroke-width="2" />
+      <text x="${width / 2}" y="${midY + 22}" fill="rgba(255, 255, 255, 0.35)" font-size="11" font-weight="600" text-anchor="middle" font-family="'Montserrat', sans-serif">Click Review to evaluate moves</text>
+    `;
+    return;
+  }
+
+  // Build the analyzed points list
+  const analyzedPoints = [];
+  for (let i = 0; i < points.length; i++) {
+    if (points[i].score !== null) {
+      analyzedPoints.push(points[i]);
+    }
+  }
+
+  const activePoints = analyzedPoints.length > 0 ? analyzedPoints : points;
+
+  let lineD = "";
+  for (let i = 0; i < activePoints.length; i++) {
+    const pt = activePoints[i];
+    if (i === 0) {
+      lineD += `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
+    } else {
+      const prev = activePoints[i - 1];
+      const cx1 = (prev.x + (pt.x - prev.x) / 2).toFixed(1);
+      const cx2 = cx1;
+      lineD += ` C ${cx1} ${prev.y.toFixed(1)}, ${cx2} ${pt.y.toFixed(1)}, ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
+    }
+  }
+
+  const lastX = activePoints[activePoints.length - 1].x;
+  const firstX = activePoints[0].x;
+
+  const areaD = `${lineD} L ${lastX.toFixed(1)} ${midY} L ${firstX.toFixed(1)} ${midY} Z`;
+
+  let markersHtml = "";
+  for (const pt of activePoints) {
+    if (pt.result) {
+      const k = pt.result.key;
+      if (k === "brilliant") {
+        markersHtml += `<circle cx="${pt.x.toFixed(1)}" cy="${pt.y.toFixed(1)}" r="4.5" fill="#1baca6" stroke="#ffffff" stroke-width="1.5" class="eval-marker" data-ply="${pt.ply}" />`;
+      } else if (k === "blunder") {
+        markersHtml += `<circle cx="${pt.x.toFixed(1)}" cy="${pt.y.toFixed(1)}" r="4" fill="#fa412d" stroke="#ffffff" stroke-width="1.5" class="eval-marker" data-ply="${pt.ply}" />`;
+      } else if (k === "miss") {
+        markersHtml += `<circle cx="${pt.x.toFixed(1)}" cy="${pt.y.toFixed(1)}" r="3.5" fill="#db4a38" stroke="#ffffff" stroke-width="1.2" class="eval-marker" data-ply="${pt.ply}" />`;
+      } else if (k === "mistake") {
+        markersHtml += `<circle cx="${pt.x.toFixed(1)}" cy="${pt.y.toFixed(1)}" r="3" fill="#fa8c35" stroke="#ffffff" stroke-width="1" class="eval-marker" data-ply="${pt.ply}" />`;
+      }
+    }
+  }
+
+  const currentPly = state.cursor ?? 0;
+  const curPt = points.find(p => p.ply === currentPly) || activePoints[0];
+  const cursorHtml = curPt ? `
+    <line x1="${curPt.x.toFixed(1)}" y1="${padY}" x2="${curPt.x.toFixed(1)}" y2="${height - padY}" stroke="rgba(255,255,255,0.45)" stroke-dasharray="2,2" stroke-width="1" />
+    <circle cx="${curPt.x.toFixed(1)}" cy="${curPt.y.toFixed(1)}" r="4.5" fill="#81b64c" stroke="#ffffff" stroke-width="2" />
+  ` : "";
+
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="evalWhiteArea" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(255, 255, 255, 0.45)" />
+        <stop offset="100%" stop-color="rgba(255, 255, 255, 0.05)" />
+      </linearGradient>
+      <linearGradient id="evalBlackArea" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(20, 20, 24, 0.2)" />
+        <stop offset="100%" stop-color="rgba(10, 10, 12, 0.85)" />
+      </linearGradient>
+      <filter id="evalGlow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="rgba(255,255,255,0.4)" />
+      </filter>
+    </defs>
+
+    <!-- Background split tint -->
+    <rect x="${padX}" y="${padY}" width="${usableW}" height="${midY - padY}" fill="rgba(255, 255, 255, 0.02)" rx="2" />
+    <rect x="${padX}" y="${midY}" width="${usableW}" height="${midY - padY}" fill="rgba(0, 0, 0, 0.15)" rx="2" />
+
+    <!-- Center Zero Axis Line -->
+    <line x1="${padX}" y1="${midY}" x2="${width - padX}" y2="${midY}" stroke="rgba(255, 255, 255, 0.2)" stroke-dasharray="4,4" stroke-width="1.2" />
+
+    <!-- Area Fill -->
+    <path d="${areaD}" fill="url(#evalWhiteArea)" />
+
+    <!-- Main Eval Stroke -->
+    <path d="${lineD}" fill="none" stroke="#e6edf3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" filter="url(#evalGlow)" />
+
+    <!-- Significant Move Markers -->
+    ${markersHtml}
+
+    <!-- Cursor line & circle -->
+    ${cursorHtml}
+  `;
+}
+
+function initEvalGraphInteraction() {
+  const container = $("evalGraphContainer");
+  const tooltip = $("evalGraphTooltip");
+  if (!container || !tooltip) return;
+
+  container.addEventListener("mousemove", (e) => {
+    const tree = state.tree;
+    const nodes = tree?.mainline || [];
+    if (nodes.length <= 1) {
+      tooltip.style.display = "none";
+      return;
+    }
+    const rect = container.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const padX = 14;
+    const usableW = rect.width - 2 * padX;
+    const totalMoves = nodes.length - 1;
+
+    let ply = Math.round(((x - padX) / usableW) * totalMoves);
+    ply = Math.max(0, Math.min(totalMoves, ply));
+
+    const node = nodes[ply];
+    if (!node) {
+      tooltip.style.display = "none";
+      return;
+    }
+
+    let score = null;
+    if (ply === 0) {
+      score = node.analysis?.whiteScore ?? 0.0;
+    } else if (node.result) {
+      score = node.result.afterWhite;
+    } else if (node.analysis && Number.isFinite(node.analysis.whiteScore)) {
+      score = node.analysis.whiteScore;
+    }
+
+    const scoreStr = formatEvalScorePill(score);
+    const scoreClass = score !== null && score > 0 ? "white" : "black";
+    const moveText = ply === 0 ? "Start position" : `${node.result?.moveNo || `${Math.ceil(ply / 2)}.`} ${node.result?.san || node.move?.san || ""}`;
+    const badgeText = node.result?.label ? `<span style="color:${node.result.color};">${node.result.label}</span>` : "";
+
+    tooltip.innerHTML = `<span>${moveText}</span> <span class="eval-graph-tooltip-score ${scoreClass}">${scoreStr}</span> ${badgeText}`;
+    tooltip.style.display = "flex";
+
+    const clampX = Math.max(48, Math.min(rect.width - 48, x));
+    const mouseY = e.clientY - rect.top;
+
+    tooltip.style.left = `${clampX}px`;
+    if (mouseY < 34) {
+      // Near top: show tooltip below cursor so it never gets cut off
+      tooltip.style.top = `${mouseY + 28}px`;
+      tooltip.style.transform = "translate(-50%, 0)";
+    } else {
+      // Default: show tooltip above cursor
+      tooltip.style.top = `${mouseY}px`;
+      tooltip.style.transform = "translate(-50%, -100%)";
+    }
+  });
+
+  container.addEventListener("mouseleave", () => {
+    tooltip.style.display = "none";
+  });
+
+  container.addEventListener("click", (e) => {
+    const tree = state.tree;
+    const nodes = tree?.mainline || [];
+    if (nodes.length <= 1) return;
+    const rect = container.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const padX = 14;
+    const usableW = rect.width - 2 * padX;
+    const totalMoves = nodes.length - 1;
+
+    let ply = Math.round(((x - padX) / usableW) * totalMoves);
+    ply = Math.max(0, Math.min(totalMoves, ply));
+
+    if (nodes[ply]) {
+      navigateNode(nodes[ply]);
+    }
+  });
 }
 
 function updateAnalysisProgress(current, total, statusText, isDone = false, isStopped = false) {
@@ -1544,6 +1868,11 @@ function updateAnalysisProgress(current, total, statusText, isDone = false, isSt
 
   if (dockFill) dockFill.style.width = `${pct}%`;
 
+  const summaryFill = $("summaryProgressBarFill");
+  const summaryPct = $("summaryProgressPct");
+  if (summaryFill) summaryFill.style.width = `${pct}%`;
+  if (summaryPct) summaryPct.textContent = `${pct}%`;
+
   if (isDone) {
     if (reviewProgress) reviewProgress.textContent = `100% · Complete (${total} moves)`;
   } else if (isStopped) {
@@ -1553,12 +1882,15 @@ function updateAnalysisProgress(current, total, statusText, isDone = false, isSt
   } else {
     if (reviewProgress) reviewProgress.textContent = `${pct}% · ${current}/${total}`;
   }
+
+  renderEvalGraph();
+  renderSummary();
 }
 
 function renderSummary() {
   const nodes = state.tree?.mainline.slice(1) || [];
-  const whiteMoves = nodes.filter(node => node.move.color === "w" && node.result).map(node => node.result);
-  const blackMoves = nodes.filter(node => node.move.color === "b" && node.result).map(node => node.result);
+  const whiteMoves = nodes.filter(node => node.move?.color === "w" && node.result).map(node => node.result);
+  const blackMoves = nodes.filter(node => node.move?.color === "b" && node.result).map(node => node.result);
   const isComplete = nodes.length > 0 && nodes.every(node => Boolean(node.result));
 
   if (isComplete) {
@@ -1653,18 +1985,38 @@ function renderSummary() {
 
 async function startReview() {
   const tree = state.tree;
-  if (!tree || state.running) return;
+  if (!tree || state.running) {
+    if (!tree) {
+      setStatus("Load a game or paste a PGN first to review.", true);
+    }
+    return;
+  }
   const nodes = tree.mainline.slice(1);
   if (!nodes.length) {
     setStatus("Play moves on the board first before analyzing the game.", true);
     return;
   }
   state.running = true;
+  updateSummaryActionButtons();
   state.reviewController = new AbortController();
   const controller = state.reviewController;
   const signal = AbortSignal.any([controller.signal, state.session.signal]);
   const moveTime = Number($("moveTime").value);
   cancelQuickAnalysis();
+
+  // Wipe out previous analysis results, reset board to start position, and clear graph & stats
+  for (const node of nodes) {
+    node.result = null;
+    node.resultTime = 0;
+    node.analysis = null;
+    node.analysisStatus = "idle";
+  }
+  navigateNode(tree.root);
+  renderBoard(0);
+  renderEvalGraph();
+  renderSummary();
+  updateAnalysisProgress(0, nodes.length, "Starting review...", false, false);
+
   switchTab("summary");
   $("startReview").style.display = "none";
   $("stopReview").style.display = "inline-flex";
@@ -1686,11 +2038,20 @@ async function startReview() {
   } finally {
     if (state.tree === tree && state.reviewController === controller) {
       state.running = false;
+      const isComplete = nodes.every(n => Boolean(n.result));
+      state.isAnalyzed = isComplete;
+      if (isComplete) {
+        state.hasReviewedPreviously = true;
+      }
+      updateSummaryActionButtons();
       $("stopReview").style.display = "none";
       $("stopReview").disabled = true;
       $("startReview").style.display = "inline-flex";
+      $("startReviewText").textContent = state.isAnalyzed ? "Start" : "Analyze game";
       refreshAnalysisView();
       setNavEnabled();
+      renderEvalGraph();
+      renderSummary();
       requestQuickAnalysisForCurrentPosition();
     }
   }
@@ -1704,7 +2065,9 @@ $("startReview").addEventListener("click", () => {
 });
 $("stopReview").addEventListener("click", stopReview);
 $("moveTime").addEventListener("change", () => {
-  if (state.tree) renderBoard(state.cursor);
+  state.isAnalyzed = false;
+  if ($("startReviewText")) $("startReviewText").textContent = "Analyze game";
+  updateSummaryActionButtons();
 });
 
 // AUTOMATIC IMPORT
@@ -1731,4 +2094,6 @@ async function autoImportPendingGame() {
 }
 updatePlayerHeaders();
 updateAiUi();
+initEvalGraphInteraction();
+showSummaryView();
 autoImportPendingGame();

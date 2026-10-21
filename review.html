@@ -21,6 +21,132 @@
       <span class="engine-badge">
         <span class="engine-indicator"></span> STOCKFISH 19 (LOCAL)
       </span>
+      <button id="topbarMenuBtn" class="topbar-menu-btn" type="button" title="Game Options (Flip, Import, Paste, Speed)" aria-label="Menu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round">
+          <line x1="4" y1="6" x2="20" y2="6"></line>
+          <line x1="4" y1="12" x2="20" y2="12"></line>
+          <line x1="4" y1="18" x2="20" y2="18"></line>
+        </svg>
+      </button>
+
+      <!-- HAMBURGER DROPDOWN MENU -->
+      <div id="hamburgerMenu" class="hamburger-dropdown" style="display:none">
+        <div class="menu-header">
+          <span class="menu-title">Game Options</span>
+          <button id="closeHamburgerBtn" class="menu-close-btn" type="button" title="Close menu">✕</button>
+        </div>
+
+        <div class="menu-items">
+          <!-- ANALYSIS BOARD -->
+          <button id="menuAnalysisBoard" class="menu-item-btn" type="button" title="Start a fresh analysis board">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <line x1="3" y1="9" x2="21" y2="9"/>
+              <line x1="3" y1="15" x2="21" y2="15"/>
+              <line x1="9" y1="3" x2="9" y2="21"/>
+              <line x1="15" y1="3" x2="15" y2="21"/>
+            </svg>
+            <span>Analysis Board</span>
+          </button>
+
+          <!-- FLIP BOARD -->
+          <button id="flipBoard" class="menu-item-btn" type="button">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M7 7h10v2l4-3-4-3v2H5v6h2V7zm10 10H7v-2l-4 3 4 3v-2h12v-6h-2v4z"/>
+            </svg>
+            <span>Flip Board</span>
+            <kbd class="menu-kbd">F</kbd>
+          </button>
+
+          <!-- IMPORT PGN FILE -->
+          <label for="pgnFile" class="menu-item-btn menu-label-btn" title="Import PGN File">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+            </svg>
+            <span>Import PGN</span>
+          </label>
+          <input id="pgnFile" type="file" accept=".pgn,.txt,text/plain" hidden>
+
+          <!-- PASTE PGN -->
+          <button id="togglePastePgn" class="menu-item-btn" type="button">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+            </svg>
+            <span>Paste PGN</span>
+          </button>
+
+          <!-- LOAD GAME -->
+          <button id="loadPgn" class="menu-item-btn" type="button">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4v16l16-8z"/>
+            </svg>
+            <span>Load Game</span>
+          </button>
+
+          <!-- SPEED SELECTOR -->
+          <div class="menu-speed-row">
+            <span class="menu-speed-label">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              <span>Speed</span>
+            </span>
+            <select id="moveTime" class="menu-select">
+              <option value="250" selected>Fast · 0.25s</option>
+              <option value="500">Balanced · 0.5s</option>
+              <option value="1000">Deep · 1.0s</option>
+            </select>
+          </div>
+
+          <!-- BEST MOVE ARROW TOGGLE -->
+          <div class="menu-speed-row">
+            <span class="menu-speed-label">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+              <span>Best Move Arrow</span>
+            </span>
+            <label class="toggle-switch">
+              <input id="toggleBestMoveArrow" type="checkbox" aria-label="Best move arrow" checked />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <!-- OPTIONAL AI COACHING -->
+          <div class="menu-speed-row" style="border-top: 1px solid var(--line-subtle); margin-top: 4px; padding-top: 8px;">
+            <span class="menu-speed-label">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+              </svg>
+              <span>AI Coach</span>
+            </span>
+            <span id="aiStatus" class="ai-status-dot off" title="Gemini AI coaching disabled"></span>
+          </div>
+          <div class="menu-speed-row">
+            <label for="aiProvider" class="menu-speed-label">Provider</label>
+            <select id="aiProvider" class="menu-select"><option value="gemini">Gemini</option><option value="groq">Groq</option></select>
+          </div>
+          <div class="menu-api-row">
+            <input id="aiApiKey" type="password" class="menu-api-input" placeholder="Gemini API key" autocomplete="off" spellcheck="false" />
+            <button id="saveAiKey" class="dock-btn primary-sm" type="button" style="flex-shrink:0;">Save</button>
+            <button id="clearAiKey" class="sidebar-nav-btn" type="button" title="Clear API key" style="width:28px;height:28px;font-size:11px;display:none;padding:0;">✕</button>
+          </div>
+          <div id="aiKeyHelp" class="menu-api-help"></div>
+          <div class="menu-api-help"><span id="aiConnectionStatus" role="status">Local feedback; no Gemini API key saved</span></div>
+        </div>
+
+        <!-- COLLAPSIBLE PASTE DRAWER INSIDE MENU -->
+        <div id="pasteDrawer" class="paste-drawer" style="display: none;">
+          <textarea id="pgnText" rows="4" spellcheck="false" placeholder='[Event "Live Chess"] 1. e4 e5 ... (Paste PGN here)'></textarea>
+          <div class="drawer-actions">
+            <span id="importStatus" class="status-msg">Paste PGN text and click Load</span>
+            <button id="drawerLoadBtn" class="dock-btn primary-sm" type="button">Load</button>
+          </div>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -103,82 +229,137 @@
 
     <!-- RIGHT: ANALYSIS & MOVE LIST SIDEBAR -->
     <aside class="sidebar-panel">
-      <!-- MOVE FEEDBACK & COACHING CARD -->
-      <div id="feedbackContainer" class="feedback-container" tabindex="0" aria-label="Move feedback">
-        <div id="feedbackContent" class="feedback-content">
-          <div class="feedback-empty">
-            <p>Select any move or start analysis to inspect move classifications, evaluation changes, and coaching notes.</p>
-          </div>
-        </div>
-      </div>
-
-      <div id="feedbackSplitter" class="feedback-splitter" role="separator" tabindex="0"
-        aria-label="Resize feedback and moves" aria-orientation="horizontal"
-        aria-controls="feedbackContainer moveListWrapper summaryPanel"
-        title="Drag to resize. Use arrow keys to adjust; double-click to reset."></div>
-
-      <!-- TABS -->
-      <div class="sidebar-tabs">
-        <button id="tabMoves" class="tab-btn active">Moves</button>
-        <button id="tabSummary" class="tab-btn">Game Summary</button>
-      </div>
-
-      <!-- MOVE LIST TABLE -->
-      <div id="moveListWrapper" class="move-list-wrapper">
-        <div class="move-table-header">
-          <span class="move-tree-heading">Original game &amp; variations</span>
-        </div>
-        <div id="moveList" class="move-list">
-          <p class="muted empty-state">Your game’s moves will appear here.</p>
-        </div>
-      </div>
-
-      <!-- SUMMARY PANEL (Accuracy & Breakdown) -->
-      <div id="summaryPanel" class="summary-panel" style="display:none">
-        <!-- PERFORMANCE & RATING OVERVIEW CARD -->
-        <div class="performance-overview-card">
-          <div class="perf-player-col white-col">
-            <div class="perf-player-header">
-              <div class="perf-avatar" id="summaryWhiteAvatar"></div>
-              <span class="perf-player-name" id="summaryWhiteName">White</span>
+      <!-- 1. GAME SUMMARY VIEW (Default when a game is loaded) -->
+      <div id="gameSummaryView" class="game-summary-view">
+        <div class="summary-content-scroll">
+          <!-- EVALUATION GRAPH -->
+          <div class="eval-graph-card" id="evalGraphCard">
+            <div class="eval-graph-header">
+              <div class="eval-graph-title-group">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+                <span class="eval-graph-title">Evaluation</span>
+              </div>
+              <span id="evalGraphCurrentScore" class="eval-graph-score-pill">0.0</span>
             </div>
-            <div class="perf-stats">
-              <div class="perf-stat-item rating-stat">
-                <span class="perf-val rating-val" id="summaryWhiteRating">—</span>
-                <span class="perf-lbl">Est. Rating</span>
-              </div>
-              <div class="perf-stat-item acc-stat">
-                <span class="perf-val acc-val" id="summaryWhiteAcc">—</span>
-                <span class="perf-lbl">Accuracy</span>
-              </div>
+            <div id="evalGraphContainer" class="eval-graph-container" tabindex="0" aria-label="Evaluation graph">
+              <svg id="evalGraphSvg" class="eval-graph-svg" viewBox="0 0 380 110" preserveAspectRatio="none"></svg>
+              <div id="evalGraphTooltip" class="eval-graph-tooltip" style="display:none;"></div>
             </div>
           </div>
 
-          <div class="perf-vs-divider">
-            <span class="vs-text">VS</span>
+          <!-- PERFORMANCE & RATING OVERVIEW CARD -->
+          <div class="performance-overview-card">
+            <div class="perf-player-col white-col">
+              <div class="perf-player-header">
+                <div class="perf-avatar" id="summaryWhiteAvatar"></div>
+                <span class="perf-player-name" id="summaryWhiteName">White</span>
+              </div>
+              <div class="perf-stats">
+                <div class="perf-stat-item rating-stat">
+                  <span class="perf-val rating-val" id="summaryWhiteRating">—</span>
+                  <span class="perf-lbl">Est. Rating</span>
+                </div>
+                <div class="perf-stat-item acc-stat">
+                  <span class="perf-val acc-val" id="summaryWhiteAcc">—</span>
+                  <span class="perf-lbl">Accuracy</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="perf-vs-divider">
+              <span class="vs-text">VS</span>
+            </div>
+
+            <div class="perf-player-col black-col">
+              <div class="perf-player-header">
+                <div class="perf-avatar" id="summaryBlackAvatar"></div>
+                <span class="perf-player-name" id="summaryBlackName">Black</span>
+              </div>
+              <div class="perf-stats">
+                <div class="perf-stat-item rating-stat">
+                  <span class="perf-val rating-val" id="summaryBlackRating">—</span>
+                  <span class="perf-lbl">Est. Rating</span>
+                </div>
+                <div class="perf-stat-item acc-stat">
+                  <span class="perf-val acc-val" id="summaryBlackAcc">—</span>
+                  <span class="perf-lbl">Accuracy</span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div class="perf-player-col black-col">
-            <div class="perf-player-header">
-              <div class="perf-avatar" id="summaryBlackAvatar"></div>
-              <span class="perf-player-name" id="summaryBlackName">Black</span>
+          <!-- BREAKDOWN TABLE -->
+          <div class="breakdown-table" id="breakdownTable">
+            <!-- Dynamically populated classification counts -->
+          </div>
+        </div>
+
+        <!-- SUMMARY FOOTER: ONLY REVIEW BUTTON ON GREEN / PROGRESS FILL / START BUTTON -->
+        <div class="summary-bottom-actions">
+          <button id="summaryReviewBtn" class="summary-action-btn green-btn" type="button" title="Review game">
+            <svg class="summary-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+            </svg>
+            <span id="summaryReviewBtnText">Review</span>
+          </button>
+
+          <div id="summaryProgressBox" class="summary-progress-box-inline" style="display:none;">
+            <div class="summary-progress-bar-row">
+              <span class="summary-progress-label">Reviewing game...</span>
+              <span id="summaryProgressPct" class="summary-progress-pct">0%</span>
             </div>
-            <div class="perf-stats">
-              <div class="perf-stat-item rating-stat">
-                <span class="perf-val rating-val" id="summaryBlackRating">—</span>
-                <span class="perf-lbl">Est. Rating</span>
-              </div>
-              <div class="perf-stat-item acc-stat">
-                <span class="perf-val acc-val" id="summaryBlackAcc">—</span>
-                <span class="perf-lbl">Accuracy</span>
-              </div>
+            <div class="summary-progress-track">
+              <div id="summaryProgressBarFill" class="summary-progress-bar-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <button id="summaryStartBtn" class="summary-action-btn green-btn start-mode" type="button" style="display:none;" title="Start reviewing moves">
+            <svg class="summary-btn-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+            <span>Start</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. GAME MOVES VIEW (Ask AI & Moves List) -->
+      <div id="gameMovesView" class="game-moves-view" style="display:none;">
+        <!-- TOP LEFT BACK BUTTON -->
+        <div class="moves-view-header">
+          <button id="backToSummaryBtn" class="back-to-summary-btn" type="button" title="Back to Game Review">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            <span>Game Review</span>
+          </button>
+        </div>
+
+        <!-- MOVE FEEDBACK & COACHING CARD -->
+        <div id="feedbackContainer" class="feedback-container" tabindex="0" aria-label="Move feedback">
+          <div id="feedbackContent" class="feedback-content">
+            <div class="feedback-empty">
+              <p>Select any move to inspect move classifications, evaluation changes, and coaching notes.</p>
             </div>
           </div>
         </div>
-        <div class="breakdown-table" id="breakdownTable">
-          <!-- Dynamically populated classification counts -->
+
+        <div id="feedbackSplitter" class="feedback-splitter" role="separator" tabindex="0"
+          aria-label="Resize feedback and moves" aria-orientation="horizontal"
+          aria-controls="feedbackContainer moveListWrapper"
+          title="Drag to resize. Use arrow keys to adjust; double-click to reset."></div>
+
+        <!-- MOVE LIST TABLE -->
+        <div id="moveListWrapper" class="move-list-wrapper">
+          <div class="move-table-header">
+            <span class="move-tree-heading">Original game &amp; variations</span>
+          </div>
+          <div id="moveList" class="move-list">
+            <p class="muted empty-state">Your game’s moves will appear here.</p>
+          </div>
         </div>
-      </div>
 
       <!-- SIDEBAR FOOTER: NAVIGATION, ANALYZE/START BUTTON & HAMBURGER MENU -->
       <div class="sidebar-footer">
@@ -238,132 +419,17 @@
                 <line x1="4" y1="18" x2="20" y2="18"></line>
               </svg>
             </button>
-
-            <!-- HAMBURGER DROPDOWN MENU -->
-            <div id="hamburgerMenu" class="hamburger-dropdown" style="display:none">
-              <div class="menu-header">
-                <span class="menu-title">Game Options</span>
-                <button id="closeHamburgerBtn" class="menu-close-btn" type="button" title="Close menu">✕</button>
-              </div>
-
-              <div class="menu-items">
-                <!-- ANALYSIS BOARD -->
-                <button id="menuAnalysisBoard" class="menu-item-btn" type="button" title="Start a fresh analysis board">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                    <line x1="3" y1="9" x2="21" y2="9"/>
-                    <line x1="3" y1="15" x2="21" y2="15"/>
-                    <line x1="9" y1="3" x2="9" y2="21"/>
-                    <line x1="15" y1="3" x2="15" y2="21"/>
-                  </svg>
-                  <span>Analysis Board</span>
-                </button>
-
-                <!-- FLIP BOARD -->
-                <button id="flipBoard" class="menu-item-btn" type="button">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                    <path d="M7 7h10v2l4-3-4-3v2H5v6h2V7zm10 10H7v-2l-4 3 4 3v-2h12v-6h-2v4z"/>
-                  </svg>
-                  <span>Flip Board</span>
-                  <kbd class="menu-kbd">F</kbd>
-                </button>
-
-                <!-- IMPORT PGN FILE -->
-                <label for="pgnFile" class="menu-item-btn menu-label-btn" title="Import PGN File">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-                  </svg>
-                  <span>Import PGN</span>
-                </label>
-                <input id="pgnFile" type="file" accept=".pgn,.txt,text/plain" hidden>
-
-                <!-- PASTE PGN -->
-                <button id="togglePastePgn" class="menu-item-btn" type="button">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
-                  </svg>
-                  <span>Paste PGN</span>
-                </button>
-
-                <!-- LOAD GAME -->
-                <button id="loadPgn" class="menu-item-btn" type="button">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 4v16l16-8z"/>
-                  </svg>
-                  <span>Load Game</span>
-                </button>
-
-                <!-- SPEED SELECTOR -->
-                <div class="menu-speed-row">
-                  <span class="menu-speed-label">
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <polyline points="12 6 12 12 16 14"></polyline>
-                    </svg>
-                    <span>Speed</span>
-                  </span>
-                  <select id="moveTime" class="menu-select">
-                    <option value="250" selected>Fast · 0.25s</option>
-                    <option value="500">Balanced · 0.5s</option>
-                    <option value="1000">Deep · 1.0s</option>
-                  </select>
-                </div>
-
-                <!-- BEST MOVE ARROW TOGGLE -->
-                <div class="menu-speed-row">
-                  <span class="menu-speed-label">
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-                      <line x1="5" y1="12" x2="19" y2="12"></line>
-                      <polyline points="12 5 19 12 12 19"></polyline>
-                    </svg>
-                    <span>Best Move Arrow</span>
-                  </span>
-                  <label class="toggle-switch">
-                    <input id="toggleBestMoveArrow" type="checkbox" aria-label="Best move arrow" checked />
-                    <span class="toggle-slider"></span>
-                  </label>
-                </div>
-
-                <!-- OPTIONAL AI COACHING -->
-                <div class="menu-speed-row" style="border-top: 1px solid var(--line-subtle); margin-top: 4px; padding-top: 8px;">
-                  <span class="menu-speed-label">
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                    </svg>
-                    <span>AI Coach</span>
-                  </span>
-                  <span id="aiStatus" class="ai-status-dot off" title="Gemini AI coaching disabled"></span>
-                </div>
-                <div class="menu-speed-row">
-                  <label for="aiProvider" class="menu-speed-label">Provider</label>
-                  <select id="aiProvider" class="menu-select"><option value="gemini">Gemini</option><option value="groq">Groq</option></select>
-                </div>
-                <div class="menu-api-row">
-                  <input id="aiApiKey" type="password" class="menu-api-input" placeholder="Gemini API key" autocomplete="off" spellcheck="false" />
-                  <button id="saveAiKey" class="dock-btn primary-sm" type="button" style="flex-shrink:0;">Save</button>
-                  <button id="clearAiKey" class="sidebar-nav-btn" type="button" title="Clear API key" style="width:28px;height:28px;font-size:11px;display:none;padding:0;">✕</button>
-                </div>
-                <div id="aiKeyHelp" class="menu-api-help"></div>
-                <div class="menu-api-help"><span id="aiConnectionStatus" role="status">Local feedback; no Gemini API key saved</span></div>
-              </div>
-
-              <!-- COLLAPSIBLE PASTE DRAWER INSIDE MENU -->
-              <div id="pasteDrawer" class="paste-drawer" style="display: none;">
-                <textarea id="pgnText" rows="4" spellcheck="false" placeholder='[Event "Live Chess"] 1. e4 e5 ... (Paste PGN here)'></textarea>
-                <div class="drawer-actions">
-                  <span id="importStatus" class="status-msg">Paste PGN text and click Load</span>
-                  <button id="drawerLoadBtn" class="dock-btn primary-sm" type="button">Load</button>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
+    </div>
     </aside>
 
     <!-- Hidden compatibility elements -->
     <div style="display:none" aria-hidden="true">
+      <div id="summaryPanel"></div>
+      <button id="tabMoves"></button>
+      <button id="tabSummary"></button>
       <span id="whiteName">White</span>
       <span id="blackName">Black</span>
       <span id="whiteEval">—</span>
