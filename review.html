@@ -387,6 +387,18 @@
 
         <!-- MOVES FOOTER: PREVIEW STATUS AND ORIGINAL-GAME PLAYBACK -->
         <div class="sidebar-footer">
+          <nav id="variationNavigation" class="variation-navigation" aria-label="Variation navigation" hidden>
+            <div class="variation-heading">
+              <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                <path d="M5 3v14M5 9h5a5 5 0 0 0 5-5"/><circle cx="5" cy="3" r="1.5"/><circle cx="15" cy="3" r="1.5"/>
+              </svg>
+              <span id="variationIndicator" class="variation-indicator">Exploring variation</span>
+            </div>
+            <div class="variation-actions">
+              <button id="parentVariationBtn" class="reset-variation-btn" type="button" aria-label="Back to parent branch" title="Back to parent branch" hidden><span aria-hidden="true">↰</span> Parent branch</button>
+              <button id="resetVariationBtn" class="reset-variation-btn return-to-game" type="button" hidden>Back to game</button>
+            </div>
+          </nav>
           <div id="continuationPreview" class="continuation-preview" hidden>
             <span id="continuationPreviewStatus" role="status"></span>
             <button id="returnFromPreview" type="button" class="show-move-btn">Back to move</button>
@@ -398,12 +410,7 @@
               <span id="engineStatus">Engine idle</span>
               <button id="retryPositionAnalysis" class="retry-analysis" type="button" hidden>Retry</button>
             </div>
-            <div class="move-counter-group" style="display: flex; align-items: center; gap: 6px;">
-              <span id="variationIndicator" class="variation-indicator" hidden>Exploring variation</span>
-              <button id="parentVariationBtn" class="reset-variation-btn" type="button" hidden>Back to parent
-                branch</button>
-              <button id="resetVariationBtn" class="reset-variation-btn" type="button" style="display:none;"
-                title="Return to where exploration started">Back to game</button>
+            <div class="move-counter-group">
               <span id="moveCounter" class="move-counter-badge">Start</span>
             </div>
           </div>

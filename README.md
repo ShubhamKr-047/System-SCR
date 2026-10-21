@@ -61,8 +61,8 @@ Temporary add-ons may be removed when Zen restarts. To test code changes, rebuil
 
 1. Select a position in the original game's move list and play an alternative move on the board.
 2. Continue playing to explore the line. Stockfish evaluates each new move and adds its classification, recommended continuation, and coaching feedback.
-3. Click **Back to game - [move]** to return to the exact original-game position where that variation started. The next navigation step follows the original game's continuation.
-4. Reopen any saved variation by clicking its moves in the indented move list. Branches can be expanded or collapsed; playing a different reply within a variation creates a nested branch. **Back to parent branch** returns to the nearest nested fork.
+3. Click **Back to game** beside the original-position label to return to the exact original-game position where that variation started. The next navigation step follows the original game's continuation.
+4. Reopen any saved variation by clicking its moves in the indented move list. Branches can be expanded or collapsed; playing a different reply within a variation creates a nested branch. **Parent branch** returns to the nearest nested fork.
 
 Left/Right arrows and the navigation buttons follow the selected line. Up goes to the imported game's initial position; Down goes to the selected line's end. Pawn promotion offers Queen, Rook, Bishop, and Knight.
 

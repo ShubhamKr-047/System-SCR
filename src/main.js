@@ -468,12 +468,13 @@ function syncActiveLine() {
   const origin = tree.nodes.get(tree.returnId);
   const back = $("resetVariationBtn");
   back.hidden = !origin;
-  back.style.display = origin ? "inline-flex" : "none";
-  back.textContent = origin ? `Back to game - ${moveLabel(origin)}` : "Back to game";
+  back.innerHTML = `<span class="variation-return-label"><span aria-hidden="true">↩</span> Back to game</span>${origin ? `<span class="variation-return-move">${esc(moveLabel(origin))}</span>` : ""}`;
+  back.setAttribute("aria-label", origin ? `Back to game at ${moveLabel(origin)}` : "Back to game");
   back.title = "Return to the original position where this variation started";
   const parent = tree.branchOrigin();
   $("parentVariationBtn").hidden = !state.isVariation || parent.mainline;
   $("variationIndicator").hidden = !state.isVariation;
+  $("variationNavigation").hidden = !state.isVariation;
   if (!state.running) {
     updateSummaryActionButtons();
     $("startReviewText").textContent = state.autoPlaying ? "Pause" : "Play";
@@ -1567,6 +1568,7 @@ function renderFeedback(result) {
   }
 
   const beforeFen = result.beforeFen;
+  $("feedbackContent").style.setProperty("--move-accent", result.color);
   const providerId = getProvider();
   const provider = PROVIDERS[providerId];
   const isEligible = isCoachingEligible(result);
