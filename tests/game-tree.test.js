@@ -136,12 +136,15 @@ test("analysis evaluates both endpoints and keeps feedback attached to its origi
   tree.select(tree.mainline[4]);
   const node = tree.play("Bc4");
   const evaluated = [];
-  const result = await analyzeMove(node, async n => {
+  const result = await analyzeMove(node, async (n, options) => {
     evaluated.push(n);
     const move = new Chess(n.fen).moves({ verbose: true })[0];
-    return { score: n.fen.split(" ")[1] === "w" ? 0.5 : -0.2, bestmove: `${move.from}${move.to}`, pv: "" };
+    return { score: options.searchMoves?.length ? 0.2 : n.fen.split(" ")[1] === "w" ? 0.5 : -0.2,
+      bestmove: options.searchMoves?.[0] || `${move.from}${move.to}`, pv: "" };
   }, {});
-  assert.deepEqual(evaluated, [node.parent, node]);
+  // A non-best move is compared with the top choice from the same root position.
+  assert.deepEqual(evaluated.slice(0, 2), [node.parent, node]);
+  assert.ok(evaluated.slice(2).length > 0 && evaluated.slice(2).every(n => n === node.parent));
   assert.equal(result.beforeWhite, 0.5);
   assert.equal(result.afterWhite, 0.2);
   assert.ok(Math.abs(result.lossCp - 30) < 0.001);

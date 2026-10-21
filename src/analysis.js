@@ -1,54 +1,21 @@
 import { Chess } from "chess.js";
-import { classifyMove, isMaterialSacrifice } from "./classifications.js";
+import { CLASSIFICATIONS } from "./classifications.js";
+import { analyzeClassification } from "./classification-analysis.js";
 
 export async function analyzeMove(node, evaluate, options) {
   const playedMove = node.move;
   const newPly = node.ply - 1;
   const beforeFen = node.parent.fen;
   const afterFen = node.fen;
-  const before = await evaluate(node.parent, options);
-  const after = await evaluate(node, options);
+  const evidence = await analyzeClassification(node, evaluate, options);
+  const { before, after, best, played, classification, opening } = evidence;
   const beforeWhite = scoreWhite(before.score, beforeFen);
-  let afterWhite = scoreWhite(after.score, afterFen);
+  const afterWhite = scoreWhite(after.score, afterFen);
   const mover = playedMove.color;
-
-  let isDeliveringMate = false;
-  try {
-    const afterChess = new Chess(afterFen);
-    isDeliveringMate = afterChess.isCheckmate() || playedMove.san.endsWith("#");
-  } catch {
-    isDeliveringMate = playedMove.san.endsWith("#");
-  }
-
-  if (isDeliveringMate) {
-    afterWhite = mover === "w" ? 10 : -10;
-  }
-
-  const beforePlayer = mover === "w" ? beforeWhite : -beforeWhite;
-  const afterPlayer = mover === "w" ? afterWhite : -afterWhite;
-
-  const lossCp = isDeliveringMate ? 0 : Math.max(0, Math.min(1000, (beforePlayer - afterPlayer) * 100));
-
+  const lossCp = evidence.lossCp;
   const playedUci = `${playedMove.from}${playedMove.to}${playedMove.promotion || ""}`;
-  const isBest = isDeliveringMate || before.bestmove === playedUci || lossCp <= 10;
-  const isSacrifice = isMaterialSacrifice(beforeFen, afterFen, playedMove);
-
-  let legalMovesCount = 10;
-  try {
-    legalMovesCount = new Chess(beforeFen).moves().length;
-  } catch {}
-
-  const classificationObj = classifyMove({
-    lossCp,
-    ply: newPly,
-    isBest,
-    beforePlayerScore: beforePlayer,
-    afterPlayerScore: afterPlayer,
-    legalMovesCount,
-    capturedPiece: playedMove.captured,
-    playedPiece: playedMove.piece,
-    isSacrifice
-  });
+  const isSacrifice = Boolean(evidence.sacrifice?.verified);
+  const classificationObj = CLASSIFICATIONS[classification.key];
 
   const bestSan = convertPvToSan(beforeFen, before.bestmove);
 
@@ -86,24 +53,7 @@ export async function analyzeMove(node, evaluate, options) {
     } catch {}
   }
 
-  let coachingTip = "";
-  if (classificationObj.key === "brilliant") {
-    coachingTip = `Brilliant play! You found a sharp tactical idea, sacrificing material to seize a decisive advantage.`;
-  } else if (classificationObj.key === "great") {
-    coachingTip = `Great find! You found the critical move to keep the upper hand or turn the tide.`;
-  } else if (classificationObj.key === "miss") {
-    coachingTip = `You had an opportunity to capitalize decisively. The engine prefers ${bestSan || "a sharper line"}.`;
-  } else if (classificationObj.key === "blunder") {
-    coachingTip = `Severe evaluation swing. Check for hanging pieces, unguarded squares, and forcing tactics before moving.`;
-  } else if (classificationObj.key === "mistake") {
-    coachingTip = `This gave away a chunk of your advantage. Compare your move with ${bestSan || "the engine suggestion"}.`;
-  } else if (classificationObj.key === "inaccuracy") {
-    coachingTip = `A slight concession. Notice how ${bestSan || "the engine line"} maintains more control and pressure.`;
-  } else if (classificationObj.key === "best") {
-    coachingTip = `Top-notch calculation. This is the optimal continuation that maximizes piece activity.`;
-  } else {
-    coachingTip = `Good practical choice. Continues developing and preserving a healthy position.`;
-  }
+  const coachingTip = classification.reason;
 
   const result = {
     ply: newPly,
@@ -113,6 +63,14 @@ export async function analyzeMove(node, evaluate, options) {
     beforeWhite,
     afterWhite,
     lossCp,
+    classificationVersion: evidence.classificationVersion,
+    chanceLoss: classification.chanceLoss,
+    beforeChances: best.chances,
+    afterChances: played.chances,
+    classificationReason: classification.reason,
+    classificationEvidence: { ...classification, opening, legalMovesCount: evidence.legalMovesCount,
+      sacrifice: evidence.sacrifice, alternatives: evidence.alternatives?.candidates || [],
+      opportunity: evidence.opportunityEvidence },
     key: classificationObj.key,
     label: classificationObj.name,
     sign: classificationObj.sign,
@@ -136,8 +94,10 @@ export async function analyzeMove(node, evaluate, options) {
     afterFen,
     playedUci,
     engineEvidence: {
-      before: { score: beforeWhite, moveTime: before.moveTime, bestmove: before.bestmove, pv: before.pv || "" },
-      after: { score: afterWhite, moveTime: after.moveTime, bestmove: after.bestmove, pv: after.pv || "" }
+      classificationVersion: evidence.classificationVersion,
+      before: { ...before, score: beforeWhite, scorePerspective: "White" },
+      played: evidence.playedSearch ? { ...evidence.playedSearch, scorePerspective: "mover" } : null,
+      after: { ...after, score: afterWhite, scorePerspective: "White" }
     }
   };
 
@@ -145,6 +105,7 @@ export async function analyzeMove(node, evaluate, options) {
 }
 
 function scoreWhite(engineScore, fen) {
+  if (engineScore === 0) return 0;
   const turn = fen.split(" ")[1];
   return turn === "w" ? engineScore : -engineScore;
 }

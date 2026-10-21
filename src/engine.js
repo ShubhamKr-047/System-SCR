@@ -1,5 +1,18 @@
 const aborted = () => new DOMException("Analysis cancelled", "AbortError");
 
+function searchKey(fen, time, { position, multiPv = 1, searchMoves = [], nodes } = {}) {
+  return `${fen}|${time}` + (position || multiPv !== 1 || searchMoves.length || nodes
+    ? `|${JSON.stringify([position, multiPv, [...searchMoves].sort(), nodes])}` : "");
+}
+
+function stable(history) {
+  const last = history.slice(-3);
+  return last.length >= 2 && last.every(line => !line.bound && line.depth >= 12 &&
+    line.pv.split(" ")[0] === last[0].pv.split(" ")[0] && line.scoreType === last[0].scoreType &&
+    (line.scoreType === "mate" ? Math.sign(line.rawScore) === Math.sign(last[0].rawScore)
+      : Math.abs(line.rawScore - last[0].rawScore) <= 35));
+}
+
 // One UCI search at a time. Each worker is fully initialized before its first job.
 export class EngineQueue {
   constructor(createWorker, { timeoutMs = 15000 } = {}) {
@@ -18,8 +31,8 @@ export class EngineQueue {
     this.sort();
   }
 
-  invalidate(fen, time) {
-    this.cache.delete(`${fen}|${time}`);
+  invalidate(fen, time, options) {
+    this.cache.delete(searchKey(fen, time, options));
   }
 
   sort() {
@@ -27,12 +40,13 @@ export class EngineQueue {
     this.queue.sort((a, b) => rank(b) - rank(a));
   }
 
-  evaluate(fen, time, { priority = 0, signal } = {}) {
+  evaluate(fen, time, { priority = 0, signal, position, multiPv = 1, searchMoves = [], nodes } = {}) {
     if (signal?.aborted) return Promise.reject(aborted());
-    const key = `${fen}|${time}`;
+    const key = searchKey(fen, time, { position, multiPv, searchMoves, nodes });
     if (this.cache.has(key)) return Promise.resolve(this.cache.get(key));
     return new Promise((resolve, reject) => {
-      const job = { fen, time, key, priority, signal, resolve, reject, score: 0, pv: "", hasScore: false };
+      const job = { fen, time, key, priority, signal, position, multiPv, searchMoves, nodes,
+        resolve, reject, lines: new Map(), history: [] };
       job.cancel = () => {
         this.queue = this.queue.filter(j => j !== job);
         if (this.active === job) {
@@ -112,33 +126,64 @@ export class EngineQueue {
 
   start() {
     if (!this.active) return;
-    this.worker.postMessage(`position fen ${this.active.fen}`);
-    this.worker.postMessage(`go movetime ${this.active.time}`);
+    const job = this.active;
+    this.worker.postMessage(`setoption name MultiPV value ${job.multiPv}`);
+    this.worker.postMessage(job.position
+      ? `position fen ${job.position.fen}${job.position.moves.length ? ` moves ${job.position.moves.join(" ")}` : ""}`
+      : `position fen ${job.fen}`);
+    this.worker.postMessage(`go ${job.nodes ? `nodes ${job.nodes}` : `movetime ${job.time}`}${job.searchMoves.length ? ` searchmoves ${job.searchMoves.join(" ")}` : ""}`);
   }
 
   onLine(line) {
-    if (line === "uciok") this.worker.postMessage("isready");
+    if (line === "uciok") {
+      this.worker.postMessage("setoption name UCI_ShowWDL value true");
+      this.worker.postMessage("isready");
+    }
     else if (line === "readyok" && !this.ready) {
       this.ready = true;
       this.start();
     } else if (line.startsWith("info ") && this.active) {
       const score = line.match(/\bscore (cp|mate) (-?\d+)/);
       const pv = line.match(/\bpv (.+)$/);
-      if (score) {
+      if (score && pv) {
         const n = Number(score[2]);
-        this.active.score = score[1] === "mate"
+        const depth = Number(line.match(/\bdepth (\d+)/)?.[1] || 0);
+        const rank = Number(line.match(/\bmultipv (\d+)/)?.[1] || 1);
+        const wdl = line.match(/\bwdl (\d+) (\d+) (\d+)/);
+        const info = { scoreType: score[1], rawScore: n, depth,
+          nodes: Number(line.match(/\bnodes (\d+)/)?.[1] || 0),
+          bound: line.match(/\b(lowerbound|upperbound)\b/)?.[1] || null,
+          wdl: wdl ? wdl.slice(1).map(Number) : null,
+          pv: pv[1], rank };
+        info.score = score[1] === "mate"
           ? (n > 0 ? 10 - Math.min(n, 9) * 0.01 : -10 + Math.min(-n, 9) * 0.01)
           : n / 100;
-        this.active.hasScore = true;
+        // A bounded search line is not a completed evaluation.
+        if (!info.bound) {
+          this.active.lines.set(`${depth}:${rank}`, info);
+          if (rank === 1) {
+            this.active.history = this.active.history.filter(previous => previous.depth !== depth);
+            this.active.history.push(info);
+          }
+        }
       }
-      if (pv) this.active.pv = pv[1].split(" ").slice(0, 8).join(" ");
     } else if (line.startsWith("bestmove ") && this.active) {
       const job = this.active;
       this.active = null;
-      if (!job.hasScore) {
+      const bestmove = line.split(/\s+/)[1] || "";
+      const primary = [...job.lines.values()].filter(info => info.rank === 1 && info.pv.split(" ")[0] === bestmove)
+        .sort((a, b) => b.depth - a.depth)[0];
+      if (!primary) {
         this.settle(job, new Error("Engine returned no evaluation. Retry analysis."));
       } else {
-        const result = { score: job.score, pv: job.pv, bestmove: line.split(/\s+/)[1] || "", moveTime: job.time };
+        // All alternatives must belong to the same completed depth.
+        const candidates = [...job.lines.values()].filter(info => info.depth === primary.depth)
+          .sort((a, b) => a.rank - b.rank).map(info => ({ ...info,
+            stable: stable([...job.lines.values()].filter(previous => previous.rank === info.rank)
+              .sort((a, b) => a.depth - b.depth)) }));
+        const result = { ...primary, bestmove, moveTime: job.time, candidates,
+          complete: candidates.length === job.multiPv,
+          stable: stable(job.history), history: job.history.slice(-3) };
         this.cache.set(job.key, result);
         this.settle(job, null, result);
       }

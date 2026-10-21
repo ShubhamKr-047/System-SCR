@@ -177,3 +177,64 @@ test("already aborted signals reject even a cached position", async () => {
   await first;
   await assert.rejects(engine.evaluate("fen", 250, { signal: AbortSignal.abort() }), { name: "AbortError" });
 });
+
+test("MultiPV keeps scores with their own lines at a matching depth and ignores bounds", async () => {
+  const { engine, workers } = setup();
+  const pending = engine.evaluate("fen", 250, { multiPv: 2 });
+  const worker = workers[0]; worker.ready();
+  for (const depth of [14, 15, 16]) {
+    worker.emit(`info depth ${depth} multipv 1 score cp 40 nodes 200 wdl 30 960 10 pv e2e4 e7e5`);
+    worker.emit(`info depth ${depth} multipv 2 score cp -100 nodes 220 pv d2d4 d7d5`);
+  }
+  worker.emit("info depth 17 multipv 1 score cp 900 lowerbound pv e2e4");
+  worker.emit("bestmove e2e4");
+  const result = await pending;
+  assert.equal(result.score, 0.4);
+  assert.equal(result.rawScore, 40);
+  assert.equal(result.depth, 16);
+  assert.equal(result.complete, true);
+  assert.equal(result.stable, true);
+  assert.equal(result.candidates[1].score, -1);
+  assert.equal(result.candidates[1].stable, true);
+  assert.deepEqual(result.wdl, [30, 960, 10]);
+});
+
+test("mate sign and distance survive parsing separately from numeric display score", async () => {
+  const { engine, workers } = setup(); const pending = engine.evaluate("fen", 250);
+  workers[0].ready();
+  workers[0].emit("info depth 18 score mate -12 pv e2e4 e7e5\nbestmove e2e4");
+  const result = await pending;
+  assert.equal(result.scoreType, "mate"); assert.equal(result.rawScore, -12);
+});
+
+test("candidate snapshots cannot mix depths or mismatch bestmove and score", async () => {
+  const { engine, workers } = setup(); const pending = engine.evaluate("fen", 250, { multiPv: 2 });
+  workers[0].ready();
+  workers[0].emit("info depth 15 multipv 1 score cp 20 pv e2e4");
+  workers[0].emit("info depth 15 multipv 2 score cp 10 pv d2d4");
+  workers[0].emit("info depth 16 multipv 1 score cp 40 pv e2e4\nbestmove e2e4");
+  const result = await pending;
+  assert.equal(result.complete, false); assert.equal(result.candidates.length, 1);
+});
+
+test("history and restricted moves have separate caches and options reset between jobs", async () => {
+  const { engine, workers } = setup();
+  const first = engine.evaluate("fen", 250, { position: { fen: "root", moves: ["e2e4", "e7e5"] }, searchMoves: ["g1f3"] });
+  workers[0].ready();
+  assert.equal(workers[0].commands.at(-2), "position fen root moves e2e4 e7e5");
+  assert.equal(workers[0].commands.at(-1), "go movetime 250 searchmoves g1f3");
+  workers[0].complete(10, "g1f3"); await first;
+  const second = engine.evaluate("fen", 250, { multiPv: 2 });
+  workers[0].complete(20); await second;
+  const third = engine.evaluate("fen", 250);
+  assert.equal(workers[0].commands.at(-3), "setoption name MultiPV value 1");
+  workers[0].complete(); await third;
+  assert.equal(workers[0].commands.filter(command => command.startsWith("go ")).length, 3);
+});
+
+test("a score belonging to another move is rejected instead of misclassified", async () => {
+  const { engine, workers } = setup(); const pending = engine.evaluate("fen", 250);
+  const rejected = assert.rejects(pending, /no evaluation/);
+  workers[0].ready(); workers[0].emit("info depth 15 score cp 40 pv e2e4\nbestmove d2d4");
+  await rejected;
+});

@@ -61,7 +61,7 @@ test("AutoPlay advances original moves, pauses, restarts at the end and stops on
   await expect(page.locator("#startReview")).toHaveAttribute("aria-pressed", "false");
 });
 
-test("Show Move plays a separate Stockfish preview and restores the exact original board", async ({ page }, info) => {
+test("Show Move opens a playable engine line and retains the reviewed move's feedback", async ({ page }, info) => {
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   await load(page);
@@ -73,24 +73,18 @@ test("Show Move plays a separate Stockfish preview and restores the exact origin
   const chips = await page.locator("#moveList .move-chip").count();
   const line = await page.locator(".stockfish-continuation .pv-line").innerText();
   await expect(page.locator(".pv-move.is-played")).toHaveCount(0);
-  const initialColor = await page.locator(".pv-move").first().evaluate(element => getComputedStyle(element).color);
   const card = await page.locator(".stockfish-continuation").boundingBox();
   const button = await page.locator("#showContinuationBtn").boundingBox();
   expect(button.x).toBeGreaterThan(card.x + card.width / 2);
   expect(Math.abs(button.y + button.height / 2 - card.y - card.height / 2)).toBeLessThan(1);
   await page.locator("#showContinuationBtn").click();
-  await expect(page.locator("#continuationPreview")).toBeVisible();
-  await expect(page.locator("#startReview")).toBeDisabled();
-  await expect(page.locator("#nextMove")).toBeDisabled();
-  await expect(page.locator("#continuationPreviewStatus")).toContainText(line.split(/\s+/)[0], { timeout: 5000 });
-  await expect.poll(() => page.locator(".pv-move.is-played").count()).toBeGreaterThan(0);
-  await expect.poll(() => page.locator(".pv-move").first().evaluate(element => getComputedStyle(element).color)).not.toBe(initialColor);
-  expect(await pieces(page)).not.toEqual(original);
-  await page.screenshot({ path: info.outputPath("stockfish-preview.png") });
-  await page.locator("#returnFromPreview").click();
+  // Latest main intentionally makes Show Move a real, navigable variation.
+  await expect(page.locator("#moveCounter")).toContainText(line.split(/\s+/)[0], { timeout: 5000 });
+  await page.screenshot({ path: info.outputPath("stockfish-variation.png") });
+  await page.locator('#moveList .move-chip[title="1. f3"]').click();
   expect(await pieces(page)).toEqual(original);
   await expect(page.locator("#moveCounter")).toHaveText("1. f3");
-  await expect(page.locator("#moveList .move-chip")).toHaveCount(chips);
+  expect(await page.locator("#moveList .move-chip").count()).toBeGreaterThanOrEqual(chips);
   await expect(page.locator(".stockfish-continuation .pv-line")).toHaveText(line);
   await expect(page.locator(".pv-move.is-played")).toHaveCount(0);
   // Revealing local coaching must not duplicate or hide the independent line.
@@ -98,10 +92,6 @@ test("Show Move plays a separate Stockfish preview and restores the exact origin
   await expect(page.locator("#positionFeedback")).toBeVisible();
   await expect(page.locator(".stockfish-continuation")).toHaveCount(1);
   await expect(page.locator("#positionFeedback .stockfish-continuation")).toHaveCount(0);
-  await page.locator("#showContinuationBtn").click();
-  await page.keyboard.press("Escape");
-  await expect(page.locator("#continuationPreview")).toBeHidden();
-  expect(await pieces(page)).toEqual(original);
   expect(errors).toEqual([]);
 });
 

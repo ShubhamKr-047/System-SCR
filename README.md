@@ -13,8 +13,8 @@ A free Firefox/Zen WebExtension starter for reviewing **completed** Chess.com ga
 ## Important limitations of this first MVP
 
 - The extension adds an “Analyze with Zen” button to supported Chess.com game URLs. Clicking it retrieves the finished game PGN from Chess.com's public monthly archive and opens the separate review page automatically. The game must be completed and publicly available in the archive; if Chess.com has not published it yet, the extension will explain that.
-- The lite engine is intentionally compact. The default is 0.5 seconds for each position and analysis checks both before and after every ply, so long games can take a few minutes.
-- Labels and explanations are heuristic approximations, not Chess.com's proprietary Game Review model. The first coaching text is intentionally rule-based; richer tactical explanations are the next milestone.
+- The lite engine is intentionally compact. The default base search budget is 0.25 seconds. Review checks both endpoints, the played continuation, and critical alternatives when needed, so long games can take a few minutes.
+- Move labels use local Stockfish comparisons, verified opening entries, and conservative checks for exceptional moves. They follow SCR's documented rules rather than Chess.com's proprietary model. See [move classification](docs/move-classification.md).
 - This starter needs Node.js/npm to build and fetch the local dependencies once. After building, the review and engine run locally.
 
 ## Automatic import behavior
@@ -54,7 +54,7 @@ Temporary add-ons may be removed when Zen restarts. To test code changes, rebuil
 ## Engine settings
 
 - Single-threaded WASM engine: one CPU worker, so the thread setting cannot be increased.
-- Per-position time: 250 / 500 / 1000 ms.
+- Base search time: 250 / 500 / 1000 ms. Borderline moves, mate transitions, and possible Great/Brilliant moves receive additional checks, so total review time varies by position.
 - Selecting an unevaluated position requests a quick local evaluation. New variation moves are analyzed automatically using the selected per-position time.
 
 ## Exploring variations
@@ -140,3 +140,13 @@ To load the extension itself in Firefox/Zen, run `npm run build`, open `about:de
 - With no key for the selected AI provider, PGN and chess analysis stay in the browser after dependencies are installed. With a key saved, the selected position and engine context are sent only to that provider for explanations, as described above.
 - Use this only for completed games or independent study. Do not use engine analysis during live games.
 - Stockfish is GPL-licensed. Keep the upstream license notice with the distributed engine and comply with its license if redistributing builds.
+
+## Move classification
+
+All eleven labels are supported: Brilliant, Great, Best, Excellent, Good, Book, Forced, Inaccuracy, Mistake, Miss, and Blunder. Quality reflects the loss of estimated winning chances, with explicit handling of mate and draw outcomes. Book requires a match in a bundled opening database; accurate early moves alone do not qualify. Great compares alternatives, and Brilliant additionally verifies a real piece sacrifice and compensation. Uncertain exceptional candidates retain their ordinary quality label.
+
+Move badges and the feedback heading expose the classification reason on hover. Original-game summary counts include Forced moves; forced replies do not affect accuracy. Accuracy now uses changes in estimated chances, with extra weight for critical stretches. The performance rating remains a heuristic estimate.
+
+The opening index contains 8,192 position/move entries from 3,865 named lines in the CC0 Lichess opening dataset. It is bundled locally and supports transpositions; normal builds and reviews do not download opening data. Engine history follows the actual game or variation so repetition and draw rules are respected.
+
+See [the classification rules, data provenance, limitations, and verification commands](docs/move-classification.md). This feature requires no AI key and does not request AI explanations automatically.

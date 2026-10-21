@@ -1,0 +1,70 @@
+[
+  {
+    "name": "King pawn theory",
+    "pgn": "1. e4 *",
+    "expected": [
+      "book"
+    ]
+  },
+  {
+    "name": "Ruy Lopez beyond four moves",
+    "pgn": "1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 *",
+    "expected": [
+      "book"
+    ]
+  },
+  {
+    "name": "Fool's mate blunder",
+    "pgn": "1. f3 e5 2. g4 *",
+    "expected": [
+      "blunder"
+    ]
+  },
+  {
+    "name": "Delivering mate as Black",
+    "pgn": "1. f3 e5 2. g4 Qh4# 0-1",
+    "expected": [
+      "best"
+    ]
+  },
+  {
+    "name": "Legal queen offer",
+    "pgn": "1. e4 e5 2. Nf3 d6 3. Bc4 Bg4 4. Nc3 g6 5. Nxe5 *",
+    "expected": [
+      "brilliant",
+      "best",
+      "book"
+    ]
+  },
+  {
+    "name": "Stalemate throws away mate",
+    "pgn": "[SetUp \"1\"]\n[FEN \"7k/8/5KQ1/8/8/8/8/8 w - - 0 20\"]\n\n20. Qf7 *",
+    "expected": [
+      "blunder"
+    ]
+  },
+  {
+    "name": "Underpromotion throws away win",
+    "pgn": "[SetUp \"1\"]\n[FEN \"7k/P7/8/8/8/8/8/7K w - - 0 30\"]\n\n30. a8=N *",
+    "expected": [
+      "blunder"
+    ]
+  },
+  {
+    "name": "Repetition holds equality",
+    "pgn": "1. Nf3 Nf6 2. Ng1 Ng8 3. Nf3 Nf6 4. Ng1 Ng8 *",
+    "expected": [
+      "best",
+      "excellent",
+      "good",
+      "inaccuracy"
+    ]
+  },
+  {
+    "name": "Only legal reply",
+    "pgn": "[SetUp \"1\"]\n[FEN \"7k/5K2/8/8/8/8/8/6R1 b - - 0 20\"]\n\n20... Kh7 *",
+    "expected": [
+      "forced"
+    ]
+  }
+]
