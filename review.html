@@ -361,8 +361,12 @@
           </div>
         </div>
 
-      <!-- SIDEBAR FOOTER: NAVIGATION, ANALYZE/START BUTTON & HAMBURGER MENU -->
+      <!-- MOVES FOOTER: PREVIEW STATUS AND ORIGINAL-GAME PLAYBACK -->
       <div class="sidebar-footer">
+        <div id="continuationPreview" class="continuation-preview" hidden>
+          <span id="continuationPreviewStatus" role="status"></span>
+          <button id="returnFromPreview" type="button" class="show-move-btn">Back to move</button>
+        </div>
         <!-- MOVE COUNTER & STATUS BAR -->
         <div class="sidebar-footer-top">
           <div class="engine-state">
@@ -378,26 +382,18 @@
           </div>
         </div>
 
-        <!-- PROGRESS BAR TRACK -->
-        <div class="dock-progress-wrapper">
-          <div class="dock-progress-track">
-            <div id="dockProgressBarFill" class="dock-progress-bar-fill" style="width: 0%;"></div>
-          </div>
-          <span id="reviewProgress" class="progress-pill">Not analyzed</span>
-        </div>
-
         <!-- MAIN CONTROL ROW -->
         <div class="sidebar-nav-bar">
           <button id="firstMove" class="sidebar-nav-btn" title="First move (Up arrow)" disabled>⏮</button>
           <button id="prevMove" class="sidebar-nav-btn" title="Previous move (Left arrow)" disabled>◀</button>
 
-          <!-- MIDDLE: ANALYZE / START BUTTON -->
+          <!-- ORIGINAL-GAME AUTOPLAY / PAUSE -->
           <div class="action-btn-container">
-            <button id="startReview" class="action-btn-primary" disabled title="Analyze game">
+            <button id="startReview" class="action-btn-primary" disabled title="Autoplay original game" aria-pressed="false">
               <svg class="action-btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
               </svg>
-              <span id="startReviewText">Analyze game</span>
+              <span id="startReviewText">AutoPlay</span>
             </button>
             <button id="stopReview" class="action-btn-stop" style="display:none" title="Stop analysis">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
@@ -410,16 +406,6 @@
           <button id="nextMove" class="sidebar-nav-btn" title="Next move (Right arrow)" disabled>▶</button>
           <button id="lastMove" class="sidebar-nav-btn" title="Last move (Down arrow)" disabled>⏭</button>
 
-          <!-- RIGHT BOTTOM: 3-LINE HAMBURGER BUTTON -->
-          <div class="hamburger-container">
-            <button id="hamburgerBtn" class="hamburger-btn" type="button" title="Game Options (Flip, Import, Paste, Speed)" aria-label="Menu" aria-expanded="false">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round">
-                <line x1="4" y1="6" x2="20" y2="6"></line>
-                <line x1="4" y1="12" x2="20" y2="12"></line>
-                <line x1="4" y1="18" x2="20" y2="18"></line>
-              </svg>
-            </button>
-          </div>
         </div>
       </div>
     </div>

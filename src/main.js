@@ -10,6 +10,7 @@ import { BoardInput } from "./board-input.js";
 import { evaluatePosition, legalBestMove } from "./position-analysis.js";
 import { playSound } from "./audio.js";
 import { initSidebarResize } from "./sidebar-resize.js";
+import { continuationFrames } from "./playback.js";
 import "./style.css";
 
 const $ = (id) => document.getElementById(id);
@@ -74,6 +75,7 @@ function readImport() {
     if (tree.isAnalysisBoard) {
       throw new Error("No moves found in PGN.");
     }
+    stopPlayback();
     state.session.abort();
     state.reviewController?.abort();
     engine.clear();
@@ -91,10 +93,10 @@ function readImport() {
     state.legalMoves = [];
     syncActiveLine();
 
-    if ($("startReviewText")) $("startReviewText").textContent = "Analyze game";
+    if ($("startReviewText")) $("startReviewText").textContent = "AutoPlay";
     if ($("startReview")) {
       $("startReview").disabled = false;
-      $("startReview").title = "Analyze game";
+      $("startReview").title = "Autoplay original game";
       $("startReview").classList.remove("review-mode");
       $("startReview").style.display = "inline-flex";
     }
@@ -102,7 +104,6 @@ function readImport() {
 
     updatePlayerHeaders();
 
-    $("reviewProgress").textContent = `${state.moves.length} half-moves loaded`;
     setStatus(`Loaded ${state.moves.length} half-moves. Ready to analyze.`);
     $("engineStatus").textContent = "Engine idle";
     updateAnalysisProgress(0, state.moves.length, "Ready to analyze", false, false);
@@ -134,6 +135,7 @@ function readImport() {
 }
 
 function startFreshAnalysisBoard() {
+  stopPlayback();
   state.session.abort();
   state.reviewController?.abort();
   engine.clear();
@@ -153,10 +155,10 @@ function startFreshAnalysisBoard() {
   state.legalMoves = [];
   syncActiveLine();
 
-  if ($("startReviewText")) $("startReviewText").textContent = "Analyze game";
+  if ($("startReviewText")) $("startReviewText").textContent = "AutoPlay";
   if ($("startReview")) {
     $("startReview").disabled = false;
-    $("startReview").title = "Analyze game";
+    $("startReview").title = "Autoplay original game";
     $("startReview").classList.remove("review-mode");
     $("startReview").style.display = "inline-flex";
   }
@@ -164,7 +166,6 @@ function startFreshAnalysisBoard() {
 
   updatePlayerHeaders();
 
-  $("reviewProgress").textContent = "Analysis board";
   setStatus("Analysis board ready. Play a move to begin.");
   $("engineStatus").textContent = "Engine idle";
   updateAnalysisProgress(0, 0, "Analysis board", false, false);
@@ -231,17 +232,12 @@ function updatePlayerHeaders() {
 }
 
 // Hamburger Menu Wiring
-const hamburgerBtn = $("hamburgerBtn");
 const topbarMenuBtn = $("topbarMenuBtn");
 const hamburgerMenu = $("hamburgerMenu");
 const closeHamburgerBtn = $("closeHamburgerBtn");
 
 function closeHamburger() {
   if (hamburgerMenu) hamburgerMenu.style.display = "none";
-  if (hamburgerBtn) {
-    hamburgerBtn.classList.remove("active");
-    hamburgerBtn.setAttribute("aria-expanded", "false");
-  }
   if (topbarMenuBtn) {
     topbarMenuBtn.classList.remove("active");
     topbarMenuBtn.setAttribute("aria-expanded", "false");
@@ -256,13 +252,6 @@ function toggleHamburgerMenu(triggerBtn) {
     triggerBtn.classList.toggle("active", isHidden);
     triggerBtn.setAttribute("aria-expanded", String(isHidden));
   }
-}
-
-if (hamburgerBtn && hamburgerMenu) {
-  hamburgerBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    toggleHamburgerMenu(hamburgerBtn);
-  });
 }
 
 if (topbarMenuBtn && hamburgerMenu) {
@@ -282,7 +271,7 @@ if (closeHamburgerBtn) {
 // Click outside to close
 document.addEventListener("click", (e) => {
   if (!hamburgerMenu) return;
-  if (!hamburgerMenu.contains(e.target) && !hamburgerBtn?.contains(e.target) && !topbarMenuBtn?.contains(e.target)) {
+  if (!hamburgerMenu.contains(e.target) && !topbarMenuBtn?.contains(e.target)) {
     closeHamburger();
   }
 });
@@ -395,15 +384,6 @@ function updateAiUi(refreshInput = true) {
   }
 }
 
-function openAiSettings() {
-  if (hamburgerMenu) hamburgerMenu.style.display = "block";
-  if (hamburgerBtn) {
-    hamburgerBtn.classList.add("active");
-    hamburgerBtn.setAttribute("aria-expanded", "true");
-  }
-  $("aiApiKey")?.focus();
-}
-
 $("aiProvider").addEventListener("change", event => {
   setProvider(event.target.value);
   updateAiUi();
@@ -496,13 +476,105 @@ function syncActiveLine() {
   $("variationIndicator").hidden = !state.isVariation;
   if (!state.running) {
     updateSummaryActionButtons();
-    $("startReviewText").textContent = state.isAnalyzed ? "Start" : "Analyze game";
+    $("startReviewText").textContent = state.autoPlaying ? "Pause" : "AutoPlay";
     $("startReview").classList.toggle("review-mode", state.isAnalyzed);
-    $("startReview").title = state.isAnalyzed ? "Start original game review" : "Analyze original game";
+    $("startReview").title = state.autoPlaying ? "Pause autoplay" : "Autoplay original game";
   }
 }
 
-function navigateNode(node) {
+function stopAutoplay() {
+  clearInterval(state.autoplayTimer);
+  state.autoPlaying = false;
+  $("startReviewText").textContent = "AutoPlay";
+  $("startReview").title = "Autoplay original game";
+  $("startReview").setAttribute("aria-pressed", "false");
+}
+
+function stopPreview({ render = true } = {}) {
+  if (!state.preview) return;
+  clearInterval(state.preview.timer);
+  state.preview = null;
+  $("continuationPreview").hidden = true;
+  $("board").classList.remove("is-previewing");
+  if (render && state.tree) renderBoard(state.cursor);
+}
+
+function stopPlayback() {
+  stopAutoplay();
+  stopPreview();
+}
+
+function manualNavigate(index) {
+  // Navigation exits a preview before using the unchanged original-game index.
+  stopPlayback();
+  switchTab("moves");
+  renderBoard(index);
+}
+
+function toggleAutoplay() {
+  if (state.autoPlaying) { stopAutoplay(); return; }
+  if (!state.tree?.mainline[1] || state.running) return;
+  stopPreview();
+  const tree = state.tree;
+  let index = tree.mainline.indexOf(tree.current);
+  if (index < 0 || index === tree.mainline.length - 1) index = 0;
+  state.autoPlaying = true;
+  switchTab("moves");
+  const advance = () => {
+    if (state.tree !== tree) { stopAutoplay(); return; }
+    const next = tree.mainline[++index];
+    if (!next) { stopAutoplay(); return; }
+    navigateNode(next, { automatic: true });
+    if (index === tree.mainline.length - 1) stopAutoplay();
+  };
+  advance();
+  if (state.autoPlaying) state.autoplayTimer = setInterval(advance, 1100);
+}
+
+function continuationMarkup(result, compact = false) {
+  const playable = !state.running && continuationFrames(result).length > 0;
+  return `<div class="${compact ? "ai-guidance-continuation" : "feedback-block stockfish-continuation"}">
+    <div class="continuation-heading"><span>Stockfish recommended continuation</span>
+      <button id="showContinuationBtn" type="button" class="show-move-btn" ${playable ? "" : "disabled"}>${state.preview ? "Back to move" : "Show Move"}</button>
+    </div><p class="pv-line">${esc(result.pv || result.bestSan || "No continuation reported.")}</p></div>`;
+}
+
+function showContinuation(result) {
+  const frames = continuationFrames(result);
+  if (!frames.length || state.running) return;
+  stopPlayback();
+  boardInput.cancel();
+  clearBoardSelection();
+  overlay.clear();
+  const preview = { frames, index: 0, fen: result.beforeFen, lastMove: null };
+  state.preview = preview;
+  $("continuationPreview").hidden = false;
+  $("board").classList.add("is-previewing");
+  $("continuationPreviewStatus").textContent = "Stockfish preview — starting position";
+  renderBoard(state.cursor);
+  preview.timer = setInterval(() => {
+    if (state.preview !== preview) { clearInterval(preview.timer); return; }
+    const frame = frames[preview.index++];
+    preview.fen = frame.fen;
+    preview.lastMove = frame.move;
+    renderBoard(state.cursor);
+    playSound(frame.move.captured ? "capture" : "move");
+    $("continuationPreviewStatus").textContent = `Stockfish preview ${preview.index}/${frames.length}: ${frame.move.san}`;
+    if (preview.index === frames.length) clearInterval(preview.timer);
+  }, 900);
+}
+
+$("returnFromPreview").addEventListener("click", () => {
+  stopPreview();
+  $("showContinuationBtn")?.focus({ preventScroll: true });
+});
+window.addEventListener("pagehide", () => {
+  stopAutoplay();
+  stopPreview({ render: false });
+});
+
+function navigateNode(node, { automatic = false } = {}) {
+  if (!automatic) stopPlayback();
   if (!state.tree || !node) return;
   state.tree.select(node);
   state.selectedSquare = null;
@@ -513,6 +585,7 @@ function navigateNode(node) {
 
 // View Switching (Game Summary View vs Moves & Ask AI View)
 function showSummaryView() {
+  stopPlayback();
   const summaryView = $("gameSummaryView");
   const movesView = $("gameMovesView");
   if (summaryView) summaryView.style.display = "flex";
@@ -594,7 +667,7 @@ $("backToSummaryBtn")?.addEventListener("click", () => {
 const overlay = new BoardOverlay($("boardArrows"), () => state.flipped, $("board"));
 const boardInput = new BoardInput({
   board: $("board"), overlay,
-  context: () => state.tree ? { key: state.tree.current, flipped: state.flipped, chess: new Chess(state.tree.current.fen) } : null,
+  context: () => state.tree && !state.preview ? { key: state.tree.current, flipped: state.flipped, chess: new Chess(state.tree.current.fen) } : null,
   click: handleSquareClick,
   select: square => {
     state.selectedSquare = square;
@@ -604,6 +677,9 @@ const boardInput = new BoardInput({
   move: executeUserMove,
   clearSelection: clearBoardSelection
 });
+$("board").addEventListener("pointerdown", () => {
+  if (state.autoPlaying) stopAutoplay();
+}, { capture: true });
 let displayedNode = null;
 let displayedFlipped = state.flipped;
 
@@ -629,7 +705,7 @@ function updateSelectionHints() {
 
 function drawBestMoveArrow() {
   const node = state.tree?.current;
-  overlay.bestmove = state.showBestMoveArrow && node ? legalBestMove(node.fen, node.analysis) : "";
+  overlay.bestmove = !state.preview && state.showBestMoveArrow && node ? legalBestMove(node.fen, node.analysis) : "";
   overlay.render();
 }
 
@@ -676,6 +752,7 @@ function refreshAnalysisView() {
   const node = state.tree.current;
   renderFeedback(node.result);
   refreshPositionAnalysis();
+  if (state.preview) return;
   // Engine completion never replaces the squares underneath a user's click.
   $("board").querySelectorAll(".square-badge").forEach(badge => badge.remove());
   $("board").querySelectorAll(".brilliant-move").forEach(square => square.classList.remove("brilliant-move"));
@@ -827,6 +904,8 @@ function stopReview() {
 }
 
 function executeUserMove(fromSq, toSq, promotion = "q") {
+  if (state.preview) return;
+  stopAutoplay();
   if (!state.tree) return;
   if (state.running) stopReview();
   // Promotion must be chosen explicitly, including underpromotion.
@@ -915,11 +994,11 @@ function renderBoard(index) {
     displayedFlipped = state.flipped;
   }
   const currentPos = state.positions[state.cursor];
-  const fen = currentPos.fen;
+  const fen = state.preview?.fen || currentPos.fen;
   const chessInstance = new Chess(fen);
   const boardData = chessInstance.board();
 
-  const lastMove = state.cursor ? state.moves[state.cursor - 1] : null;
+  const lastMove = state.preview ? state.preview.lastMove : state.cursor ? state.moves[state.cursor - 1] : null;
   const lastSquares = lastMove ? [lastMove.from, lastMove.to] : [];
   const currentResult = state.cursor > 0 ? state.results[state.cursor - 1] : null;
 
@@ -992,8 +1071,8 @@ function renderBoard(index) {
 
       // Move classification badge on the move's destination square
       let badgeHtml = "";
-      const isBrilliant = Boolean(currentResult?.key === "brilliant" && lastMove && sqName === lastMove.to);
-      if (currentResult && lastMove && sqName === lastMove.to) {
+      const isBrilliant = Boolean(!state.preview && currentResult?.key === "brilliant" && lastMove && sqName === lastMove.to);
+      if (!state.preview && currentResult && lastMove && sqName === lastMove.to) {
         badgeHtml = `<div class="square-badge ${currentResult.key}" style="background-color: ${currentResult.color}; color: ${currentResult.textColor};" title="${esc(currentResult.label)}: ${esc(currentResult.sign)}">${esc(currentResult.sign)}</div>`;
       }
 
@@ -1007,7 +1086,9 @@ function renderBoard(index) {
   drawBestMoveArrow();
 
   // Update Move Counter
-  if (state.cursor === 0) {
+  if (state.preview) {
+    $("moveCounter").textContent = `Preview ${state.preview.index}/${state.preview.frames.length}`;
+  } else if (state.cursor === 0) {
     $("moveCounter").textContent = "Start";
   } else {
     $("moveCounter").textContent = moveLabel(state.tree.current);
@@ -1208,22 +1289,25 @@ function highlightActiveMoveInList() {
 }
 
 function setNavEnabled() {
-  const has = state.moves.length > 0;
+  const has = state.moves.length > 0 && !state.preview;
   $("firstMove").disabled = !has || state.cursor === 0;
   $("prevMove").disabled = !has || state.cursor === 0;
   $("nextMove").disabled = !has || state.cursor >= state.moves.length;
   $("lastMove").disabled = !has || state.cursor >= state.moves.length;
   $("stopReview").disabled = !state.running;
+  $("startReview").disabled = !state.tree?.mainline?.[1] || Boolean(state.preview) || state.running;
+  $("startReview").setAttribute("aria-pressed", String(Boolean(state.autoPlaying)));
 }
 
-$("firstMove").addEventListener("click", () => renderBoard(0));
-$("prevMove").addEventListener("click", () => renderBoard(state.cursor - 1));
-$("nextMove").addEventListener("click", () => renderBoard(state.cursor + 1));
-$("lastMove").addEventListener("click", () => renderBoard(state.moves.length));
+$("firstMove").addEventListener("click", () => manualNavigate(0));
+$("prevMove").addEventListener("click", () => manualNavigate(state.cursor - 1));
+$("nextMove").addEventListener("click", () => manualNavigate(state.cursor + 1));
+$("lastMove").addEventListener("click", () => manualNavigate(state.moves.length));
 
 // Global Keyboard Navigation
 window.addEventListener("keydown", e => {
   if (e.key === "Escape" && !$("promotionDialog").open) {
+    stopPlayback();
     boardInput.cancel();
     clearBoardSelection();
     return;
@@ -1232,16 +1316,16 @@ window.addEventListener("keydown", e => {
   if (e.target.closest?.("#feedbackContainer") && ["ArrowUp", "ArrowDown"].includes(e.key)) return;
   if (e.key === "ArrowLeft") {
     e.preventDefault();
-    renderBoard(state.cursor - 1);
+    manualNavigate(state.cursor - 1);
   } else if (e.key === "ArrowRight") {
     e.preventDefault();
-    renderBoard(state.cursor + 1);
+    manualNavigate(state.cursor + 1);
   } else if (e.key === "ArrowUp") {
     e.preventDefault();
-    renderBoard(0);
+    manualNavigate(0);
   } else if (e.key === "ArrowDown") {
     e.preventDefault();
-    renderBoard(state.moves.length);
+    manualNavigate(state.moves.length);
   } else if (e.key.toLowerCase() === "f" || e.key.toLowerCase() === "x") {
     e.preventDefault();
     state.flipped = !state.flipped;
@@ -1483,15 +1567,13 @@ function renderFeedback(result) {
   }
 
   const beforeFen = result.beforeFen;
-  const hasKey = hasApiKey();
   const providerId = getProvider();
   const provider = PROVIDERS[providerId];
   const isEligible = isCoachingEligible(result);
   const ai = isEligible ? getCoachingState(result, beforeFen) : null;
   const local = getLocalDetailedFeedback(result);
   const coaching = ai?.status === "ready" ? ai.coaching : null;
-  const continuation = `<div class="feedback-block"><h3>Stockfish recommended continuation</h3>
-    <p class="pv-line">${esc(result.pv || result.bestSan || "No continuation reported.")}</p></div>`;
+  const continuation = continuationMarkup(result);
   const genericBody = `<div class="feedback-block"><div class="feedback-block-header"><h3>Feedback</h3>
       <span class="feedback-concept-pill">${esc(local.concept)}</span></div><p>${local.whyText}</p></div>${continuation}`;
   const coachingBody = coaching
@@ -1500,10 +1582,7 @@ function renderFeedback(result) {
         <h3>${esc(coaching.concept)}</h3>
         <p class="ai-guidance-summary">${esc(coaching.summary)}</p>
         <p class="ai-guidance-tip"><span aria-hidden="true">↳</span><span>${esc(coaching.tip)}</span></p>
-        <div class="ai-guidance-continuation">
-          <span>Stockfish recommended continuation</span>
-          <p class="pv-line">${esc(result.pv || result.bestSan || "No continuation reported.")}</p>
-        </div>
+        ${continuationMarkup(result, true)}
       </article>`
     : "";
 
@@ -1567,14 +1646,14 @@ function renderFeedback(result) {
       <div class="feedback-title-group">
       <span class="feedback-badge" style="background-color: ${result.color}; color: ${result.textColor};">${esc(result.sign)} ${esc(result.label)}</span>
       <span class="feedback-move-text">${esc(result.moveNo)} ${esc(result.san)}</span></div>
-      ${hasKey ? '<button id="openAiSettingsBtn" class="ai-banner-btn" type="button">Settings</button>' : ""}</div>
+      </div>
     ${promptHtml}
     ${statusHtml}${feedbackBody ? `<div id="positionFeedback" data-source="${coaching ? providerId : "local"}" aria-busy="${ai?.status === "pending"}">${feedbackBody}</div>` : ""}`;
   $("feedbackContainer").scrollTop = scrollTop;
 
-  $("openAiSettingsBtn")?.addEventListener("click", event => {
-    event.stopPropagation();
-    openAiSettings();
+  $("showContinuationBtn")?.addEventListener("click", () => {
+    if (state.preview) stopPreview();
+    else showContinuation(result);
   });
 
   const request = (retry = false) => {
@@ -1863,25 +1942,10 @@ function initEvalGraphInteraction() {
 function updateAnalysisProgress(current, total, statusText, isDone = false, isStopped = false) {
   const pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
 
-  const dockFill = $("dockProgressBarFill");
-  const reviewProgress = $("reviewProgress");
-
-  if (dockFill) dockFill.style.width = `${pct}%`;
-
   const summaryFill = $("summaryProgressBarFill");
   const summaryPct = $("summaryProgressPct");
   if (summaryFill) summaryFill.style.width = `${pct}%`;
   if (summaryPct) summaryPct.textContent = `${pct}%`;
-
-  if (isDone) {
-    if (reviewProgress) reviewProgress.textContent = `100% · Complete (${total} moves)`;
-  } else if (isStopped) {
-    if (reviewProgress) reviewProgress.textContent = `Stopped · ${pct}% (${current}/${total})`;
-  } else if (current === 0) {
-    if (reviewProgress) reviewProgress.textContent = total > 0 ? `${total} moves loaded` : "Not analyzed";
-  } else {
-    if (reviewProgress) reviewProgress.textContent = `${pct}% · ${current}/${total}`;
-  }
 
   renderEvalGraph();
   renderSummary();
@@ -1984,6 +2048,7 @@ function renderSummary() {
 }
 
 async function startReview() {
+  stopPlayback();
   const tree = state.tree;
   if (!tree || state.running) {
     if (!tree) {
@@ -2032,7 +2097,7 @@ async function startReview() {
     if (state.tree !== tree) return;
     const completed = nodes.filter(node => node.result).length;
     updateAnalysisProgress(completed, nodes.length, signal.aborted ? "Analysis stopped" : "Review complete", !signal.aborted, signal.aborted);
-    setStatus(signal.aborted ? "Review stopped. Completed moves are retained; Analyze game resumes the review." : "Analysis complete. Select a move to review or explore a variation.");
+    setStatus(signal.aborted ? "Review stopped. Completed moves are retained; use Review in Game Summary to run analysis again." : "Analysis complete. Select a move to review or explore a variation.");
   } catch (error) {
     if (state.tree === tree && error.name !== "AbortError") setStatus(`Analysis stopped: ${error.message}`, true);
   } finally {
@@ -2047,7 +2112,7 @@ async function startReview() {
       $("stopReview").style.display = "none";
       $("stopReview").disabled = true;
       $("startReview").style.display = "inline-flex";
-      $("startReviewText").textContent = state.isAnalyzed ? "Start" : "Analyze game";
+      $("startReviewText").textContent = state.autoPlaying ? "Pause" : "AutoPlay";
       refreshAnalysisView();
       setNavEnabled();
       renderEvalGraph();
@@ -2057,16 +2122,12 @@ async function startReview() {
   }
 }
 
-$("startReview").addEventListener("click", () => {
-  if (state.isAnalyzed) {
-    switchTab("moves");
-    navigateNode(state.tree.mainline[1]);
-  } else startReview();
-});
+$("startReview").addEventListener("click", toggleAutoplay);
 $("stopReview").addEventListener("click", stopReview);
 $("moveTime").addEventListener("change", () => {
+  stopPlayback();
   state.isAnalyzed = false;
-  if ($("startReviewText")) $("startReviewText").textContent = "Analyze game";
+  if ($("startReviewText")) $("startReviewText").textContent = "AutoPlay";
   updateSummaryActionButtons();
 });
 

@@ -39,7 +39,7 @@ The content script adds a fixed “Analyze with Zen” button on Chess.com live/
 6. Choose **This Firefox** → **Load Temporary Add-on**.
 7. Open the `dist` folder and select `manifest.json`.
 8. Click the Zen Chess Review toolbar icon → **Open Game Review**.
-9. On Chess.com, open a completed game. Click **Share** → **PGN** → **Download**. On the review page's empty board, choose **Import PGN file** to load the downloaded game, then select **Analyze game**. Alternatively, select **Paste PGN**, paste the game, and select **Load game** (or press Ctrl/Cmd + Enter). Import controls also remain available in the menu.
+9. On Chess.com, open a completed game. Click **Share** → **PGN** → **Download**. On the review page's empty board, choose **Import PGN file** to load the downloaded game, then select **Review** in Game Summary. Alternatively, select **Paste PGN**, paste the game, and select **Load game** (or press Ctrl/Cmd + Enter). Import controls also remain available in the menu.
 
 Temporary add-ons may be removed when Zen restarts. To test code changes, rebuild and use the extension's Reload button in `about:debugging`.
 
@@ -66,9 +66,17 @@ Temporary add-ons may be removed when Zen restarts. To test code changes, rebuil
 
 Left/Right arrows and the navigation buttons follow the selected line. Up goes to the imported game's initial position; Down goes to the selected line's end. Pawn promotion offers Queen, Rook, Bishop, and Knight.
 
-The Game Summary always describes the original game. Exploring alternatives preserves its evaluations, classifications, accuracy, and rating estimates. Moving pieces during a full-game review stops that review safely; **Analyze game** resumes using completed results.
+The Game Summary always describes the original game. Exploring alternatives preserves its evaluations, classifications, accuracy, and rating estimates. Moving pieces during a full-game review stops that review safely. Use **Review** in Game Summary to run the analysis again.
 
 Variations and their analyses remain available in the current review session. Loading another PGN or reloading the page clears them. Saving studies across sessions and exporting PGNs with variations are not included.
+
+## Playback controls
+
+Playing a move opens the Moves view automatically. Game options, PGN import, engine settings, and AI keys are available from the single menu at the top right of the navbar.
+
+**AutoPlay** in Moves plays the original game's moves, starting after the selected original position. **Pause** holds the current position; starting again at the end replays from the beginning. When exploring a variation, AutoPlay starts the original game from its beginning. Manual navigation, moving a piece, returning to Game Summary, and importing a game stop autoplay. Full-game analysis and its completion bar remain in Game Summary under **Review**.
+
+**Show Move**, beside **Stockfish recommended continuation**, previews the displayed engine line on the board from the position before the reviewed move. This works with local feedback and Gemini/Groq coaching. **Back to move** or Escape restores the exact selected position. The preview does not add moves or variations, change the original game, or make another AI request. Board moves are disabled during the preview; exit it before exploring another line.
 
 ## Moving pieces and planning on the board
 

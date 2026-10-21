@@ -1650,6 +1650,38 @@ body.resizing-feedback {
   word-break: normal;
 }
 
+.continuation-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 7px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.show-move-btn {
+  padding: 5px 9px;
+  border: 1px solid rgba(129, 182, 76, .45);
+  border-radius: 5px;
+  background: rgba(129, 182, 76, .1);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.show-move-btn:hover { background: rgba(129, 182, 76, .25); }
+.show-move-btn:disabled { opacity: .4; cursor: default; }
+.show-move-btn:focus-visible { outline: 2px solid var(--chess-green); outline-offset: 2px; }
+.continuation-preview:not([hidden]) { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.continuation-preview { font-size: 11px; color: #a8ccdc; padding-bottom: 8px; }
+.continuation-preview .show-move-btn { flex-shrink: 0; }
+#board.is-previewing { cursor: default; }
+
 .ai-feedback-status {
   margin-top: 8px;
   padding: 8px 10px;
