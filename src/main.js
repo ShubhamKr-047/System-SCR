@@ -5,6 +5,7 @@ import { getApiKey, setApiKey, hasApiKey, getCoachingState, generateCoaching, ca
 import { GameTree, moveLabel } from "./game-tree.js";
 import { EngineQueue } from "./engine.js";
 import { analyzeMove } from "./analysis.js";
+import { CLASSIFICATION_VERSION } from "./move-quality.js";
 import { BoardOverlay } from "./board-overlay.js";
 import { BoardInput } from "./board-input.js";
 import { evaluatePosition, legalBestMove } from "./position-analysis.js";
@@ -28,6 +29,7 @@ const state = {
   cursor: 0,
   flipped: false,
   displayedWhiteScore: null,
+  displayedMate: null,
   running: false,
   headers: {},
   selectedSquare: null,
@@ -88,6 +90,7 @@ function readImport() {
     state.session = new AbortController();
     state.tree = tree;
     state.displayedWhiteScore = null;
+    state.displayedMate = null;
     state.headers = tree.headers;
     state.running = false;
     state.selectedSquare = null;
@@ -150,6 +153,7 @@ function startFreshAnalysisBoard() {
   state.tree = tree;
   state.hasReviewedPreviously = false;
   state.displayedWhiteScore = null;
+  state.displayedMate = null;
   state.headers = { White: "White", Black: "Black", Event: "Analysis Board" };
   state.running = false;
   state.selectedSquare = null;
@@ -465,7 +469,7 @@ function syncActiveLine() {
   state.cursor = tree.current.ply;
   state.isVariation = !tree.current.mainline;
   const moveTime = Number($("moveTime").value);
-  state.isAnalyzed = tree.mainline.slice(1).every(node => node.result && node.resultTime >= moveTime);
+  state.isAnalyzed = tree.mainline.slice(1).every(node => node.result?.classificationVersion === CLASSIFICATION_VERSION && node.resultTime >= moveTime);
   const origin = tree.nodes.get(tree.returnId);
   const back = $("resetVariationBtn");
   back.hidden = !origin;
@@ -819,7 +823,7 @@ function refreshAnalysisView() {
     badge.style.backgroundColor = result.color;
     badge.style.color = result.textColor;
     badge.textContent = result.sign;
-    badge.title = `${result.label}: ${result.sign}`;
+    badge.title = `${result.label}: ${result.classificationReason || result.explanation}`;
     square.append(badge);
     const isBrilliant = result.key === "brilliant";
     square.classList.toggle("brilliant-move", isBrilliant);
@@ -831,12 +835,12 @@ function refreshAnalysisView() {
 
 async function ensureMoveAnalysis(node, { moveTime, priority = 1, signal = state.session.signal } = {}) {
   if (!node.move) return;
-  if (node.result && node.resultTime >= moveTime) return node.result;
+  if (node.result?.classificationVersion === CLASSIFICATION_VERSION && node.resultTime >= moveTime) return node.result;
   const tree = state.tree;
   if (node.analysisPromise) {
     await node.analysisPromise;
     if (signal.aborted || state.tree !== tree) return;
-    if (node.resultTime >= moveTime) return node.result;
+    if (node.result?.classificationVersion === CLASSIFICATION_VERSION && node.resultTime >= moveTime) return node.result;
   }
   if (signal.aborted) return;
   node.analysisStatus = "pending";
@@ -1127,7 +1131,7 @@ function renderBoard(index) {
       let badgeHtml = "";
       const isBrilliant = Boolean(!state.preview && currentResult?.key === "brilliant" && lastMove && sqName === lastMove.to);
       if (!state.preview && currentResult && lastMove && sqName === lastMove.to) {
-        badgeHtml = `<div class="square-badge ${currentResult.key}" style="background-color: ${currentResult.color}; color: ${currentResult.textColor};" title="${esc(currentResult.label)}: ${esc(currentResult.sign)}">${esc(currentResult.sign)}</div>`;
+        badgeHtml = `<div class="square-badge ${currentResult.key}" style="background-color: ${currentResult.color}; color: ${currentResult.textColor};" title="${esc(currentResult.label)}: ${esc(currentResult.classificationReason || currentResult.explanation)}">${esc(currentResult.sign)}</div>`;
       }
 
       html += `<div class="square ${shade} ${isLast ? 'last-move' : ''} ${isCheck ? 'in-check' : ''} ${isBrilliant ? 'brilliant-move' : ''} ${isSelected ? 'selected' : ''} ${isLegalTarget ? 'legal-target' : ''}" data-square="${sqName}">${pieceHtml}${coordRank}${coordFile}${badgeHtml}${legalHintHtml}</div>`;
@@ -1164,33 +1168,42 @@ function renderBoard(index) {
 function updateEvaluationDisplay() {
   const currentEval = state.analyses[state.cursor];
   let whiteScore = currentEval?.whiteScore;
+  let mateDistance = currentEval?.scoreType === "mate" ? Math.abs(currentEval.rawScore) : null;
 
   if (whiteScore === undefined) {
     const currentPos = state.positions[state.cursor];
     if (currentPos) {
       try {
         const ch = new Chess(currentPos.fen);
-        if (ch.isGameOver()) whiteScore = ch.isCheckmate() ? (ch.turn() === "w" ? -10 : 10) : 0;
+        if (ch.isGameOver()) {
+          whiteScore = ch.isCheckmate() ? (ch.turn() === "w" ? -10 : 10) : 0;
+          mateDistance = ch.isCheckmate() ? 0 : null;
+        }
       } catch {}
     }
   }
 
   // Retain the last visible evaluation until this position has a real score.
   // This is presentation state only; never cache it as this node's analysis.
-  if (Number.isFinite(whiteScore)) state.displayedWhiteScore = whiteScore;
-  else whiteScore = state.displayedWhiteScore;
+  if (Number.isFinite(whiteScore)) {
+    state.displayedWhiteScore = whiteScore;
+    state.displayedMate = mateDistance;
+  } else {
+    whiteScore = state.displayedWhiteScore;
+    mateDistance = state.displayedMate;
+  }
   const hasScore = Number.isFinite(whiteScore);
   const effectiveScore = hasScore ? whiteScore : 0;
-  const scoreText = hasScore ? formatScore(effectiveScore) : "—";
+  const scoreText = hasScore ? formatScore(effectiveScore, mateDistance) : "—";
 
   const topEvalEl = $("topPlayerEval");
   const bottomEvalEl = $("bottomPlayerEval");
 
   if (state.flipped) {
     if (topEvalEl) topEvalEl.textContent = hasScore ? scoreText : "—";
-    if (bottomEvalEl) bottomEvalEl.textContent = hasScore ? formatScore(-effectiveScore) : "—";
+    if (bottomEvalEl) bottomEvalEl.textContent = hasScore ? formatScore(-effectiveScore, mateDistance) : "—";
   } else {
-    if (topEvalEl) topEvalEl.textContent = hasScore ? formatScore(-effectiveScore) : "—";
+    if (topEvalEl) topEvalEl.textContent = hasScore ? formatScore(-effectiveScore, mateDistance) : "—";
     if (bottomEvalEl) bottomEvalEl.textContent = hasScore ? scoreText : "—";
   }
 
@@ -1215,8 +1228,7 @@ function updateEvaluationDisplay() {
     return;
   }
 
-  // Check for forced mate: Math.abs >= 9
-  const isMate = Math.abs(effectiveScore) >= 9;
+  const isMate = mateDistance !== null;
   let pct;
   if (isMate) {
     // Forced mate fills the eval bar completely (100% for White, 0% for Black)
@@ -1228,7 +1240,7 @@ function updateEvaluationDisplay() {
   }
 
   evalBarFill.style.height = `${pct}%`;
-  evalBarScore.textContent = formatEvalBarScore(effectiveScore);
+  evalBarScore.textContent = formatEvalBarScore(effectiveScore, mateDistance);
 
   // Position score on winning side of eval bar
   const isWhiteWinning = effectiveScore >= 0;
@@ -1267,7 +1279,7 @@ function renderMoves() {
   function chip(node) {
     const result = node.result;
     const status = node.analysisStatus;
-    const badge = result ? `<span class="move-sign ${result.key}" style="background-color:${result.color};color:${result.textColor}" title="${esc(result.label)}">${esc(result.sign)}</span>` : "";
+    const badge = result ? `<span class="move-sign ${result.key}" style="background-color:${result.color};color:${result.textColor}" title="${esc(result.label)}: ${esc(result.classificationReason || result.explanation)}">${esc(result.sign)}</span>` : "";
     return `<button type="button" class="move-chip ${node === tree.current ? "active" : ""}" data-node="${node.id}" aria-current="${node === tree.current ? "step" : "false"}" title="${esc(moveLabel(node))}">
       <span class="move-number">${node.parent.fen.split(" ")[5]}${node.move.color === "w" ? "." : "..."}</span>
       <span class="move-san">${esc(node.move.san)}</span>${badge}
@@ -1389,22 +1401,15 @@ window.addEventListener("keydown", e => {
   }
 });
 
-function formatScore(score) {
+function formatScore(score, mateDistance = null) {
   if (!Number.isFinite(score)) return "—";
-  if (Math.abs(score) >= 9) {
-    const moves = Math.round((10 - Math.abs(score)) * 100);
-    return score > 0 ? `+M${moves || 1}` : `-M${moves || 1}`;
-  }
+  if (mateDistance !== null) return `${score > 0 ? "+" : "-"}M${mateDistance}`;
   return `${score > 0 ? "+" : ""}${score.toFixed(1)}`;
 }
 
-function formatEvalBarScore(score) {
+function formatEvalBarScore(score, mateDistance = null) {
   if (!Number.isFinite(score)) return "0.0";
-  if (Math.abs(score) >= 9) {
-    const moves = Math.round((10 - Math.abs(score)) * 100);
-    return `M${moves || 1}`;
-  }
-  return Math.abs(score).toFixed(1);
+  return mateDistance !== null ? `M${mateDistance}` : Math.abs(score).toFixed(1);
 }
 
 function getLocalDetailedFeedback(result) {
@@ -1424,7 +1429,7 @@ function getLocalDetailedFeedback(result) {
 
   const isDirectHang = Boolean(punishDetails && punishDetails.captured && punishDetails.to === result.to);
   const isOtherHang = Boolean(punishDetails && punishDetails.captured && punishDetails.to !== result.to);
-  const isMate = Boolean(punishDetails && (punishDetails.san?.endsWith("#") || Math.abs(result.afterWhite) >= 9.5));
+  const isMate = Boolean(punishDetails && (punishDetails.san?.endsWith("#") || (result.engineEvidence?.after?.scoreType === "mate" && result.engineEvidence.after.rawScore > 0)));
   const isCheck = Boolean(punishDetails && punishDetails.san?.endsWith("+"));
 
   let moveDesc = "";
@@ -1544,27 +1549,23 @@ function getLocalDetailedFeedback(result) {
 
     case "brilliant": {
       concept = "Tactical Sacrifice";
-      const sacrificeNote = result.isSacrifice
-        ? `A brilliant material sacrifice! ${moverName} boldly gives up the ${pName} to blow open ${opponentName}'s defenses and launch an unstoppable attack.`
-        : `A brilliant tactical strike that completely paralyzes ${opponentName}'s position.`;
-      const refutationNote = punishSan
-        ? ` Even if ${opponentName} tries to respond with ${punishSan}, ${moverName}'s continuation is totally winning.`
-        : ``;
-      whyText = `${moveDesc} ${sacrificeNote}${refutationNote}`;
-      tipText = `Sacrifices that decisively expose the enemy king require calculating all forced responses. Superb tactical vision!`;
+      whyText = `${moveDesc} ${esc(result.classificationReason || result.explanation)}`;
+      const offered = result.classificationEvidence?.sacrifice?.acceptances?.[0];
+      if (offered) whyText += ` If ${opponentName} accepts with <strong>${esc(offered.san)}</strong>, Stockfish confirms compensation for the offered material.`;
+      tipText = `Compare the acceptance line with the opponent's strongest reply ${punishSan || ''}; the sacrifice must work against both.`;
       break;
     }
 
     case "great": {
       concept = "Critical Find";
-      whyText = `${moveDesc} A critical continuation! In a high-pressure position, ${result.san} was the only move that maintains the initiative or prevents ${opponentName} from turning the tables.`;
-      tipText = `When under tactical tension, finding the single winning resource separates master games from missed opportunities.`;
+      whyText = `${moveDesc} ${esc(result.classificationReason || result.explanation)}`;
+      tipText = `Compare the alternatives to see why they fail to preserve the outcome.`;
       break;
     }
 
     case "best": {
       concept = "Optimal Move";
-      whyText = `${moveDesc} Stockfish's top engine choice. Maximizes piece activity, maintains central harmony, and leaves ${opponentName} with zero counterplay.`;
+      whyText = `${moveDesc} ${esc(result.classificationReason || result.explanation)}`;
       tipText = `Consistent best moves compound pressure over time. Notice how seamlessly this aligns with king safety and piece coordination.`;
       break;
     }
@@ -1585,8 +1586,15 @@ function getLocalDetailedFeedback(result) {
 
     case "book": {
       concept = "Opening Theory";
-      whyText = `${moveDesc} Standard grandmaster opening theory. Follows established master principles for early piece development and king safety.`;
+      whyText = `${moveDesc} ${esc(result.classificationReason || result.explanation)}`;
       tipText = `In the opening, focus on rapid development, central control, and king safety before launching premature attacks.`;
+      break;
+    }
+
+    case "forced": {
+      concept = "Only Legal Move";
+      whyText = `${moveDesc} ${esc(result.classificationReason || result.explanation)}`;
+      tipText = `This reply does not affect your accuracy because there was no legal alternative.`;
       break;
     }
 
@@ -1669,7 +1677,7 @@ function renderFeedback(result) {
   }
 
   $("feedbackContent").innerHTML = `
-    <div class="feedback-header-box ${esc(result.key)}">
+    <div class="feedback-header-box ${esc(result.key)}" title="${esc(result.classificationReason || result.explanation)}">
       ${result.key === "brilliant" ? `<svg class="brilliant-flames" viewBox="0 0 600 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
         <defs>
           <linearGradient id="brilliantFire" x1="0" y1="1" x2="0" y2="0">
@@ -1736,9 +1744,9 @@ function renderFeedback(result) {
   });
 }
 
-function formatEvalScorePill(score) {
+function formatEvalScorePill(score, analysis) {
   if (score === null || score === undefined || !Number.isFinite(score)) return "0.0";
-  if (Math.abs(score) >= 9) return score > 0 ? "+M" : "-M";
+  if (analysis?.scoreType === "mate") return `${score > 0 ? "+" : "-"}M${Math.abs(analysis.rawScore)}`;
   const sign = score > 0 ? "+" : "";
   return `${sign}${score.toFixed(1)}`;
 }
@@ -1805,7 +1813,7 @@ function renderEvalGraph() {
     const currentPly = state.cursor ?? 0;
     const currentPoint = points[currentPly] || points[points.length - 1];
     const scoreVal = currentPoint?.score ?? (hasAnyAnalysis ? lastKnownScore : 0);
-    currentScorePill.textContent = formatEvalScorePill(scoreVal);
+    currentScorePill.textContent = formatEvalScorePill(scoreVal, currentPoint?.node?.analysis || currentPoint?.node?.result?.engineEvidence?.after);
     currentScorePill.className = `eval-graph-score-pill ${scoreVal > 0.3 ? "white-win" : scoreVal < -0.3 ? "black-win" : "equal"}`;
   }
 
@@ -1948,7 +1956,7 @@ function initEvalGraphInteraction() {
       score = node.analysis.whiteScore;
     }
 
-    const scoreStr = formatEvalScorePill(score);
+    const scoreStr = formatEvalScorePill(score, node.analysis || node.result?.engineEvidence?.after);
     const scoreClass = score !== null && score > 0 ? "white" : "black";
     const moveText = ply === 0 ? "Start position" : `${node.result?.moveNo || `${Math.ceil(ply / 2)}.`} ${node.result?.san || node.move?.san || ""}`;
     const badgeText = node.result?.label ? `<span style="color:${node.result.color};">${node.result.label}</span>` : "";
@@ -2084,7 +2092,7 @@ function renderSummary() {
   }
 
   // Count classifications
-  const keys = ["brilliant", "great", "best", "excellent", "good", "book", "inaccuracy", "mistake", "miss", "blunder"];
+  const keys = ["brilliant", "great", "best", "excellent", "good", "book", "forced", "inaccuracy", "mistake", "miss", "blunder"];
   let rowsHtml = "";
   for (const k of keys) {
     const cls = CLASSIFICATIONS[k];
