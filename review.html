@@ -100,9 +100,9 @@
               <span>Speed</span>
             </span>
             <select id="moveTime" class="menu-select">
-              <option value="250" selected>Fast · 0.25s</option>
-              <option value="500">Balanced · 0.5s</option>
-              <option value="1000">Deep · 1.0s</option>
+              <option value="250" selected>Quick review · Recommended</option>
+              <option value="500">Thorough review</option>
+              <option value="1000">Deep review</option>
             </select>
           </div>
 
@@ -355,8 +355,11 @@
 
           <div id="summaryProgressBox" class="summary-progress-box-inline" style="display:none;">
             <div class="summary-progress-bar-row">
-              <span class="summary-progress-label">Reviewing game...</span>
-              <span id="summaryProgressPct" class="summary-progress-pct">0%</span>
+              <span id="summaryProgressLabel" class="summary-progress-label" aria-live="polite">Reviewing moves</span>
+              <div class="summary-progress-actions">
+                <span id="summaryProgressPct" class="summary-progress-pct">0%</span>
+                <button id="summaryStopReview" type="button" class="summary-stop-review" title="Stop review and retain completed analysis">Stop</button>
+              </div>
             </div>
             <div class="summary-progress-track">
               <div id="summaryProgressBarFill" class="summary-progress-bar-fill" style="width: 0%;"></div>

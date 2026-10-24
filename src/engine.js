@@ -20,6 +20,7 @@ export class EngineQueue {
     this.timeoutMs = timeoutMs;
     this.queue = [];
     this.cache = new Map();
+    this.cacheGroups = new Map();
     this.worker = null;
     this.active = null;
     this.ready = false;
@@ -32,7 +33,20 @@ export class EngineQueue {
   }
 
   invalidate(fen, time, options) {
-    this.cache.delete(searchKey(fen, time, options));
+    const group = searchKey(fen, 0, options);
+    for (const key of this.cacheGroups.get(group)?.keys() || []) this.cache.delete(key);
+    this.cacheGroups.delete(group);
+  }
+
+  cached(fen, time, options) {
+    // Only reuse the same history, restrictions, MultiPV and node limit.
+    // A stronger completed search can satisfy a smaller time request.
+    const group = this.cacheGroups.get(searchKey(fen, 0, options));
+    let best;
+    for (const result of group?.values() || []) {
+      if (result.moveTime >= time && (!best || result.moveTime > best.moveTime)) best = result;
+    }
+    return best;
   }
 
   sort() {
@@ -43,7 +57,8 @@ export class EngineQueue {
   evaluate(fen, time, { priority = 0, signal, position, multiPv = 1, searchMoves = [], nodes } = {}) {
     if (signal?.aborted) return Promise.reject(aborted());
     const key = searchKey(fen, time, { position, multiPv, searchMoves, nodes });
-    if (this.cache.has(key)) return Promise.resolve(this.cache.get(key));
+    const cached = this.cached(fen, time, { position, multiPv, searchMoves, nodes });
+    if (cached) return Promise.resolve(cached);
     return new Promise((resolve, reject) => {
       const job = { fen, time, key, priority, signal, position, multiPv, searchMoves, nodes,
         resolve, reject, lines: new Map(), history: [] };
@@ -90,6 +105,7 @@ export class EngineQueue {
     this.queue = [];
     this.resetWorker();
     this.cache.clear();
+    this.cacheGroups.clear();
     this.focused.clear();
     for (const job of jobs) this.settle(job, aborted());
   }
@@ -98,9 +114,10 @@ export class EngineQueue {
     if (this.active || !this.queue.length) return;
     this.active = this.queue.shift();
     const job = this.active;
-    if (this.cache.has(job.key)) {
+    const cached = this.cached(job.fen, job.time, job);
+    if (cached) {
       this.active = null;
-      this.settle(job, null, this.cache.get(job.key));
+      this.settle(job, null, cached);
       this.pump();
       return;
     }
@@ -185,6 +202,9 @@ export class EngineQueue {
           complete: candidates.length === job.multiPv,
           stable: stable(job.history), history: job.history.slice(-3) };
         this.cache.set(job.key, result);
+        const group = searchKey(job.fen, 0, job);
+        if (!this.cacheGroups.has(group)) this.cacheGroups.set(group, new Map());
+        this.cacheGroups.get(group).set(job.key, result);
         this.settle(job, null, result);
       }
       this.pump();

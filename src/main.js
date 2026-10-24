@@ -5,7 +5,7 @@ import { getApiKey, setApiKey, hasApiKey, getCoachingState, generateCoaching, ca
 import { GameTree, moveLabel } from "./game-tree.js";
 import { EngineQueue } from "./engine.js";
 import { analyzeMove } from "./analysis.js";
-import { CLASSIFICATION_VERSION } from "./move-quality.js";
+import { hasReview, reviewGame } from "./review-policy.js";
 import { BoardOverlay } from "./board-overlay.js";
 import { BoardInput } from "./board-input.js";
 import { evaluatePosition, legalBestMove } from "./position-analysis.js";
@@ -469,7 +469,7 @@ function syncActiveLine() {
   state.cursor = tree.current.ply;
   state.isVariation = !tree.current.mainline;
   const moveTime = Number($("moveTime").value);
-  state.isAnalyzed = tree.mainline.slice(1).every(node => node.result?.classificationVersion === CLASSIFICATION_VERSION && node.resultTime >= moveTime);
+  state.isAnalyzed = tree.mainline.slice(1).every(node => hasReview(node, moveTime));
   const origin = tree.nodes.get(tree.returnId);
   const back = $("resetVariationBtn");
   back.hidden = !origin;
@@ -688,6 +688,7 @@ function updateSummaryActionButtons() {
   const startBtn = $("summaryStartBtn");
 
   if (!reviewBtn || !progressBox || !startBtn) return;
+  $("summaryStopReview").disabled = !state.running;
 
   if (state.running) {
     reviewBtn.style.display = "none";
@@ -702,7 +703,9 @@ function updateSummaryActionButtons() {
     progressBox.style.display = "none";
     startBtn.style.display = "none";
     if (reviewBtnText) {
-      reviewBtnText.textContent = state.hasReviewedPreviously ? "Review again" : "Review";
+      const time = Number($("moveTime").value);
+      const partial = state.tree?.mainline.slice(1).some(node => hasReview(node, time, { complete: false }));
+      reviewBtnText.textContent = partial ? "Resume review" : state.hasReviewedPreviously ? "Review again" : "Review";
     }
   }
 }
@@ -801,10 +804,10 @@ function refreshPositionAnalysis() {
     : node.result ? "Move analyzed" : "Engine idle";
 }
 
-function refreshAnalysisView() {
+function refreshAnalysisView({ moveNode, summary = true } = {}) {
   syncActiveLine();
-  renderMoves();
-  renderSummary();
+  renderMoves(moveNode);
+  if (summary) renderSummary();
   updateEvaluationDisplay();
   drawBestMoveArrow();
   const node = state.tree.current;
@@ -833,21 +836,22 @@ function refreshAnalysisView() {
   }
 }
 
-async function ensureMoveAnalysis(node, { moveTime, priority = 1, signal = state.session.signal } = {}) {
+async function ensureMoveAnalysis(node, { moveTime, priority = 1, signal = state.session.signal,
+  refine = true, refinementBudget } = {}) {
   if (!node.move) return;
-  if (node.result?.classificationVersion === CLASSIFICATION_VERSION && node.resultTime >= moveTime) return node.result;
+  if (hasReview(node, moveTime, { complete: refine })) return node.result;
   const tree = state.tree;
   if (node.analysisPromise) {
     await node.analysisPromise;
     if (signal.aborted || state.tree !== tree) return;
-    if (node.result?.classificationVersion === CLASSIFICATION_VERSION && node.resultTime >= moveTime) return node.result;
+    if (hasReview(node, moveTime, { complete: refine })) return node.result;
   }
   if (signal.aborted) return;
   node.analysisStatus = "pending";
   node.error = "";
   const task = (async () => {
     try {
-      const result = await analyzeMove(node, evaluateNode, { moveTime, priority, signal });
+      const result = await analyzeMove(node, evaluateNode, { moveTime, priority, signal, refine, refinementBudget });
       if (signal.aborted) return;
       node.result = result;
       node.resultTime = moveTime;
@@ -861,7 +865,7 @@ async function ensureMoveAnalysis(node, { moveTime, priority = 1, signal = state
   })();
   node.analysisPromise = task;
   if (state.tree === tree) {
-    renderMoves();
+    renderMoves(node);
     refreshPositionAnalysis();
     if (tree.current === node) renderFeedback(node.result);
   }
@@ -869,7 +873,11 @@ async function ensureMoveAnalysis(node, { moveTime, priority = 1, signal = state
     return await task;
   } finally {
     if (node.analysisPromise === task) node.analysisPromise = null;
-    if (state.tree === tree) refreshAnalysisView();
+    if (state.tree === tree) {
+      if (!state.running) refreshAnalysisView();
+      else if (tree.current === node || tree.current === node.parent) refreshAnalysisView({ moveNode: node, summary: false });
+      else renderMoves(node);
+    }
   }
 }
 
@@ -880,7 +888,7 @@ function requestQuickAnalysisForCurrentPosition({ retry = false } = {}) {
   if (quickRequest && (quickRequest.tree !== tree || quickRequest.node !== node || retry)) cancelQuickAnalysis();
   engine.focus([node.fen, node.parent?.fen].filter(Boolean));
   const moveTime = Number($("moveTime")?.value) || 250;
-  if ((!node.mainline || tree.isAnalysisBoard) && node.move && node.analysisStatus !== "pending" && node.resultTime < moveTime && node.analysisStatus !== "error") {
+  if ((!node.mainline || tree.isAnalysisBoard) && node.move && node.analysisStatus !== "pending" && !hasReview(node, moveTime) && node.analysisStatus !== "error") {
     ensureMoveAnalysis(node, { moveTime, priority: 3 }).catch(() => {});
   }
   if (retry) node.positionError = "";
@@ -1270,7 +1278,7 @@ $("moveList").addEventListener("click", event => {
   }).catch(() => {});
 });
 
-function renderMoves() {
+function renderMoves(changedNode) {
   const tree = state.tree;
   if (!tree) {
     $("moveList").innerHTML = '<p class="muted empty-state">Your game moves will appear here.</p>';
@@ -1286,6 +1294,22 @@ function renderMoves() {
       ${status === "pending" ? '<span class="analysis-pending" aria-label="Analysis pending">...</span>' : ""}
       ${status === "error" ? '<span class="analysis-error" aria-label="Analysis failed">!</span>' : ""}
     </button>${status === "error" ? `<button type="button" class="retry-analysis" data-retry="${node.id}" title="${esc(node.error)}">Retry</button>` : ""}`;
+  }
+  if (changedNode && renderedTree === tree && renderedNodeCount === tree.nodes.size) {
+    const button = $("moveList").querySelector(`[data-node="${changedNode.id}"]`);
+    if (button) {
+      const template = document.createElement("template");
+      template.innerHTML = chip(changedNode);
+      const replacement = template.content.firstElementChild;
+      button.className = replacement.className;
+      button.setAttribute("aria-current", replacement.getAttribute("aria-current"));
+      if (button.innerHTML !== replacement.innerHTML) button.innerHTML = replacement.innerHTML;
+      const oldRetry = $("moveList").querySelector(`[data-retry="${changedNode.id}"]`);
+      const newRetry = template.content.querySelector("[data-retry]");
+      if (newRetry && !oldRetry) button.after(newRetry);
+      if (!newRetry) oldRetry?.remove();
+      return;
+    }
   }
   function branch(first) {
     return `<details class="variation-branch" data-branch="${first.id}" ${first.collapsed ? "" : "open"}>
@@ -2002,16 +2026,23 @@ function initEvalGraphInteraction() {
   });
 }
 
-function updateAnalysisProgress(current, total, statusText, isDone = false, isStopped = false) {
+let reviewRenderFrame = null;
+function updateAnalysisProgress(current, total, statusText) {
   const pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
 
   const summaryFill = $("summaryProgressBarFill");
   const summaryPct = $("summaryProgressPct");
   if (summaryFill) summaryFill.style.width = `${pct}%`;
   if (summaryPct) summaryPct.textContent = `${pct}%`;
+  if ($("summaryProgressLabel")) $("summaryProgressLabel").textContent = statusText;
 
-  renderEvalGraph();
-  renderSummary();
+  if (reviewRenderFrame === null) {
+    reviewRenderFrame = requestAnimationFrame(() => {
+      reviewRenderFrame = null;
+      renderEvalGraph();
+      renderSummary();
+    });
+  }
 }
 
 function renderSummary() {
@@ -2135,41 +2166,40 @@ async function startReview() {
   const moveTime = Number($("moveTime").value);
   cancelQuickAnalysis();
 
-  // Wipe out previous analysis results, reset board to start position, and clear graph & stats
-  for (const node of nodes) {
-    node.result = null;
-    node.resultTime = 0;
-    node.analysis = null;
-    node.analysisStatus = "idle";
-  }
-  navigateNode(tree.root);
-  renderBoard(0);
+  // Resume at the selected position and retain compatible results and searches.
   renderEvalGraph();
   renderSummary();
-  updateAnalysisProgress(0, nodes.length, "Starting review...", false, false);
+  updateAnalysisProgress(0, nodes.length, "Starting review...");
 
   switchTab("summary");
   $("startReview").style.display = "none";
   $("stopReview").style.display = "inline-flex";
   $("stopReview").disabled = false;
   try {
-    for (const node of nodes) {
-      if (signal.aborted) break;
-      $("engineStatus").textContent = `Analyzing original game move ${node.ply} of ${nodes.length}...`;
-      await ensureMoveAnalysis(node, { moveTime, priority: 0, signal });
-      if (state.tree !== tree) return;
-      updateAnalysisProgress(nodes.filter(n => n.result).length, nodes.length, "Analyzing game");
-    }
+    await reviewGame(nodes, { moveTime, signal, selected: () => tree.current,
+      analyze: (node, options) => ensureMoveAnalysis(node, { ...options, priority: 0 }),
+      onProgress: ({ phase, completed, total }) => {
+        if (state.tree !== tree || signal.aborted) return;
+        const label = phase === "refinement" ? "Checking critical moves" : phase === "done" ? "Review complete" : "Reviewing moves";
+        $("engineStatus").textContent = `${label}: ${completed} of ${total}`;
+        // Reserve the last fifth for refinement, so progress stays monotonic.
+        const fraction = phase === "done" ? 1 : phase === "initial" ? completed / Math.max(1, total) * 0.8
+          : 0.8 + completed / Math.max(1, total) * 0.2;
+        updateAnalysisProgress(fraction * 100, 100, label);
+      }
+    });
     if (state.tree !== tree) return;
-    const completed = nodes.filter(node => node.result).length;
-    updateAnalysisProgress(completed, nodes.length, signal.aborted ? "Analysis stopped" : "Review complete", !signal.aborted, signal.aborted);
-    setStatus(signal.aborted ? "Review stopped. Completed moves are retained; use Review in Game Summary to run analysis again." : "Analysis complete. Select a move to review or explore a variation.");
+    updateAnalysisProgress(nodes.length, nodes.length, "Review complete");
+    setStatus("Analysis complete. Select a move to review or explore a variation.");
   } catch (error) {
-    if (state.tree === tree && error.name !== "AbortError") setStatus(`Analysis stopped: ${error.message}`, true);
+    if (state.tree === tree) {
+      if (error.name !== "AbortError") setStatus(`Analysis stopped: ${error.message}`, true);
+      else setStatus("Review stopped. Completed analysis is retained; use Resume review in Game Summary to continue.");
+    }
   } finally {
     if (state.tree === tree && state.reviewController === controller) {
       state.running = false;
-      const isComplete = nodes.every(n => Boolean(n.result));
+      const isComplete = nodes.every(n => hasReview(n, moveTime));
       state.isAnalyzed = isComplete;
       if (isComplete) {
         state.hasReviewedPreviously = true;
@@ -2190,9 +2220,12 @@ async function startReview() {
 
 $("startReview").addEventListener("click", toggleAutoplay);
 $("stopReview").addEventListener("click", stopReview);
+$("summaryStopReview").addEventListener("click", stopReview);
 $("moveTime").addEventListener("change", () => {
   stopPlayback();
-  state.isAnalyzed = false;
+  const nodes = state.tree?.mainline.slice(1) || [];
+  const time = Number($("moveTime").value);
+  state.isAnalyzed = nodes.length > 0 && nodes.every(node => hasReview(node, time));
   if ($("startReviewText")) $("startReviewText").textContent = "Play";
   updateSummaryActionButtons();
 });

@@ -25,7 +25,7 @@ export function legalBestMove(fen, analysis) {
   return [analysis.bestmove, analysis.pv?.split(/\s+/)[0]].find(uci => legal.includes(uci)) || "";
 }
 
-export async function evaluatePosition(node, engine, { moveTime, priority = 0, signal, multiPv = 1, searchMoves = [], nodes } = {}) {
+export async function evaluatePosition(node, engine, { moveTime, priority = 0, signal, multiPv = 1, searchMoves = [], nodes, retry = true } = {}) {
   if (signal?.aborted) throw new DOMException("Analysis cancelled", "AbortError");
   const chess = chessAtNode(node);
   const terminal = chess.isGameOver();
@@ -36,11 +36,21 @@ export async function evaluatePosition(node, engine, { moveTime, priority = 0, s
   if (normalSearch && node.analysis?.moveTime >= moveTime &&
     (!node.analysis.signature || node.analysis.signature === signature) &&
     (terminal || legalBestMove(node.fen, node.analysis))) return node.analysis;
+  const search = async () => {
+    try {
+      return await engine.evaluate(node.fen, moveTime, searchOptions);
+    } catch (error) {
+      if (signal?.aborted || !retry || !error.message?.startsWith("Engine returned no evaluation")) throw error;
+      // A short UCI search can finish with only bounded scores for its final
+      // bestmove. Retry once instead of attaching another move's evaluation.
+      return engine.evaluate(node.fen, Math.max(400, moveTime), searchOptions);
+    }
+  };
   let result = terminal
     ? { score: chess.isCheckmate() ? -10 : 0, scoreType: chess.isCheckmate() ? "mate" : "cp", rawScore: 0,
       outcome: chess.isCheckmate() ? "checkmate" : "draw", bestmove: "", pv: "", moveTime,
       depth: 0, complete: true, stable: true, candidates: [] }
-    : await engine.evaluate(node.fen, moveTime, searchOptions);
+    : await search();
   if (signal?.aborted) throw new DOMException("Analysis cancelled", "AbortError");
   if (!terminal) {
     const bestmove = legalBestMove(node.fen, result);
