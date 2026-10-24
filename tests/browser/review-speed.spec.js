@@ -50,7 +50,7 @@ test("a stronger completed review satisfies a faster review without launching se
   await page.locator("#summaryReviewBtn").click();
   await expect(page.locator("#summaryStartBtn")).toBeVisible({ timeout: 30000 });
   const searches = await page.evaluate(() => window.engineSearches.length);
-  await page.locator("#moveTime").selectOption({ value: "250" }, { force: true });
+  await page.locator("#moveTime").selectOption({ value: "125" }, { force: true });
   await expect(page.locator("#summaryStartBtn")).toBeVisible();
   expect(await page.evaluate(() => window.engineSearches.length)).toBe(searches);
 });

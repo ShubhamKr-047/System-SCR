@@ -1,14 +1,16 @@
 import { CLASSIFICATION_VERSION } from "./move-quality.js";
 
-export const REVIEW_POLICY_VERSION = 1;
+export const REVIEW_POLICY_VERSION = 2;
+export const DEFAULT_REVIEW_TIME = 125;
 
-export function reviewPolicy(time = 250) {
+export function reviewPolicy(time = DEFAULT_REVIEW_TIME) {
+  const fast = time <= DEFAULT_REVIEW_TIME;
   return {
-    screen: Math.min(250, Math.max(150, time * 0.8)),
+    screen: fast ? 100 : Math.min(250, Math.max(150, time * 0.8)),
     confirmation: Math.min(1000, Math.max(600, time)),
     refinement: Math.min(4000, Math.max(2500, time * 4)),
     // This is additional engine time, beyond the ordinary first pass.
-    gameRefinement: count => Math.max(2500, count * Math.min(400, time * 0.8))
+    gameRefinement: count => Math.max(2500, count * (fast ? 100 : Math.min(400, time * 0.8)))
   };
 }
 
@@ -19,7 +21,7 @@ export function hasReview(node, time, { complete = true } = {}) {
     result.reviewQuality.baseTime >= time && (!complete || result.reviewQuality.complete);
 }
 
-export async function reviewGame(nodes, { moveTime = 250, analyze, signal, onProgress = () => {},
+export async function reviewGame(nodes, { moveTime = DEFAULT_REVIEW_TIME, analyze, signal, onProgress = () => {},
   selected = () => null } = {}) {
   const checkCancelled = () => { if (signal?.aborted) throw new DOMException("Analysis cancelled", "AbortError"); };
   const initial = () => nodes.filter(node => hasReview(node, moveTime, { complete: false })).length;

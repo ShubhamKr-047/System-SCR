@@ -6,27 +6,33 @@ import { GameTree } from "../src/game-tree.js";
 import { EngineQueue } from "../src/engine.js";
 import { evaluatePosition } from "../src/position-analysis.js";
 import { analyzeMove } from "../src/analysis.js";
-import { reviewGame } from "../src/review-policy.js";
+import { DEFAULT_REVIEW_TIME, reviewGame } from "../src/review-policy.js";
 import { StockfishWorker } from "./lib/stockfish-worker.mjs";
 import games from "../tests/fixtures/review-games.json" with { type: "json" };
 
 const argument = name => process.argv.find(arg => arg.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
-const time = Number(argument("time") || 250);
+const time = Number(argument("time") || DEFAULT_REVIEW_TIME);
 const baseline = argument("baseline");
 const filter = argument("game");
 const output = resolve("logs/review-benchmarks");
-const suffix = baseline ? "baseline" : time === 250 ? "quick" : `reference-${time}`;
+const suffix = baseline ? "baseline" : time === DEFAULT_REVIEW_TIME ? "quick" : time === 250 ? "quick-250" : `reference-${time}`;
 await mkdir(output, { recursive: true });
 let implementation = { EngineQueue, evaluatePosition, analyzeMove };
 if (baseline) {
   // Snapshot only the local classification modules; no checkout or network needed.
-  const directory = `${output}/baseline`;
+  const directory = `${output}/baseline-${baseline.replace(/[^a-zA-Z0-9-]/g, "_")}`;
   await mkdir(`${directory}/data`, { recursive: true });
   for (const file of ["analysis.js", "classification-analysis.js", "classifications.js", "engine.js",
     "position-analysis.js", "move-quality.js", "openings.js", "data/openings.json"]) {
     await writeFile(`${directory}/${file}`, execFileSync("git", ["show", `${baseline}:src/${file}`], { maxBuffer: 3e6 }));
   }
-  implementation = Object.assign({}, ...await Promise.all(["analysis", "engine", "position-analysis"].map(name =>
+  let policy = [];
+  try {
+    const source = execFileSync("git", ["show", `${baseline}:src/review-policy.js`], { stdio: ["ignore", "pipe", "pipe"] });
+    await writeFile(`${directory}/review-policy.js`, source);
+    policy = ["review-policy"];
+  } catch (error) { if (error.status !== 128) throw error; }
+  implementation = Object.assign({}, ...await Promise.all(["analysis", "engine", "position-analysis", ...policy].map(name =>
     import(pathToFileURL(`${directory}/${name}.js`).href))));
 }
 const reports = [];
@@ -58,10 +64,11 @@ for (const game of games.filter(game => !filter || game.name.toLowerCase().inclu
     }
   };
   try {
-    if (baseline) {
+    const runner = baseline ? implementation.reviewGame : reviewGame;
+    if (!runner) {
       for (const node of tree.mainline.slice(1)) await analyze(node, { moveTime: time });
     } else {
-      await reviewGame(tree.mainline.slice(1), { moveTime: time, analyze,
+      await runner(tree.mainline.slice(1), { moveTime: time, analyze,
         onProgress: ({ phase }) => {
           if (phase !== "initial" && initialMs === null) initialMs = Math.round(performance.now() - start);
         } });

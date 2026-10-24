@@ -98,14 +98,14 @@ still a heuristic and is not an official playing strength.
 
 ## Runtime cost and verification
 
-The default **Quick review** uses 250ms normal searches; Thorough uses 500ms and
+The default **Quick review** uses 125ms normal searches; Thorough uses 500ms and
 Deep uses 1000ms. A first pass labels every move before a second pass checks
 critical candidates. Initial labels can change during the second pass. The UI
 shows these phases separately. Selecting a position prioritizes its queued work.
 
 | Policy | Alternatives screen | Confirmation search | Extra time per candidate | Shared extra game budget |
 | --- | --- | --- | --- | --- |
-| Quick | 200ms | up to 600ms | up to 2500ms | max(2500ms, 200ms × plies) |
+| Quick | 100ms | up to 600ms | up to 2500ms | max(2500ms, 100ms × plies) |
 | Thorough | 250ms | up to 600ms | up to 2500ms | max(2500ms, 400ms × plies) |
 | Deep | 250ms | up to 1000ms | up to 4000ms | max(2500ms, 400ms × plies) |
 
@@ -147,14 +147,14 @@ affected move badge and batch graph/summary rendering per animation frame.
 Run `npm test`, `npm run build`, and
 `npx playwright test tests/browser/classifications.spec.js tests/browser/playback.spec.js`.
 Run `node scripts/benchmark-classifications.mjs --compare` for the packaged engine
-at 250ms and 1500ms. It writes per-position labels, confidence, and elapsed time to
+at 125ms and 1500ms. It writes per-position labels, confidence, and elapsed time to
 `test-results/classification-benchmark.json`. Browser tests use local engine files
 and require no provider key. Node benchmark measurements vary with CPU load.
 
 For complete-game timing and classification comparison, run sequentially:
 
 ```sh
-node scripts/benchmark-review.mjs --baseline=d2714b2
+node scripts/benchmark-review.mjs --baseline=da76f93 --time=250
 node scripts/benchmark-review.mjs
 node scripts/benchmark-review.mjs --time=1000
 node scripts/compare-review.mjs
@@ -171,7 +171,39 @@ lite-engine review is a useful comparison, not ground
 truth. Run `npx playwright test tests/browser/review-speed.spec.js` for browser
 stop/resume and cache behavior, including Chromium at 4× CPU slowdown.
 
-### Measured tradeoff
+### Faster Quick policy (version 2)
+
+Quick's base budget was reduced from 250ms to 125ms, its alternatives screen from
+200ms to 100ms, and its shared extra budget from 200ms to 100ms per ply (minimum
+2500ms). Targeted mate checks still receive up to 1000ms per search, and the
+depth/stability requirements for Great and Brilliant remain strict. Thorough and
+Deep budgets are unchanged. The policy version invalidates stale completion
+metadata when the algorithm changes.
+
+One follow-up run on the same Windows/Node setup:
+
+| Game | Previous Quick | New initial labels | New completed Quick |
+| --- | --- | --- | --- |
+| Opera game (33 plies) | 18.1s | 5.9s | 8.8s |
+| Fischer–Spassky game 6 (81 plies) | 51.6s | 17.0s | 25.9s |
+| Quiet Ruy Lopez (40 plies) | 16.2s | 7.8s | 11.1s |
+| Promotion ending (11 plies) | 6.9s | 2.3s | 4.3s |
+
+The corpus completed in 50.0s versus 92.7s for the preceding Quick policy, about
+46% less time. Repeat reviews still launched zero engine searches. The new run
+matched 122/165 exact labels (73.9%) against the finite 1000ms reference, versus
+131/165 (79.4%) previously. No reference Blunders were missed and no extra
+Brilliant labels appeared in these four games. This is the explicit tradeoff:
+Quick prioritizes review speed; Thorough and Deep offer closer move distinctions.
+Measurements and finite engine labels vary between runs.
+
+To compare retained reports from different runs, use
+`node scripts/compare-review.mjs --previous=quick-previous --quick=quick`.
+`--time=250` now writes `review-quick-250.json`; the default writes
+`review-quick.json`. Git snapshots support both the old serial classifier and
+the subsequent two-pass review, so a baseline uses its own review runner.
+
+### Earlier adaptive review measurements (version 1)
 
 One Windows/Node 25 run of the packaged engine, comparing Quick review with
 `d2714b2` at the same 250ms base budget:

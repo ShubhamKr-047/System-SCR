@@ -5,7 +5,7 @@ import { getApiKey, setApiKey, hasApiKey, getCoachingState, generateCoaching, ca
 import { GameTree, moveLabel } from "./game-tree.js";
 import { EngineQueue } from "./engine.js";
 import { analyzeMove } from "./analysis.js";
-import { hasReview, reviewGame } from "./review-policy.js";
+import { DEFAULT_REVIEW_TIME, hasReview, reviewGame } from "./review-policy.js";
 import { BoardOverlay } from "./board-overlay.js";
 import { BoardInput } from "./board-input.js";
 import { evaluatePosition, legalBestMove } from "./position-analysis.js";
@@ -887,7 +887,7 @@ function requestQuickAnalysisForCurrentPosition({ retry = false } = {}) {
   if (!node) return;
   if (quickRequest && (quickRequest.tree !== tree || quickRequest.node !== node || retry)) cancelQuickAnalysis();
   engine.focus([node.fen, node.parent?.fen].filter(Boolean));
-  const moveTime = Number($("moveTime")?.value) || 250;
+  const moveTime = Number($("moveTime")?.value) || DEFAULT_REVIEW_TIME;
   if ((!node.mainline || tree.isAnalysisBoard) && node.move && node.analysisStatus !== "pending" && !hasReview(node, moveTime) && node.analysisStatus !== "error") {
     ensureMoveAnalysis(node, { moveTime, priority: 3 }).catch(() => {});
   }

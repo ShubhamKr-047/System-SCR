@@ -1,6 +1,6 @@
 import { Chess } from "chess.js";
 import { lookupOpening } from "./openings.js";
-import { reviewPolicy } from "./review-policy.js";
+import { DEFAULT_REVIEW_TIME, reviewPolicy } from "./review-policy.js";
 import { chessAtNode } from "./position-analysis.js";
 import { CLASSIFICATION_VERSION, classifyEvidence, materialBalance, playerEvaluation,
   playUci, reliableSearch, sacrificeCandidates, uciMove } from "./move-quality.js";
@@ -59,7 +59,7 @@ async function verifySacrifice(node, candidates, evaluate, options, time) {
 }
 
 export async function analyzeClassification(node, evaluate, options = {}) {
-  const time = options.moveTime || 250;
+  const time = options.moveTime || DEFAULT_REVIEW_TIME;
   const policy = reviewPolicy(time);
   const color = node.move.color;
   const playedUci = uciMove(node.move);

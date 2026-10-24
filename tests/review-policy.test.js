@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { GameTree } from "../src/game-tree.js";
 import { analyzeMove } from "../src/analysis.js";
-import { hasReview, reviewGame, REVIEW_POLICY_VERSION } from "../src/review-policy.js";
+import { DEFAULT_REVIEW_TIME, hasReview, reviewGame, reviewPolicy, REVIEW_POLICY_VERSION } from "../src/review-policy.js";
 import { CLASSIFICATION_VERSION } from "../src/move-quality.js";
 import { evaluatePosition } from "../src/position-analysis.js";
 
@@ -20,7 +20,7 @@ test("review covers every move before refining, then prioritizes the selected po
     calls.push([node.ply, options.refine]); save(node, options, { priority: node.ply === 2 ? 4 : 0 });
   } });
   assert.deepEqual(calls, [[1, false], [2, false], [3, false], [4, false], [3, true], [2, true], [1, true], [4, true]]);
-  assert.ok(nodes.every(node => hasReview(node, 250)));
+  assert.ok(nodes.every(node => hasReview(node, DEFAULT_REVIEW_TIME)));
   await reviewGame(nodes, { analyze: () => assert.fail("A repeat review should reuse completed results") });
 });
 
@@ -30,7 +30,7 @@ test("stopping during refinement retains first-pass results and resumes only unf
   await assert.rejects(reviewGame(nodes, { signal: controller.signal, analyze: async (node, options) => {
     save(node, options); if (options.refine) controller.abort();
   } }), { name: "AbortError" });
-  assert.ok(nodes.every(node => hasReview(node, 250, { complete: false })));
+  assert.ok(nodes.every(node => hasReview(node, DEFAULT_REVIEW_TIME, { complete: false })));
   const calls = [];
   await reviewGame(nodes, { analyze: async (node, options) => { calls.push([node.ply, options.refine]); save(node, options); } });
   assert.deepEqual(calls, [[2, true]]);
@@ -54,7 +54,15 @@ test("the game refinement budget is shared and can expire without restarting ord
     save(node, options, { spentMs: Math.min(1500, options.refinementBudget || 0) });
   } });
   assert.deepEqual(budgets, [2500, 1000, 0, 0]);
-  assert.ok(nodes.every(node => hasReview(node, 250)));
+  assert.ok(nodes.every(node => hasReview(node, DEFAULT_REVIEW_TIME)));
+});
+
+test("Fast review cuts ordinary and shared refinement budgets while preserving the deeper profiles", () => {
+  assert.equal(DEFAULT_REVIEW_TIME, 125);
+  assert.equal(reviewPolicy().screen, 100);
+  assert.equal(reviewPolicy().gameRefinement(80), 8000);
+  assert.equal(reviewPolicy(500).gameRefinement(80), 32000);
+  assert.equal(reviewPolicy(1000).confirmation, 1000);
 });
 
 const line = (score, bestmove) => ({ score, scoreType: "cp", rawScore: score * 100, bestmove,
@@ -144,7 +152,7 @@ for (const scenario of ["king move", "disagreement about mate"]) {
         { ...line(-9.97, options.searchMoves[0]), scoreType: "mate", rawScore: -3 } :
         line(king ? -8.1 : 0, options.searchMoves[0]);
       return line(king ? -8 : 0, "g1h1");
-    }, { moveTime: 250 });
+    }, { moveTime: DEFAULT_REVIEW_TIME });
     assert.equal(result.key, "blunder");
     assert.equal(result.refinement.priority, 4);
     assert.ok(requests.some(request => request.moveTime === 1000));

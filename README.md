@@ -13,7 +13,7 @@ A free Firefox/Zen WebExtension starter for reviewing **completed** Chess.com ga
 ## Important limitations of this first MVP
 
 - The extension adds an “Analyze with Zen” button to supported Chess.com game URLs. Clicking it retrieves the finished game PGN from Chess.com's public monthly archive and opens the separate review page automatically. The game must be completed and publicly available in the archive; if Chess.com has not published it yet, the extension will explain that.
-- The lite engine is intentionally compact. Quick review uses a 0.25-second base search, shows an initial pass across the game, then checks critical moves within a shared budget. Total time depends on game length and CPU speed. Completed analysis survives stop/resume and repeat reviews.
+- The lite engine is intentionally compact. Quick review uses a 0.125-second base search, shows an initial pass across the game, then checks critical moves within a shared budget. Total time depends on game length and CPU speed. Completed analysis survives stop/resume and repeat reviews.
 - Move labels use local Stockfish comparisons, verified opening entries, and conservative checks for exceptional moves. They follow SCR's documented rules rather than Chess.com's proprietary model. See [move classification](docs/move-classification.md).
 - This starter needs Node.js/npm to build and fetch the local dependencies once. After building, the review and engine run locally.
 
@@ -54,7 +54,7 @@ Temporary add-ons may be removed when Zen restarts. To test code changes, rebuil
 ## Engine settings
 
 - Single-threaded WASM engine: one CPU worker, so the thread setting cannot be increased.
-- Base search time: Quick 250 / Thorough 500 / Deep 1000 ms. Critical candidates get selective checks with a per-move and shared game budget. The menu describes the review policy rather than promising a fixed time per move. See [runtime budgets and benchmarks](docs/move-classification.md#runtime-cost-and-verification).
+- Base search time: Quick 125 / Thorough 500 / Deep 1000 ms. Critical candidates get selective checks with a per-move and shared game budget. Quick prioritizes speed and may differ on fine move labels; use Thorough or Deep for closer analysis. See [runtime budgets and benchmarks](docs/move-classification.md#runtime-cost-and-verification).
 - Selecting an unevaluated position requests a quick local evaluation. New variation moves are analyzed automatically using the selected per-position time.
 
 ## Exploring variations

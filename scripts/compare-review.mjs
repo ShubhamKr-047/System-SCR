@@ -1,8 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
 
 const read = name => readFile(`logs/review-benchmarks/review-${name}.json`, "utf8").then(JSON.parse);
-const baseline = await read("baseline");
-const quick = await read("quick");
+const argument = name => process.argv.find(arg => arg.startsWith(`--${name}=`))?.slice(name.length + 3);
+const baseline = await read(argument("previous") || "baseline");
+const quick = await read(argument("quick") || "quick");
 const reference = await read("reference-1000").catch(error => { if (error.code !== "ENOENT") throw error; return []; });
 const comparisons = quick.map(game => {
   const old = baseline.find(other => other.game === game.game);
