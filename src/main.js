@@ -11,7 +11,7 @@ import { BoardInput } from "./board-input.js";
 import { evaluatePosition, legalBestMove } from "./position-analysis.js";
 import { playSound } from "./audio.js";
 import { initSidebarResize } from "./sidebar-resize.js";
-import { continuationFrames } from "./playback.js";
+import { continuationFrames, commitContinuation } from "./playback.js";
 import "./style.css";
 
 const $ = (id) => document.getElementById(id);
@@ -41,7 +41,7 @@ const state = {
   reviewController: null,
   isVariation: false,
   hasReviewedPreviously: false,
-  variationTimer: null
+  preview: null
 };
 
 function setStatus(message, error = false) {
@@ -499,24 +499,18 @@ function stopAutoplay() {
 function stopPreview({ render = true } = {}) {
   if (!state.preview) return;
   clearInterval(state.preview.timer);
+  boardInput.cancel();
+  clearBoardSelection();
+  $("promotionDialog").close();
   state.preview = null;
   $("continuationPreview").hidden = true;
   $("board").classList.remove("is-previewing");
   if (render && state.tree) renderBoard(state.cursor);
 }
 
-function stopVariationAnimation() {
-  if (state.variationTimer) {
-    clearInterval(state.variationTimer);
-    state.variationTimer = null;
-  }
-  state.variationPlayback = null;
-}
-
 function stopPlayback() {
   stopAutoplay();
   stopPreview();
-  stopVariationAnimation();
 }
 
 function manualNavigate(index) {
@@ -549,16 +543,16 @@ function toggleAutoplay() {
 function continuationMarkup(result) {
   const playable = !state.running && continuationFrames(result).length > 0;
   const moves = (result.pv || result.bestSan || "").trim().split(/\s+/).filter(Boolean);
-  const played = state.variationPlayback?.result === result ? state.variationPlayback.step : 0;
+  const played = state.preview?.result === result ? state.preview.index : 0;
   const line = moves.map((move, index) => `<span class="pv-move${index < played ? " is-played" : ""}" data-pv-index="${index}">${esc(move)}</span>`).join(" ");
   return `<div class="feedback-block stockfish-continuation" aria-label="Stockfish recommendation">
     <div class="continuation-copy"><div class="continuation-heading"><span>STOCKFISH RECOMMENDATION</span></div>
     <p class="pv-line">${line || "No continuation reported."}</p></div>
-    <div class="continuation-actions"><button id="showContinuationBtn" type="button" class="show-move-btn" ${playable ? "" : "disabled"}>Show Move</button></div></div>`;
+    <div class="continuation-actions"><button id="showContinuationBtn" type="button" class="show-move-btn" ${state.preview || playable ? "" : "disabled"}>${state.preview ? "Go back" : "Show Move"}</button></div></div>`;
 }
 
 function updateContinuationMoveHighlights() {
-  const step = state.variationPlayback ? state.variationPlayback.step : 0;
+  const step = state.preview?.index || 0;
   const spans = $("feedbackContainer")?.querySelectorAll(".stockfish-continuation .pv-move");
   if (!spans) return;
   spans.forEach((span, idx) => {
@@ -566,66 +560,46 @@ function updateContinuationMoveHighlights() {
   });
 }
 
-function playEngineVariation(result) {
+function showContinuation(result) {
   const frames = continuationFrames(result);
   if (!frames.length || state.running || !state.tree) return;
   stopPlayback();
   boardInput.cancel();
   clearBoardSelection();
   overlay.clear();
-
-  const originNode = state.tree.nodes.get(result.nodeId) || state.tree.current;
-  const baseNode = originNode?.parent || originNode;
-
-  // Build the variation tree nodes upfront
-  state.tree.select(baseNode);
-  const variationNodes = [];
-  for (const frame of frames) {
-    try {
-      const node = state.tree.play({
-        from: frame.move.from,
-        to: frame.move.to,
-        promotion: frame.move.promotion
-      });
-      variationNodes.push(node);
-    } catch {
-      break;
-    }
-  }
-
-  if (!variationNodes.length) return;
-
-  // Start animation from the base position
-  state.tree.select(baseNode);
-  syncActiveLine();
-  switchTab("moves");
-  renderBoard(baseNode.ply);
-
-  state.variationPlayback = { result, step: 0, total: variationNodes.length };
-  updateContinuationMoveHighlights();
-
-  state.variationTimer = setInterval(() => {
-    if (!state.variationPlayback || state.variationPlayback.step >= variationNodes.length) {
-      stopVariationAnimation();
-      return;
-    }
-    const nextNode = variationNodes[state.variationPlayback.step++];
+  const origin = state.tree.current;
+  const source = state.tree.nodes.get(result.nodeId) || origin;
+  const base = source.parent || source;
+  const preview = state.preview = {
+    result, origin, base, frames, index: 0, fen: result.beforeFen,
+    lastMove: null, complete: false, timer: null
+  };
+  $("continuationPreview").hidden = false;
+  $("continuationPreviewStatus").textContent = `Preview 0/${frames.length}`;
+  $("board").classList.add("is-previewing");
+  renderBoard(state.cursor);
+  preview.timer = setInterval(() => {
+    if (state.preview !== preview) return;
+    const frame = frames[preview.index++];
+    preview.fen = frame.fen;
+    preview.lastMove = frame.move;
+    preview.complete = preview.index === frames.length;
+    if (preview.complete) clearInterval(preview.timer);
+    $("continuationPreviewStatus").textContent = `Preview ${preview.index}/${frames.length}: ${frame.move.san}`;
+    renderBoard(state.cursor);
     updateContinuationMoveHighlights();
-    navigateNode(nextNode, { automatic: true });
-    if (state.variationPlayback.step >= variationNodes.length) {
-      stopVariationAnimation();
-    }
   }, 1100);
 }
 
-function showContinuation(result) {
-  playEngineVariation(result);
+// Preview positions can be played only after the recommendation has finished.
+function boardContext() {
+  if (!state.tree || (state.preview && !state.preview.complete)) return null;
+  return {
+    key: state.preview || state.tree.current, flipped: state.flipped,
+    chess: new Chess(state.preview?.fen || state.tree.current.fen)
+  };
 }
 
-$("returnFromPreview").addEventListener("click", () => {
-  stopPreview();
-  $("showContinuationBtn")?.focus({ preventScroll: true });
-});
 window.addEventListener("pagehide", () => {
   stopAutoplay();
   stopPreview({ render: false });
@@ -728,11 +702,11 @@ $("backToSummaryBtn")?.addEventListener("click", () => {
 const overlay = new BoardOverlay($("boardArrows"), () => state.flipped, $("board"));
 const boardInput = new BoardInput({
   board: $("board"), overlay,
-  context: () => state.tree && !state.preview ? { key: state.tree.current, flipped: state.flipped, chess: new Chess(state.tree.current.fen) } : null,
+  context: boardContext,
   click: handleSquareClick,
   select: square => {
     state.selectedSquare = square;
-    state.legalMoves = new Chess(state.tree.current.fen).moves({ square, verbose: true });
+    state.legalMoves = boardContext().chess.moves({ square, verbose: true });
     updateSelectionHints();
   },
   move: executeUserMove,
@@ -929,7 +903,7 @@ function handleSquareClick(sqName) {
   const currentPos = state.positions[state.cursor];
   if (!currentPos) return;
 
-  const chess = new Chess(currentPos.fen);
+  const chess = new Chess(state.preview?.fen || currentPos.fen);
   if (chess.isGameOver()) return;
   const turn = chess.turn();
 
@@ -970,19 +944,24 @@ function stopReview() {
 }
 
 function executeUserMove(fromSq, toSq, promotion = "q") {
-  if (state.preview) return;
+  if (state.preview && !state.preview.complete) return;
   stopAutoplay();
   if (!state.tree) return;
   if (state.running) stopReview();
   // Promotion must be chosen explicitly, including underpromotion.
-  const chess = new Chess(state.tree.current.fen);
+  const chess = new Chess(state.preview?.fen || state.tree.current.fen);
   const candidates = chess.moves({ square: fromSq, verbose: true }).filter(move => move.to === toSq);
   if (candidates.some(move => move.promotion) && arguments.length < 3) {
     openPromotionPicker(fromSq, toSq);
     return;
   }
   try {
-    const node = state.tree.play({ from: fromSq, to: toSq, promotion });
+    const input = { from: fromSq, to: toSq, promotion };
+    const preview = state.preview;
+    const node = preview
+      ? commitContinuation(state.tree, preview.base, preview.frames, input)
+      : state.tree.play(input);
+    if (preview) stopPreview({ render: false });
     syncActiveLine();
     switchTab("moves");
     renderBoard(node.ply);
@@ -992,27 +971,48 @@ function executeUserMove(fromSq, toSq, promotion = "q") {
   }
 }
 
+function positionPromotionPicker() {
+  const dialog = $("promotionDialog");
+  if (!dialog.open) return;
+  const board = $("board").getBoundingClientRect();
+  dialog.style.left = `${board.left + board.width / 2}px`;
+  dialog.style.top = `${board.top + board.height / 2}px`;
+}
+new ResizeObserver(positionPromotionPicker).observe($("board"));
+window.addEventListener("resize", positionPromotionPicker);
+window.addEventListener("scroll", positionPromotionPicker, true);
+
 function openPromotionPicker(from, to) {
   const dialog = $("promotionDialog");
+  const color = boardContext().chess.get(from).color;
   dialog.replaceChildren();
-  const label = document.createElement("p");
-  label.textContent = "Promote pawn to:";
-  dialog.append(label);
+  const cancel = document.createElement("button");
+  cancel.className = "promotion-close";
+  cancel.type = "button";
+  cancel.textContent = "\u00d7";
+  cancel.setAttribute("aria-label", "Cancel promotion");
+  cancel.addEventListener("click", () => dialog.close(), { once: true });
+  dialog.append(cancel);
+  const choices = document.createElement("div");
+  choices.className = "promotion-choices";
   for (const [piece, name] of [["q", "Queen"], ["r", "Rook"], ["b", "Bishop"], ["n", "Knight"]]) {
     const button = document.createElement("button");
-    button.textContent = name;
     button.type = "button";
+    button.setAttribute("aria-label", name);
+    const image = document.createElement("img");
+    image.src = PIECE_IMAGES[color + piece];
+    image.alt = `${color === "w" ? "White" : "Black"} ${name.toLowerCase()}`;
+    button.append(image);
     button.addEventListener("click", () => {
       dialog.close();
       executeUserMove(from, to, piece);
     }, { once: true });
-    dialog.append(button);
+    choices.append(button);
   }
-  const cancel = document.createElement("button");
-  cancel.textContent = "Cancel";
-  cancel.addEventListener("click", () => dialog.close(), { once: true });
-  dialog.append(cancel);
+  dialog.append(choices);
   dialog.showModal();
+  positionPromotionPicker();
+  choices.querySelector("button").focus();
 }
 
 function renderBoard(index) {
@@ -1164,7 +1164,8 @@ function renderBoard(index) {
   updateEvaluationDisplay();
   renderEvalGraph();
 
-  renderFeedback(currentResult);
+  // Keep the source feedback mounted while only the preview board advances.
+  if (!state.preview || state.preview.index === 0) renderFeedback(currentResult);
   renderMoves();
   highlightActiveMoveInList();
   setNavEnabled();
@@ -1174,6 +1175,7 @@ function renderBoard(index) {
 }
 
 function updateEvaluationDisplay() {
+  if (state.preview) return;
   const currentEval = state.analyses[state.cursor];
   let whiteScore = currentEval?.whiteScore;
   let mateDistance = currentEval?.scoreType === "mate" ? Math.abs(currentEval.rawScore) : null;
@@ -1635,6 +1637,7 @@ function getLocalDetailedFeedback(result) {
 let feedbackTarget = null;
 
 function renderFeedback(result) {
+  if (state.preview) result = state.preview.result;
   const tree = state.tree;
   const node = tree?.current;
   const samePosition = feedbackTarget?.tree === tree && feedbackTarget?.node === node && feedbackTarget?.result === result;
@@ -1739,7 +1742,10 @@ function renderFeedback(result) {
   $("feedbackContainer").scrollTop = scrollTop;
 
   $("showContinuationBtn")?.addEventListener("click", () => {
-    if (state.preview) stopPreview();
+    if (state.preview) {
+      stopPreview();
+      $("showContinuationBtn")?.focus({ preventScroll: true });
+    }
     else showContinuation(result);
   });
 

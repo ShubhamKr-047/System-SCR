@@ -39,7 +39,7 @@ for (const provider of ["gemini", "groq"]) {
     await expect(page.locator(".ai-guidance-card")).toContainText("Explanation for f3");
     await expect(page.locator(".ai-guidance-card .pv-line")).toHaveCount(0);
     await expect(page.locator(".stockfish-continuation")).toHaveCount(1);
-    await page.locator("#returnFromPreview").click();
+    await page.locator("#showContinuationBtn").click();
     await expect(page.locator("#moveCounter")).toHaveText("1. f3");
     await expect(page.locator('[data-square="f3"] img')).toHaveAttribute("alt", "White p");
     await expect(page.locator(".ai-guidance-card")).toContainText("Explanation for f3");

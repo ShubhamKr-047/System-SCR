@@ -1,3 +1,4 @@
+import { Chess } from "chess.js";
 import { test, expect } from "@playwright/test";
 
 const PGN = '1. e4 e5 2. Nf3 Nc6 *';
@@ -61,7 +62,7 @@ test("AutoPlay advances original moves, pauses, restarts at the end and stops on
   await expect(page.locator("#startReview")).toHaveAttribute("aria-pressed", "false");
 });
 
-test("Show Move opens a playable engine line and retains the reviewed move's feedback", async ({ page }, info) => {
+test("Show Move previews without saving, goes back, and saves the line only on a legal continuation", async ({ page }, info) => {
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   await load(page);
@@ -78,15 +79,43 @@ test("Show Move opens a playable engine line and retains the reviewed move's fee
   expect(button.x).toBeGreaterThan(card.x + card.width / 2);
   expect(Math.abs(button.y + button.height / 2 - card.y - card.height / 2)).toBeLessThan(1);
   await page.locator("#showContinuationBtn").click();
-  // Latest main intentionally makes Show Move a real, navigable variation.
-  await expect(page.locator("#moveCounter")).toContainText(line.split(/\s+/)[0], { timeout: 5000 });
-  await page.screenshot({ path: info.outputPath("stockfish-variation.png") });
-  await page.locator('#moveList .move-chip[title="1. f3"]').click();
+  await expect(page.locator("#showContinuationBtn")).toHaveText("Go back");
+  await expect(page.locator("#moveCounter")).toHaveText("Preview 1/" + Math.min(8, line.split(/\s+/).length), { timeout: 5000 });
+  await expect(page.locator("#moveList .move-chip")).toHaveCount(chips);
+  await expect(page.locator(".stockfish-continuation .pv-line")).toHaveText(line);
+  await page.locator("#showContinuationBtn").click();
   expect(await pieces(page)).toEqual(original);
   await expect(page.locator("#moveCounter")).toHaveText("1. f3");
-  expect(await page.locator("#moveList .move-chip").count()).toBeGreaterThanOrEqual(chips);
-  await expect(page.locator(".stockfish-continuation .pv-line")).toHaveText(line);
   await expect(page.locator(".pv-move.is-played")).toHaveCount(0);
+  const chess = new Chess();
+  const tokens = line.split(/\s+/).slice(0, 8);
+  for (const token of tokens) chess.move(token);
+  const total = tokens.length;
+  const evaluation = await page.locator("#evalBarScore").textContent();
+  const feedback = await page.locator(".feedback-header-box").innerText();
+  await page.locator("#showContinuationBtn").click();
+  await expect(page.locator("#moveCounter")).toHaveText(`Preview ${total}/${total}`, { timeout: 12000 });
+  await expect(page.locator("#moveList .move-chip")).toHaveCount(chips);
+  await expect(page.locator("#evalBarScore")).toHaveText(evaluation);
+  await expect(page.locator(".feedback-header-box")).toHaveText(feedback, { useInnerText: true });
+  await expect(page.locator(".pv-move.is-played")).toHaveCount(total);
+  await page.screenshot({ path: info.outputPath("stockfish-preview.png") });
+  // A selection and an illegal destination must not save the preview.
+  const next = chess.moves({ verbose: true })[0];
+  await play(page, next.from, next.from);
+  await expect(page.locator("#moveList .move-chip")).toHaveCount(chips);
+  await page.locator("#showContinuationBtn").click();
+  expect(await pieces(page)).toEqual(original);
+  await page.locator("#showContinuationBtn").click();
+  await expect(page.locator("#moveCounter")).toHaveText(`Preview ${total}/${total}`, { timeout: 12000 });
+  await play(page, next.from, next.to);
+  if (next.promotion) await page.getByRole("button", { name: { q: "Queen", r: "Rook", b: "Bishop", n: "Knight" }[next.promotion], exact: true }).click();
+  await expect(page.locator("#board")).not.toHaveClass(/is-previewing/);
+  expect(await page.locator("#moveList .move-chip").count()).toBeGreaterThan(chips);
+  await expect(page.locator("#variationIndicator")).toBeVisible();
+  await page.locator('#moveList .move-chip[title="1. f3"]').click();
+  expect(await pieces(page)).toEqual(original);
+  await expect(page.locator(".stockfish-continuation .pv-line")).toHaveText(line);
   // Revealing local coaching must not duplicate or hide the independent line.
   await page.locator("#askAiCoachingBtn").click();
   await expect(page.locator("#positionFeedback")).toBeVisible();
