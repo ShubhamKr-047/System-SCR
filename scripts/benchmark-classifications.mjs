@@ -5,8 +5,9 @@ import { evaluatePosition } from "../src/position-analysis.js";
 import { analyzeMove } from "../src/analysis.js";
 import { StockfishWorker } from "./lib/stockfish-worker.mjs";
 import fixtures from "../tests/fixtures/classification-positions.json" with { type: "json" };
+import { DEFAULT_REVIEW_TIME } from "../src/review-policy.js";
 
-const times = process.argv.includes("--compare") ? [250, 1500] : [250];
+const times = process.argv.includes("--compare") ? [DEFAULT_REVIEW_TIME, 1500] : [DEFAULT_REVIEW_TIME];
 const reports = [];
 for (const time of times) {
   for (const fixture of fixtures) {

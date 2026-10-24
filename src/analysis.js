@@ -1,6 +1,7 @@
 import { Chess } from "chess.js";
 import { CLASSIFICATIONS } from "./classifications.js";
 import { analyzeClassification } from "./classification-analysis.js";
+import { DEFAULT_REVIEW_TIME, REVIEW_POLICY_VERSION } from "./review-policy.js";
 
 export async function analyzeMove(node, evaluate, options) {
   const playedMove = node.move;
@@ -64,6 +65,9 @@ export async function analyzeMove(node, evaluate, options) {
     afterWhite,
     lossCp,
     classificationVersion: evidence.classificationVersion,
+    refinement: evidence.refinement,
+    reviewQuality: { version: REVIEW_POLICY_VERSION, baseTime: options?.moveTime || DEFAULT_REVIEW_TIME,
+      complete: evidence.refinement.complete },
     chanceLoss: classification.chanceLoss,
     beforeChances: best.chances,
     afterChances: played.chances,

@@ -238,3 +238,30 @@ test("a score belonging to another move is rejected instead of misclassified", a
   workers[0].ready(); workers[0].emit("info depth 15 score cp 40 pv e2e4\nbestmove d2d4");
   await rejected;
 });
+
+test("stronger compatible results serve weaker requests, including queued and restricted searches", async () => {
+  const { engine, workers } = setup();
+  const options = { position: { fen: "root", moves: ["e2e4"] }, searchMoves: ["e7e5"] };
+  const strong = engine.evaluate("fen", 600, options);
+  const weak = engine.evaluate("fen", 250, options);
+  workers[0].ready(); workers[0].complete(25, "e7e5");
+  const result = await strong;
+  assert.equal(await weak, result);
+  assert.equal(await engine.evaluate("fen", 200, options), result);
+  assert.equal(workers[0].commands.filter(command => command.startsWith("go ")).length, 1);
+  engine.invalidate("fen", 250, options);
+  const retried = engine.evaluate("fen", 250, options);
+  workers[0].complete(20, "e7e5"); await retried;
+  assert.equal(workers[0].commands.filter(command => command.startsWith("go ")).length, 2);
+});
+
+test("stronger cached analysis never crosses history or MultiPV boundaries", async () => {
+  const { engine, workers } = setup();
+  const first = engine.evaluate("fen", 1000, { position: { fen: "root", moves: ["e2e4"] } });
+  workers[0].ready(); workers[0].complete(); await first;
+  const otherHistory = engine.evaluate("fen", 250, { position: { fen: "root", moves: ["d2d4"] } });
+  workers[0].complete(); await otherHistory;
+  const alternatives = engine.evaluate("fen", 250, { position: { fen: "root", moves: ["e2e4"] }, multiPv: 2 });
+  workers[0].complete(); await alternatives;
+  assert.equal(workers[0].commands.filter(command => command.startsWith("go ")).length, 3);
+});

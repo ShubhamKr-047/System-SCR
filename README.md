@@ -6,14 +6,14 @@ A free Firefox/Zen WebExtension starter for reviewing **completed** Chess.com ga
 
 - Separate review page with a board, move list, navigation, PGN import, and feedback panel.
 - PGN import by file or pasted text.
-- Local Stockfish integration (lite, single-threaded build) and adjustable per-position time.
+- Local Stockfish integration (lite, single-threaded build) with Quick, Thorough and Deep review policies.
 - Heuristic move labels based on evaluation changes.
 - Local Stockfish analysis works without an API key. Optional Gemini or Groq explanations use your selected provider's API key and usage limits.
 
 ## Important limitations of this first MVP
 
 - The extension adds an “Analyze with Zen” button to supported Chess.com game URLs. Clicking it retrieves the finished game PGN from Chess.com's public monthly archive and opens the separate review page automatically. The game must be completed and publicly available in the archive; if Chess.com has not published it yet, the extension will explain that.
-- The lite engine is intentionally compact. The default base search budget is 0.25 seconds. Review checks both endpoints, the played continuation, and critical alternatives when needed, so long games can take a few minutes.
+- The lite engine is intentionally compact. Quick review uses a 0.125-second base search, shows an initial pass across the game, then checks critical moves within a shared budget. Total time depends on game length and CPU speed. Completed analysis survives stop/resume and repeat reviews.
 - Move labels use local Stockfish comparisons, verified opening entries, and conservative checks for exceptional moves. They follow SCR's documented rules rather than Chess.com's proprietary model. See [move classification](docs/move-classification.md).
 - This starter needs Node.js/npm to build and fetch the local dependencies once. After building, the review and engine run locally.
 
@@ -48,13 +48,13 @@ Temporary add-ons may be removed when Zen restarts. To test code changes, rebuil
 - **Build says Stockfish files could not be found:** inspect `node_modules\stockfish\bin`. Package layouts can change between versions. Update `scripts/copy-engine.mjs` to match the installed file names, then run `npm run build` again.
 - **Engine fails to start:** confirm `dist\engine` contains both `stockfish-19-lite-single.js` and `stockfish-19-lite-single.wasm`; reload the extension.
 - **PGN won't load:** use a PGN downloaded from Chess.com or paste the full PGN including move text.
-- **Review takes too long:** choose Quick (0.25 sec) or analyze shorter games first.
+- **Review takes too long:** choose Quick review (Recommended). Stop and use Resume review to continue later without losing completed work.
 - **Extension is not retained after restart:** temporary loading is for development. A permanent Firefox/Zen install generally requires a signed add-on package.
 
 ## Engine settings
 
 - Single-threaded WASM engine: one CPU worker, so the thread setting cannot be increased.
-- Base search time: 250 / 500 / 1000 ms. Borderline moves, mate transitions, and possible Great/Brilliant moves receive additional checks, so total review time varies by position.
+- Base search time: Quick 125 / Thorough 500 / Deep 1000 ms. Critical candidates get selective checks with a per-move and shared game budget. Quick prioritizes speed and may differ on fine move labels; use Thorough or Deep for closer analysis. See [runtime budgets and benchmarks](docs/move-classification.md#runtime-cost-and-verification).
 - Selecting an unevaluated position requests a quick local evaluation. New variation moves are analyzed automatically using the selected per-position time.
 
 ## Exploring variations

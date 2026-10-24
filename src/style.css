@@ -2735,6 +2735,27 @@ body.resizing-feedback {
   color: var(--text-muted);
 }
 
+.summary-progress-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.summary-stop-review {
+  padding: 1px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.summary-stop-review:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .summary-progress-pct {
   font-family: 'Roboto Mono', monospace;
   font-size: 14px;
