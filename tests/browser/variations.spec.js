@@ -171,3 +171,49 @@ test("board flipping, keyboard navigation, and identical moves preserve existing
   await page.locator("body").press("ArrowRight");
   await expect(page.locator("#moveCounter")).toHaveText("3. Bb5");
 });
+
+
+for (const color of ["White", "Black"]) {
+  test(`${color} promotion picker uses matching pieces, stays centered, and cancels safely`, async ({ page }, info) => {
+    const white = color === "White";
+    const pgn = white
+      ? '[SetUp "1"]\n[FEN "7k/P7/8/8/8/8/8/7K w - - 0 30"]\n\n30. a8=Q+ *'
+      : '[SetUp "1"]\n[FEN "7k/8/8/8/8/8/p7/7K b - - 0 30"]\n\n30... a1=Q+ *';
+    const from = white ? "a7" : "a2", to = white ? "a8" : "a1";
+    const dialog = page.locator("#promotionDialog");
+    await load(page, pgn);
+    const original = await pieces(page);
+    await play(page, from, to);
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveText("\u00d7");
+    await expect(dialog.locator("img")).toHaveCount(4);
+    for (const name of ["Queen", "Rook", "Bishop", "Knight"]) {
+      await expect(dialog.getByRole("button", { name, exact: true }).locator("img")).toHaveAttribute("alt", `${color} ${name.toLowerCase()}`);
+    }
+    async function centered() {
+      const board = await page.locator("#board").boundingBox();
+      const picker = await dialog.boundingBox();
+      expect(Math.abs(board.x + board.width / 2 - picker.x - picker.width / 2)).toBeLessThan(2);
+      expect(Math.abs(board.y + board.height / 2 - picker.y - picker.height / 2)).toBeLessThan(2);
+    }
+    await centered();
+    await page.setViewportSize({ width: 1200, height: 850 });
+    await centered();
+    await page.screenshot({ path: info.outputPath(`${color.toLowerCase()}-promotion.png`) });
+    await dialog.getByRole("button", { name: "Cancel promotion" }).click();
+    await expect(dialog).toBeHidden();
+    expect(await pieces(page)).toEqual(original);
+    await page.keyboard.press("f");
+    await play(page, from, to);
+    await centered();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(page.locator("#moveCounter")).toHaveText("Start");
+    for (const [name, piece] of [["Queen", "q"], ["Rook", "r"], ["Bishop", "b"], ["Knight", "n"]]) {
+      await load(page, pgn);
+      await play(page, from, to);
+      await dialog.getByRole("button", { name, exact: true }).click();
+      await expect(page.locator(`[data-square="${to}"] img`)).toHaveAttribute("alt", `${color} ${piece}`);
+    }
+  });
+}

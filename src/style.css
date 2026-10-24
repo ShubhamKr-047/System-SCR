@@ -1238,20 +1238,34 @@ body.chesscom-theme {
 }
 
 #promotionDialog {
+  position: fixed;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  max-width: calc(100vw - 24px);
   background: #262421;
   color: #fff;
   border: 1px solid #b4d995;
-  border-radius: 8px;
-  padding: 20px;
+  border-radius: 14px;
+  padding: 34px 12px 12px;
+  box-shadow: 0 16px 48px #0008;
 }
 
 #promotionDialog::backdrop { background: #0009; }
 
 #promotionDialog button {
-  padding: 8px 12px;
-  margin: 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
   cursor: pointer;
 }
+
+.promotion-choices { display: flex; gap: 6px; }
+.promotion-choices button { padding: 5px; width: clamp(46px, 8vw, 68px); aspect-ratio: 1; }
+.promotion-choices img { display: block; width: 100%; height: 100%; }
+#promotionDialog button:hover { background: #ffffff16; }
+#promotionDialog button:focus-visible { outline: 2px solid #b4d995; outline-offset: 2px; }
+#promotionDialog .promotion-close { position: absolute; top: 4px; right: 6px; width: 28px; height: 28px; padding: 0; font-size: 24px; line-height: 1; }
 
 /* COLLAPSIBLE PASTE DRAWER */
 .paste-drawer {

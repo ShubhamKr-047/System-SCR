@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { GameTree } from "../src/game-tree.js";
 import { Chess } from "chess.js";
-import { continuationFrames } from "../src/playback.js";
+import { continuationFrames, commitContinuation } from "../src/playback.js";
 
 test("preview replays recommendations from before the played move, without changing its source", () => {
   const before = new Chess();
@@ -38,4 +39,34 @@ test("raw engine UCI lines and a single best move also replay legally", () => {
   assert.deepEqual(continuationFrames({ beforeFen, engineEvidence: { before: { pv: "d2d4 d7d5" } } }).map(frame => frame.move.san), ["d4", "d5"]);
   assert.equal(continuationFrames({ beforeFen, bestUci: "g1f3" })[0].move.san, "Nf3");
   assert.deepEqual(continuationFrames({ beforeFen, pv: "(none)" }), []);
+});
+
+
+test("preview commits the entire continuation only after a legal user move and reuses existing branches", () => {
+  const tree = new GameTree("1. f3 e5 *");
+  tree.select(tree.mainline[1]);
+  const origin = tree.current;
+  origin.analysis = { whiteScore: -1 };
+  const frames = continuationFrames({ beforeFen: tree.root.fen, pv: "e4 e5 Nf3" });
+  assert.equal(tree.nodes.size, 3);
+  assert.equal(tree.current, origin);
+  assert.throws(() => commitContinuation(tree, tree.root, frames, { from: "a1", to: "a8" }));
+  assert.equal(tree.nodes.size, 3);
+  assert.equal(tree.current, origin);
+  const end = commitContinuation(tree, tree.root, frames, { from: "b8", to: "c6" });
+  assert.deepEqual(tree.path(end).slice(1).map(n => n.move.san), ["e4", "e5", "Nf3", "Nc6"]);
+  assert.deepEqual(tree.mainline.slice(1).map(n => n.move.san), ["f3", "e5"]);
+  assert.deepEqual(origin.analysis, { whiteScore: -1 });
+  const count = tree.nodes.size;
+  assert.equal(commitContinuation(tree, tree.root, frames, { from: "b8", to: "c6" }), end);
+  assert.equal(tree.nodes.size, count);
+});
+
+test("continuing a preview on a fresh analysis board saves a variation rather than extending mainline", () => {
+  const tree = new GameTree();
+  const frames = continuationFrames({ beforeFen: tree.root.fen, pv: "e4 e5" });
+  const end = commitContinuation(tree, tree.root, frames, { from: "g1", to: "f3" });
+  assert.equal(end.mainline, false);
+  assert.equal(tree.mainline.length, 1);
+  assert.equal(tree.returnToGame(), tree.root);
 });

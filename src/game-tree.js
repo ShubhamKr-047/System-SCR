@@ -72,11 +72,11 @@ export class GameTree {
     return line;
   }
 
-  play(input) {
+  play(input, { variation = false } = {}) {
     const chess = new Chess(this.current.fen);
     const move = chess.move(input);
     const parent = this.current;
-    const isExtendingMainline = Boolean(this.isAnalysisBoard && parent.mainline && parent === this.mainline.at(-1));
+    const isExtendingMainline = Boolean(!variation && this.isAnalysisBoard && parent.mainline && parent === this.mainline.at(-1));
     const existing = parent.children.find(n => moveUci(n.move) === moveUci(move));
     const node = existing || this.create(parent, move, chess.fen(), isExtendingMainline);
     if (!existing && isExtendingMainline) {
