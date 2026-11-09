@@ -31,4 +31,19 @@ for (const time of times) {
 }
 await mkdir("test-results", { recursive: true });
 await writeFile("test-results/classification-benchmark.json", JSON.stringify(reports, null, 2));
+const metrics = {};
+for (const report of reports.filter(r => r.expected.length === 1)) {
+  const expected = report.expected[0], predicted = report.classification;
+  for (const label of new Set([expected, predicted])) {
+    const m = metrics[label] ||= { tp: 0, fp: 0, fn: 0 };
+    if (expected === label && predicted === label) m.tp++;
+    else if (predicted === label) m.fp++; else m.fn++;
+  }
+}
+for (const m of Object.values(metrics)) {
+  m.precision = m.tp + m.fp ? m.tp / (m.tp + m.fp) : null;
+  m.recall = m.tp + m.fn ? m.tp / (m.tp + m.fn) : null;
+}
+await writeFile('test-results/classification-metrics.json', JSON.stringify({
+  scope: 'Only singleton-label fixtures; unrepresented labels have no measured accuracy. This small corpus is not population calibration.', metrics }, null, 2));
 if (reports.some(report => !report.pass)) process.exitCode = 1;

@@ -58,10 +58,14 @@ export async function evaluatePosition(node, engine, { moveTime, priority = 0, s
       engine.invalidate(node.fen, moveTime, searchOptions);
       throw new Error("Engine returned no legal best move. Retry analysis.");
     }
+    if (searchMoves.length && !searchMoves.includes(bestmove)) throw new Error('Engine returned a move outside the requested search restrictions');
     result = { ...result, bestmove };
   }
   const whiteScore = result.score === 0 ? 0 : node.fen.split(" ")[1] === "w" ? result.score : -result.score;
-  const analysis = { ...result, whiteScore, terminal, signature };
+  const provenance = { root: JSON.stringify(positionHistory(node)), perspective: node.fen.split(' ')[1],
+    multiPv, searchMoves: [...searchMoves].sort(), targetDepth, nodeLimit: nodes ?? null };
+  const analysis = { ...result, candidates: result.candidates?.map(line => ({ ...line, provenance })),
+    provenance, whiteScore, terminal, signature };
   if (normalSearch && (!node.analysis || node.analysis.moveTime <= moveTime ||
     (!terminal && !legalBestMove(node.fen, node.analysis)))) node.analysis = analysis;
   node.positionError = "";

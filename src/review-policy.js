@@ -1,6 +1,6 @@
 import { CLASSIFICATION_VERSION } from "./move-quality.js";
 
-export const REVIEW_POLICY_VERSION = 4;
+export const REVIEW_POLICY_VERSION = 5;
 export const DEFAULT_REVIEW_TIME = 125;
 
 export function reviewPolicy(time = DEFAULT_REVIEW_TIME) {

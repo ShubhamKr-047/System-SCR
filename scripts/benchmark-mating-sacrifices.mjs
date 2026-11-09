@@ -22,3 +22,17 @@ for (const game of games) for (const moveTime of [125, 500, 1000]) {
 }
 await mkdir('logs/review-benchmarks', { recursive: true });
 await writeFile('logs/review-benchmarks/mating-sacrifices.json', JSON.stringify(reports, null, 2));
+// Exhaust the legal-proof node limit deliberately to exercise the independent
+// engine-confirmed route, including its distinct confidence and explanation.
+for (const game of games) {
+  const engine = new EngineQueue(() => new StockfishWorker());
+  try {
+    const node = new GameTree(game.pgn).mainline[game.ply];
+    const result = await analyzeMove(node, (p,o) => evaluatePosition(p,engine,o), { moveTime: 1000, proofLimits: { maxNodes: 0 } });
+    assert.equal(result.key, 'brilliant');
+    assert.equal(result.classificationEvidence.sacrifice.kind, 'engine-mate');
+    assert.equal(result.classificationEvidence.sacrifice.confidence, 'engine-confirmed');
+    assert.equal(result.refinement.mateProof.proven, false);
+    console.log(JSON.stringify({ game: game.name, fallback: 'engine-confirmed', label: result.key }));
+  } finally { engine.clear(); }
+}
