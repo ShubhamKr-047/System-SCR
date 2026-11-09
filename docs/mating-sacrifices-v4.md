@@ -1,5 +1,8 @@
 # Verified mating sacrifices (classification and policy v4)
 
+> See [classification v5](classification-v5.md) for current evidence, mate,
+> material-trace, Great and Miss rules.
+
 This supersedes the mating-sacrifice and time-budget rules in review-v3.md.
 
 The reported regressions are Opera 16.Qb8+ and shubham_kr_47–mana1414

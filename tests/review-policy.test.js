@@ -165,7 +165,7 @@ for (const scenario of ["king move", "disagreement about mate"]) {
         line(king ? -8.1 : 0, options.searchMoves[0]);
       return line(king ? -8 : 0, "g1h1");
     }, { moveTime: DEFAULT_REVIEW_TIME });
-    assert.equal(result.key, "blunder");
+    assert.equal(result.key, king ? "good" : "blunder");
     assert.equal(result.refinement.priority, 4);
     assert.ok(requests.some(request => request.moveTime === 1000));
   });

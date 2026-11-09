@@ -1,6 +1,7 @@
 import { Chess } from "chess.js";
+import { mateTransition } from './review-evidence.js';
 
-export const CLASSIFICATION_VERSION = 4;
+export const CLASSIFICATION_VERSION = 5;
 // Percentage-point losses, calibrated against the human-game curve documented
 // at https://lichess.org/page/accuracy. These are SCR rules, not Chess.com's model.
 export const QUALITY_THRESHOLDS = Object.freeze({ excellent: 2, good: 5, inaccuracy: 10, mistake: 20 });
@@ -89,11 +90,14 @@ export function classifyEvidence({ before, played, isBest, lossCp, legalMovesCou
     : loss > t.excellent ? "good" : "excellent";
   const missedMate = before.mate > 0 && !played.mate;
   const missedOpportunity = opponentOpportunity && before.chances >= 70 && played.chances <= 60 && loss >= 8;
+  const equivalent = Math.abs(before.pawns - played.pawns) <= 0.100001 && lossCp <= 10 && loss <= 0.5 && before.mate === played.mate;
+  const bestRoute = before.mate > 0 && played.mate > 0 ? 'preserved-mate'
+    : isBest && loss <= 2 ? 'top-choice' : equivalent ? 'equivalent' : null;
   const result = (key, reason) => ({ key, reason, severity, chanceLoss: loss,
-    missedOpportunity, missedMate, confirmed });
+    bestRoute, missedOpportunity, missedMate, confirmed, mateTransition: mateTransition(before, played) });
   if (legalMovesCount === 1) return result("forced", "There was exactly one legal move.");
   if (confirmed && missedOpportunity) return result("miss", "The opponent offered a winning opportunity, but this move lets it slip away.");
-  if ((played.mate < 0 && before.mate >= 0) || loss >= t.mistake) {
+  if ((mateTransition(before, played) === 'new-forced-loss' && confirmed) || loss >= t.mistake) {
     return result("blunder", played.mate < 0 ? "This allows a forced checkmate that could have been avoided."
       : `This loses ${loss.toFixed(1)} percentage points of estimated winning chances.`);
   }
@@ -102,11 +106,11 @@ export function classifyEvidence({ before, played, isBest, lossCp, legalMovesCou
   const book = opening && loss <= t.excellent && lossCp <= 30 && !missedMate && !played.mate;
   // Near-equivalence requires a score tolerance too: saturated winning-chance
   // curves must not turn every move in an already won/lost position into Best.
-  const equivalent = Math.abs(before.pawns - played.pawns) <= 0.100001 && lossCp <= 10 && loss <= 0.5 && before.mate === played.mate;
-  if ((isBest && loss <= 2) || equivalent || (before.mate > 0 && played.mate > 0)) {
+  if (bestRoute) {
     if (confirmed && sacrifice?.verified && played.chances >= 48) {
       return result("brilliant", sacrifice.kind === "forcing-mate"
         ? "A sound sacrifice forcing checkmate: every legal defensive reply has been verified."
+        : sacrifice.kind === 'engine-mate' ? "A sound sacrifice: stable engine searches confirm a mating continuation against the strongest defense and checked acceptances."
         : "A sound piece sacrifice: deeper analysis confirms compensation if the opponent accepts it.");
     }
     if (confirmed && critical) return result("great", "A critical find: the strongest alternative substantially worsens the outcome.");

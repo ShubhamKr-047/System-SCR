@@ -1,16 +1,21 @@
-import { Chess } from "chess.js";
 import { lookupOpening } from "./openings.js";
 import { DEFAULT_REVIEW_TIME, reviewPolicy } from "./review-policy.js";
 import { chessAtNode } from "./position-analysis.js";
 import { proveShortMate } from "./mate-proof.js";
+import { traceSacrifice } from './sacrifice-trace.js';
+import { rootIdentity, verifiedPrevious } from './review-evidence.js';
 import { CLASSIFICATION_VERSION, classifyEvidence, materialBalance, playerEvaluation,
-  playUci, reliableSearch, sacrificeCandidates, uciMove } from "./move-quality.js";
+  reliableSearch, sacrificeCandidates, uciMove } from "./move-quality.js";
 
 const turnOf = node => node.fen.split(" ")[1];
 const asPlayer = (analysis, node, color) => playerEvaluation(analysis, turnOf(node), color);
 const lineFor = (analysis, uci) => analysis.bestmove === uci ? analysis
   : analysis.candidates?.find(line => line.pv.split(" ")[0] === uci);
-const normal = (evaluate, node, options, time) => evaluate(node, { ...options, moveTime: time, multiPv: 1, searchMoves: [] });
+const normal = async (evaluate, node, options, time) => {
+  const result = await evaluate(node, { ...options, moveTime: time, multiPv: 1, searchMoves: [] });
+  if (result?.provenance && result.provenance.root !== rootIdentity(node)) throw new Error('Incompatible review position evidence');
+  return result;
+};
 
 function completed(analysis) {
   return analysis.terminal || reliableSearch(analysis);
@@ -29,18 +34,6 @@ function opportunityFromPrevious(node, current) {
   return asPlayer(current, previous, mover).chances - earlier.chances >= 8;
 }
 
-function hasPersistentDeficit(candidate, analysis, baseline, color) {
-  const chess = new Chess(candidate.fen);
-  let plies = 0;
-  let sustained = false;
-  for (const uci of (analysis.pv || "").split(/\s+/).slice(0, 10)) {
-    try { playUci(chess, uci); plies++; } catch { break; }
-    if (chess.isCheckmate()) return chess.turn() !== color;
-    if (plies >= 2 && baseline - materialBalance(chess.fen(), color) >= 1.5) sustained = true;
-  }
-  return sustained;
-}
-
 async function verifySacrifice(node, candidates, evaluate, options, time) {
   // Ambiguous positions get an ordinary quality label rather than an unverified !!.
   if (!candidates.length || candidates.length > 4) return null;
@@ -55,11 +48,15 @@ async function verifySacrifice(node, candidates, evaluate, options, time) {
     if (accepted.chances < 48 || accepted.mate < 0) return { verified: false, rejected: true };
     // A static offer can turn out to recover material elsewhere immediately.
     // Exclude that offer, while allowing a different genuine sacrifice to qualify.
-    if (!hasPersistentDeficit(candidate, analysis, baseline, node.move.color)) continue;
+    const trace = traceSacrifice(candidate, analysis, baseline, node.move.color);
+    if (!trace.qualifies && accepted.mate <= 0) {
+      if (trace.events.length < 3) return null;
+      continue;
+    }
     evidence.push({ capture: candidate.uci, san: candidate.san, piece: candidate.piece, square: candidate.square,
-      materialOffered: candidate.loss, evaluation: accepted, search: analysis });
+      materialOffered: candidate.loss, evaluation: accepted, search: analysis, trace });
   }
-  return evidence.length ? { verified: true, acceptances: evidence } : { verified: false, rejected: true };
+  return evidence.length ? { verified: true, confidence: 'engine-confirmed', acceptances: evidence } : { verified: false, excluded: true, reason: 'ordinary-recovery' };
 }
 
 export async function analyzeClassification(node, evaluate, options = {}) {
@@ -124,7 +121,10 @@ export async function analyzeClassification(node, evaluate, options = {}) {
     if (available < 100) return null;
     spent += available;
     try {
-      return await evaluate(position, { ...options, moveTime: available, multiPv: 1, searchMoves: [], retry: false, targetDepth: searchOptions.multiPv ? policy.depthTargets[1] : policy.depthTargets[2], ...searchOptions });
+      const result = await evaluate(position, { ...options, moveTime: available, multiPv: 1, searchMoves: [], retry: false, targetDepth: searchOptions.multiPv ? policy.depthTargets[1] : policy.depthTargets[2], ...searchOptions });
+      if (result?.provenance && (result.provenance.root !== rootIdentity(position) ||
+        result.provenance.perspective !== turnOf(position))) throw new Error('Incompatible comparison evidence');
+      return result;
     } catch (error) {
       if (error.name === "AbortError" || options.signal?.aborted) throw error;
       // Optional verification may be inconclusive at a tight search limit.
@@ -140,8 +140,8 @@ export async function analyzeClassification(node, evaluate, options = {}) {
     const allowance = Math.min(150, budget - spent, options.deadline == null ? Infinity : options.deadline - performance.now());
     if (allowance > 0) {
       spent += allowance;
-      mateProof = proveShortMate(chessAtNode(node), color, { deadline: performance.now() + allowance, signal: options.signal });
-      if (mateProof.proven) sacrifice = { verified: true, kind: "forcing-mate", offers: sacrificeOffers.map(c => ({ capture: c.uci, materialOffered: c.loss })), mateProof };
+      mateProof = proveShortMate(chessAtNode(node), color, { ...options.proofLimits, deadline: performance.now() + allowance, signal: options.signal });
+      if (mateProof.proven) sacrifice = { verified: true, confidence: 'legal-proof', kind: "forcing-mate", offers: sacrificeOffers.map(c => ({ capture: c.uci, materialOffered: c.loss })), mateProof };
     }
   }
   let alternatives = null;
@@ -181,16 +181,35 @@ export async function analyzeClassification(node, evaluate, options = {}) {
     }
   }
   const confirmed = completed(before) && (playedSearch ? completed(playedSearch) : after.terminal);
-  const other = alternatives?.candidates?.find(line => line.pv.split(' ')[0] !== playedUci);
-  const alternativeScore = other ? asPlayer(other, node.parent, color) : null;
-  const hasAlternatives = alternatives?.complete && before === alternatives && reliableSearch(alternatives) && other &&
+  let other = alternatives?.candidates?.find(line => line.pv.split(' ')[0] !== playedUci);
+  let alternativeScore = other ? asPlayer(other, node.parent, color) : null;
+  let hasAlternatives = alternatives?.complete && before === alternatives && reliableSearch(alternatives) && other &&
     reliableSearch(other) && other.depth === alternatives.depth;
   const gap = alternativeScore ? played.chances - alternativeScore.chances : 0;
-  const critical = Boolean(hasAlternatives && !routineRecapture && gap >= 12 &&
+  let critical = Boolean(hasAlternatives && !routineRecapture && gap >= 12 &&
     ((played.chances >= 48 && alternativeScore.chances <= 35) ||
       (played.chances >= 70 && alternativeScore.chances <= 55)));
-  if (!sacrifice && options.refine !== false && confirmed && hasAlternatives && nearBest() && sacrificeOffers.length &&
-    played.chances >= 48 && alternativeScore.chances < 75) {
+  let greatStatus = critical ? 'inconclusive' : 'excluded-by-policy';
+  if (critical && options.refine !== false) {
+    // Confirm both scores together: root identity and distinct first moves are
+    // preserved, including when equivalent moves transpose later.
+    const check = await extra(node.parent, policy.confirmation, { multiPv: 2 });
+    const p = check && lineFor(check, playedUci);
+    const a = check?.candidates?.find(line => line.pv.split(' ')[0] !== playedUci);
+    const ps = p && asPlayer(p, node.parent, color), alt = a && asPlayer(a, node.parent, color);
+    critical = Boolean(check?.complete && p && a && beforeChess.moves({ verbose: true }).some(m => uciMove(m) === a.pv.split(' ')[0]) && completed(p) && completed(a) && p.depth === a.depth &&
+      ps.chances - alt.chances >= 12 && ((ps.chances >= 48 && alt.chances <= 35) || (ps.chances >= 70 && alt.chances <= 55)));
+    greatStatus = critical ? 'verified' : check?.complete && p && a && completed(p) && completed(a) ? 'refuted' : 'inconclusive';
+    if (check?.complete && p && a && completed(p) && completed(a) && p.depth === a.depth) {
+      // A changed ranking must also update ordinary quality, not merely remove !.
+      alternatives = before = check; playedSearch = p;
+      ({ best, played } = evidenceScores());
+      other = a; alternativeScore = alt; hasAlternatives = true;
+    }
+  }
+  const engineMateCandidate = played.mate > 0;
+  if (!sacrifice && options.refine !== false && confirmed && (hasAlternatives || engineMateCandidate) && nearBest() && sacrificeOffers.length &&
+    played.chances >= 48 && (engineMateCandidate || alternativeScore.chances < 75)) {
     // Reserve a fair share for the strongest reply and every acceptance. No
     // partially checked sacrifice can earn Brilliant when its budget expires.
     const each = Math.min(Math.max(1000, policy.confirmation), Math.floor((budget - spent) / (sacrificeOffers.length + 1)));
@@ -199,6 +218,11 @@ export async function analyzeClassification(node, evaluate, options = {}) {
       after = reply;
       sacrifice = await verifySacrifice(node, sacrificeOffers,
         (position, opts) => extra(position, opts.moveTime), options, each);
+      if (engineMateCandidate && sacrifice?.verified) {
+        const mating = asPlayer(reply, node, color).mate > 0 && sacrifice.acceptances.every(a => a.evaluation.mate > 0);
+        if (mating) sacrifice = { ...sacrifice, kind: 'engine-mate', confidence: 'engine-confirmed' };
+        else if (!hasAlternatives || alternativeScore.chances >= 75) sacrifice = null;
+      }
     }
   }
   let verifiedOpportunity = false;
@@ -208,8 +232,7 @@ export async function analyzeClassification(node, evaluate, options = {}) {
     const previous = node.parent;
     // Reuse verified same-root evidence, including a preceding review result.
     const old = previous.result;
-    const cached = old?.classificationVersion === CLASSIFICATION_VERSION && old.classificationEvidence?.confirmed &&
-      old.reviewQuality?.baseTime >= time && old.reviewQuality.complete;
+    const cached = verifiedPrevious(old, previous, CLASSIFICATION_VERSION, time);
     if (cached) {
       verifiedOpportunity = old.chanceLoss >= 8;
       opportunityEvidence = { reused: true, chanceLoss: old.chanceLoss };
@@ -229,12 +252,14 @@ export async function analyzeClassification(node, evaluate, options = {}) {
   }
   const unresolved = [];
   const sacrificeStatus = sacrifice?.verified ? "verified" : sacrifice?.rejected ? "refuted"
+    : sacrifice?.excluded ? 'excluded-by-policy'
     : hasAlternatives && alternativeScore.chances >= 75 && !played.mate ? "excluded-already-winning" : "inconclusive";
   if (reasons.includes("sacrifice") && sacrificeStatus === "inconclusive") unresolved.push("sacrifice");
   if (reasons.includes("alternatives") && !hasAlternatives) unresolved.push("alternatives");
   if (possibleMiss && !opportunityEvidence) unresolved.push("miss");
   if (recheck && !confirmed) unresolved.push("evaluation");
-  const refinement = { sacrificeStatus, mateProof, unresolved, verificationComplete: !unresolved.length, reasons, priority: mateTransition || mateDisagreement || kingDanger ? 4 : possibleMiss || inconsistent ? 3 :
+  if (greatStatus === 'inconclusive') unresolved.push('critical-gap');
+  const refinement = { greatStatus, sacrificeStatus, mateProof, unresolved, verificationComplete: !unresolved.length, reasons, priority: mateTransition || mateDisagreement || kingDanger ? 4 : possibleMiss || inconsistent ? 3 :
     sacrificeOffers.length ? 2 : recheck ? 1 : 0, spentMs: spent, failedChecks,
     complete: options.refine !== false || !reasons.length };
   const classification = classifyEvidence({ before: best, played, isBest: playedUci === before.bestmove,
@@ -242,6 +267,8 @@ export async function analyzeClassification(node, evaluate, options = {}) {
     critical: critical && (!sacrificeOffers.length || Boolean(sacrifice)), sacrifice,
     opponentOpportunity: verifiedOpportunity, confirmed: confirmed || Boolean(mateProof?.proven) });
   return { before, after, playedSearch, best, played, classification,
+    comparison: { root: rootIdentity(node.parent), playedMove: playedUci, mover: color,
+      bestSearch: before.provenance, playedSearch: playedSearch?.provenance },
     lossCp: cpLoss(), opening, legalMovesCount, sacrifice, alternatives, opportunityEvidence, refinement,
     classificationVersion: CLASSIFICATION_VERSION };
 }

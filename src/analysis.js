@@ -76,8 +76,10 @@ export async function analyzeMove(node, evaluate, options) {
       ? ` Verification incomplete: ${evidence.refinement.unresolved.join(", ")}.` : "") +
       (evidence.refinement.reasons.includes("sacrifice") && evidence.refinement.sacrificeStatus === "excluded-already-winning"
         ? " The ordinary sacrifice rule excludes positions with another clearly winning continuation." : "") +
-      (evidence.refinement.sacrificeStatus === "refuted" ? " Verification did not establish a sound qualifying sacrifice." : ""),
-    classificationEvidence: { ...classification, opening, legalMovesCount: evidence.legalMovesCount,
+      (evidence.refinement.sacrificeStatus === "refuted" ? " Verification did not establish a sound qualifying sacrifice." : "") +
+      (classification.mateTransition === 'confirmed-already-losing'
+        ? ' The position was already heavily losing; mate is now confirmed. Severity uses the ordinary chance loss.' : ''),
+    classificationEvidence: { ...classification, comparison: evidence.comparison, opening, legalMovesCount: evidence.legalMovesCount,
       sacrifice: evidence.sacrifice, alternatives: evidence.alternatives?.candidates || [],
       opportunity: evidence.opportunityEvidence },
     key: classificationObj.key,
