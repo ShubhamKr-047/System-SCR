@@ -1,5 +1,18 @@
 import { test, expect } from "@playwright/test";
 
+test("whole-game Quick review preserves a verified Brilliant queen sacrifice", async ({ page }) => {
+  await page.route("https://fonts.googleapis.com/**", route => route.abort());
+  await page.route("https://fonts.gstatic.com/**", route => route.abort());
+  await page.goto("/review.html");
+  await page.locator("#pgnFile").setInputFiles({ name: "sacrifice.pgn", mimeType: "text/plain",
+    buffer: Buffer.from("1. e4 e5 2. Nf3 d6 3. Bc4 Bg4 4. Nc3 g6 5. Nxe5 *") });
+  await page.locator("#summaryReviewBtn").click();
+  await expect(page.locator("#summaryStartBtn")).toBeVisible({ timeout: 30000 });
+  await page.locator("#summaryStartBtn").click();
+  await page.locator('.move-chip[title="5. Nxe5"]').click();
+  await expect(page.locator(".feedback-header-box")).toHaveClass(/brilliant/);
+});
+
 test("local review classifies mate threats and preserves game labels while exploring", async ({ page }) => {
   const errors = [];
   const aiRequests = [];

@@ -46,14 +46,25 @@ test("a larger review budget or changed policy invalidates completion without di
   assert.ok(node.result);
 });
 
+test("elapsed wall time caps optional work even when the engine allowance remains", async () => {
+  const nodes = new GameTree("1. e4 e5 *").mainline.slice(1);
+  let clock = 0;
+  await reviewGame(nodes, { now: () => clock, analyze: async (node, options) => {
+    if (options.refine) assert.equal(options.refinementBudget, 0);
+    else { assert.ok(options.searchTime <= 125); clock += 15000; }
+    save(node, options);
+  } });
+  assert.ok(nodes.every(node => hasReview(node, DEFAULT_REVIEW_TIME)));
+});
+
 test("the game refinement budget is shared and can expire without restarting ordinary searches", async () => {
   const nodes = new GameTree("1. e4 e5 2. Nf3 Nc6 *").mainline.slice(1);
   const budgets = [];
   await reviewGame(nodes, { analyze: async (node, options) => {
     if (options.refine) budgets.push(options.refinementBudget);
-    save(node, options, { spentMs: Math.min(1500, options.refinementBudget || 0) });
+    save(node, options, { spentMs: Math.min(10000, options.refinementBudget || 0) });
   } });
-  assert.deepEqual(budgets, [2500, 1000, 0, 0]);
+  assert.deepEqual(budgets, [15000, 5000, 0, 0]);
   assert.ok(nodes.every(node => hasReview(node, DEFAULT_REVIEW_TIME)));
 });
 

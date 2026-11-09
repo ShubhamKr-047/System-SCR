@@ -1,6 +1,6 @@
 import { Chess } from "chess.js";
 
-export const CLASSIFICATION_VERSION = 2;
+export const CLASSIFICATION_VERSION = 3;
 // Percentage-point losses, calibrated against the human-game curve documented
 // at https://lichess.org/page/accuracy. These are SCR rules, not Chess.com's model.
 export const QUALITY_THRESHOLDS = Object.freeze({ excellent: 2, good: 5, inaccuracy: 10, mistake: 20 });
@@ -23,7 +23,7 @@ export function playerEvaluation(analysis, turn, mover) {
 }
 
 export function reliableSearch(analysis) {
-  return !analysis.bound && analysis.depth >= 14 && analysis.stable === true;
+  return !analysis.bound && analysis.depth >= 12 && analysis.stable === true;
 }
 
 export function materialBalance(fen, color) {
@@ -92,16 +92,14 @@ export function classifyEvidence({ before, played, isBest, lossCp, legalMovesCou
   const result = (key, reason) => ({ key, reason, severity, chanceLoss: loss,
     missedOpportunity, missedMate, confirmed });
   if (legalMovesCount === 1) return result("forced", "There was exactly one legal move.");
+  if (confirmed && missedOpportunity) return result("miss", "The opponent offered a winning opportunity, but this move lets it slip away.");
   if ((played.mate < 0 && before.mate >= 0) || loss >= t.mistake) {
     return result("blunder", played.mate < 0 ? "This allows a forced checkmate that could have been avoided."
       : `This loses ${loss.toFixed(1)} percentage points of estimated winning chances.`);
   }
-  if (confirmed && missedOpportunity) return result("miss", "The opponent offered a winning opportunity, but this move lets it slip away.");
   if (loss >= t.inaccuracy) return result("mistake", `This loses ${loss.toFixed(1)} percentage points of estimated winning chances.`);
   if (loss >= t.good) return result("inaccuracy", "A stronger continuation would preserve more of the position's chances.");
-  if (opening && loss <= t.excellent && lossCp <= 30 && !missedMate && !played.mate) {
-    return result("book", `Recognized opening line: ${opening.eco} — ${opening.name}.`);
-  }
+  const book = opening && loss <= t.excellent && lossCp <= 30 && !missedMate && !played.mate;
   // Near-equivalence requires a score tolerance too: saturated winning-chance
   // curves must not turn every move in an already won/lost position into Best.
   const equivalent = Math.abs(before.pawns - played.pawns) <= 0.100001 && lossCp <= 10 && loss <= 0.5 && before.mate === played.mate;
@@ -110,9 +108,11 @@ export function classifyEvidence({ before, played, isBest, lossCp, legalMovesCou
       return result("brilliant", "A sound piece sacrifice: deeper analysis confirms compensation if the opponent accepts it.");
     }
     if (confirmed && critical) return result("great", "A critical find: the strongest alternative substantially worsens the outcome.");
+    if (book) return result("book", `Recognized opening line: ${opening.eco} — ${opening.name}.`);
     return result("best", before.mate > 0 && played.mate > 0
       ? "This preserves forced checkmate." : "This is Stockfish's best move or an equivalent continuation.");
   }
+  if (book) return result("book", `Recognized opening line: ${opening.eco} — ${opening.name}.`);
   return result(severity, severity === "excellent" ? "Almost as strong as Stockfish's best continuation."
     : "A playable move, with a small concession compared with Stockfish's recommendation.");
 }

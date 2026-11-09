@@ -43,9 +43,10 @@ test("threshold boundaries use percentage points consistently", () => {
   }
 });
 
-test("book recognition and missed opportunities never hide a blunder", () => {
+test("a verified Miss retains its underlying blunder severity", () => {
   const result = classify(2.4, -3, { opening: { eco: "A00", name: "Named trap" }, opponentOpportunity: true, confirmed: true });
-  assert.equal(result.key, "blunder");
+  assert.equal(result.key, "miss");
+  assert.equal(result.severity, "blunder");
   assert.equal(result.missedOpportunity, true);
 });
 
@@ -53,6 +54,11 @@ test("an accurate early move is not automatically Book", () => assert.equal(clas
 test("Great and Brilliant require confirmation; a hanging piece alone is insufficient", () => {
   assert.equal(classify(0, 0, { isBest: true, critical: true, sacrifice: { verified: true } }).key, "best");
   assert.equal(classify(0, 0, { isBest: true, confirmed: true, sacrifice: { verified: false } }).key, "best");
+});
+
+test("a verified Brilliant takes precedence over Great and opening recognition", () => {
+  assert.equal(classify(0.5, 0.5, { isBest: true, confirmed: true, critical: true,
+    opening: { eco: "C00", name: "Sacrifice line" }, sacrifice: { verified: true } }).key, "brilliant");
 });
 test("Miss requires a new opponent opportunity, not merely losing an old advantage", () => {
   assert.equal(classify(2.3, 0.7, { confirmed: true }).key, "mistake");
@@ -203,7 +209,7 @@ test("an unsound acceptance refutes a Brilliant candidate", async () => {
 test("Miss verifies the opponent's preceding mistake rather than trusting its cached label", async () => {
   const tree = new GameTree("1. h3 e5 2. a3 *");
   const node = tree.mainline[3];
-  node.parent.result = { classificationVersion: 2, chanceLoss: 15 };
+  node.parent.result = { classificationVersion: 3, chanceLoss: 15 };
   for (const opponentReallyErred of [true, false]) {
     const result = await analyzeMove(node, async (position, options) => {
       if (position === node.parent.parent) return options.searchMoves?.length
@@ -214,4 +220,18 @@ test("Miss verifies the opponent's preceding mistake rather than trusting its ca
     assert.equal(result.key, opponentReallyErred ? "miss" : "mistake");
     assert.ok(result.classificationEvidence.opportunity);
   }
+});
+
+test("a severe missed opportunity is verified as Miss through the full analysis pipeline", async () => {
+  const node = new GameTree("1. h3 e5 2. a3 *").mainline[3];
+  node.parent.result = { classificationVersion: 3, chanceLoss: 30 };
+  const result = await analyzeMove(node, async (position, options) => {
+    if (position === node.parent.parent) return options.searchMoves?.length
+      ? search(-3, "e7e5") : search(0, "d7d5");
+    if (position === node) return search(3, "b8c6");
+    return options.searchMoves?.length ? search(-3, "a2a3") : search(3, "g1f3");
+  }, { moveTime: 250 });
+  assert.equal(result.key, "miss");
+  assert.equal(result.classificationEvidence.severity, "blunder");
+  assert.ok(result.classificationEvidence.opportunity.chanceLoss >= 8);
 });
