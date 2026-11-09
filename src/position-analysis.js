@@ -25,13 +25,13 @@ export function legalBestMove(fen, analysis) {
   return [analysis.bestmove, analysis.pv?.split(/\s+/)[0]].find(uci => legal.includes(uci)) || "";
 }
 
-export async function evaluatePosition(node, engine, { moveTime, priority = 0, signal, multiPv = 1, searchMoves = [], nodes, retry = true } = {}) {
+export async function evaluatePosition(node, engine, { moveTime, priority = 0, signal, multiPv = 1, searchMoves = [], nodes, targetDepth = 0, retry = true } = {}) {
   if (signal?.aborted) throw new DOMException("Analysis cancelled", "AbortError");
   const chess = chessAtNode(node);
   const terminal = chess.isGameOver();
   const position = node.parent ? positionHistory(node) : undefined;
-  const searchOptions = { priority, signal, position, multiPv, searchMoves, nodes };
-  const signature = JSON.stringify([position, multiPv, searchMoves, nodes]);
+  const searchOptions = { priority, signal, position, multiPv, searchMoves, nodes, targetDepth };
+  const signature = JSON.stringify([position, multiPv, searchMoves, nodes, targetDepth]);
   const normalSearch = multiPv === 1 && !searchMoves.length && !nodes;
   if (normalSearch && node.analysis?.moveTime >= moveTime &&
     (!node.analysis.signature || node.analysis.signature === signature) &&

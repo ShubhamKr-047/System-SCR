@@ -811,7 +811,7 @@ function refreshAnalysisView({ moveNode, summary = true } = {}) {
 }
 
 async function ensureMoveAnalysis(node, { moveTime, priority = 1, signal = state.session.signal,
-  refine = true, refinementBudget } = {}) {
+  refine = true, refinementBudget, searchTime, deadline } = {}) {
   if (!node.move) return;
   if (hasReview(node, moveTime, { complete: refine })) return node.result;
   const tree = state.tree;
@@ -825,7 +825,7 @@ async function ensureMoveAnalysis(node, { moveTime, priority = 1, signal = state
   node.error = "";
   const task = (async () => {
     try {
-      const result = await analyzeMove(node, evaluateNode, { moveTime, priority, signal, refine, refinementBudget });
+      const result = await analyzeMove(node, evaluateNode, { moveTime, priority, signal, refine, refinementBudget, searchTime, deadline });
       if (signal.aborted) return;
       node.result = result;
       node.resultTime = moveTime;

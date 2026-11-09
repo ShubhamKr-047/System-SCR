@@ -1,5 +1,8 @@
 # Move classification v2
 
+> Historical v2 documentation. See [review v3](review-v3.md) for the current
+> classification precedence, search targets and whole-game timing policy.
+
 SCR classifies moves locally using Stockfish 19 lite single-threaded WASM. Gemini
 and Groq explain a completed analysis only when requested; neither chooses labels.
 These are SCR's documented rules, not a reproduction of a proprietary classifier.

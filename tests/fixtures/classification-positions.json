@@ -31,9 +31,7 @@
     "name": "Legal queen offer",
     "pgn": "1. e4 e5 2. Nf3 d6 3. Bc4 Bg4 4. Nc3 g6 5. Nxe5 *",
     "expected": [
-      "brilliant",
-      "best",
-      "book"
+      "brilliant"
     ]
   },
   {

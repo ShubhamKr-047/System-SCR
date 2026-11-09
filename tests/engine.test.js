@@ -24,6 +24,22 @@ function setup(options) {
   return { workers, engine };
 }
 
+test("target depth stops only after stable completed MultiPV lines and isolates cached evidence", async () => {
+  const { engine, workers } = setup();
+  const result = engine.evaluate("fen", 500, { multiPv: 2, targetDepth: 14 });
+  const worker = workers[0]; worker.ready();
+  for (const depth of [12, 13, 14]) {
+    worker.emit(`info depth ${depth} multipv 1 score cp 30 pv e2e4`);
+    assert.ok(!worker.commands.includes("stop"));
+    worker.emit(`info depth ${depth} multipv 2 score cp 10 pv d2d4`);
+  }
+  assert.equal(worker.commands.at(-1), "stop");
+  worker.emit("bestmove e2e4");
+  assert.equal((await result).depth, 14);
+  assert.equal(engine.cached("fen", 500, { multiPv: 2, targetDepth: 18 }), undefined);
+  engine.clear();
+});
+
 test("serializes searches and waits for UCI initialization before starting", async () => {
   const { engine, workers } = setup();
   const first = engine.evaluate("first", 250);

@@ -1,8 +1,8 @@
 const aborted = () => new DOMException("Analysis cancelled", "AbortError");
 
-function searchKey(fen, time, { position, multiPv = 1, searchMoves = [], nodes } = {}) {
-  return `${fen}|${time}` + (position || multiPv !== 1 || searchMoves.length || nodes
-    ? `|${JSON.stringify([position, multiPv, [...searchMoves].sort(), nodes])}` : "");
+function searchKey(fen, time, { position, multiPv = 1, searchMoves = [], nodes, targetDepth = 0 } = {}) {
+  return `${fen}|${time}` + (position || multiPv !== 1 || searchMoves.length || nodes || targetDepth
+    ? `|${JSON.stringify([position, multiPv, [...searchMoves].sort(), nodes, targetDepth])}` : "");
 }
 
 function stable(history) {
@@ -54,13 +54,13 @@ export class EngineQueue {
     this.queue.sort((a, b) => rank(b) - rank(a));
   }
 
-  evaluate(fen, time, { priority = 0, signal, position, multiPv = 1, searchMoves = [], nodes } = {}) {
+  evaluate(fen, time, { priority = 0, signal, position, multiPv = 1, searchMoves = [], nodes, targetDepth = 0 } = {}) {
     if (signal?.aborted) return Promise.reject(aborted());
-    const key = searchKey(fen, time, { position, multiPv, searchMoves, nodes });
-    const cached = this.cached(fen, time, { position, multiPv, searchMoves, nodes });
+    const key = searchKey(fen, time, { position, multiPv, searchMoves, nodes, targetDepth });
+    const cached = this.cached(fen, time, { position, multiPv, searchMoves, nodes, targetDepth });
     if (cached) return Promise.resolve(cached);
     return new Promise((resolve, reject) => {
-      const job = { fen, time, key, priority, signal, position, multiPv, searchMoves, nodes,
+      const job = { fen, time, key, priority, signal, position, multiPv, searchMoves, nodes, targetDepth,
         resolve, reject, lines: new Map(), history: [] };
       job.cancel = () => {
         this.queue = this.queue.filter(j => j !== job);
@@ -178,6 +178,14 @@ export class EngineQueue {
         // A bounded search line is not a completed evaluation.
         if (!info.bound) {
           this.active.lines.set(`${depth}:${rank}`, info);
+          const job = this.active;
+          if (job.targetDepth && depth >= job.targetDepth && !job.stopRequested &&
+            Array.from({ length: job.multiPv }, (_, i) => job.lines.get(`${depth}:${i + 1}`))
+              .every(candidate => candidate && stable([...job.lines.values()]
+                .filter(previous => previous.rank === candidate.rank).sort((a, b) => a.depth - b.depth)))) {
+            job.stopRequested = true;
+            this.worker.postMessage("stop");
+          }
           if (rank === 1) {
             this.active.history = this.active.history.filter(previous => previous.depth !== depth);
             this.active.history.push(info);
