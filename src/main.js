@@ -2055,7 +2055,8 @@ function renderSummary() {
   const nodes = state.tree?.mainline.slice(1) || [];
   const whiteMoves = nodes.filter(node => node.move?.color === "w" && node.result).map(node => node.result);
   const blackMoves = nodes.filter(node => node.move?.color === "b" && node.result).map(node => node.result);
-  const isComplete = nodes.length > 0 && nodes.every(node => Boolean(node.result));
+  const moveTime = Number($("moveTime").value);
+  const isComplete = !state.running && nodes.length > 0 && nodes.every(node => hasReview(node, moveTime));
 
   if (isComplete) {
     const whiteAcc = calculateAccuracy(whiteMoves);
@@ -2232,6 +2233,7 @@ $("moveTime").addEventListener("change", () => {
   const nodes = state.tree?.mainline.slice(1) || [];
   const time = Number($("moveTime").value);
   state.isAnalyzed = nodes.length > 0 && nodes.every(node => hasReview(node, time));
+  renderSummary();
   if ($("startReviewText")) $("startReviewText").textContent = "Play";
   updateSummaryActionButtons();
 });
