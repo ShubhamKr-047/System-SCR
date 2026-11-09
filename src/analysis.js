@@ -73,7 +73,10 @@ export async function analyzeMove(node, evaluate, options) {
     beforeChances: best.chances,
     afterChances: played.chances,
     classificationReason: classification.reason + (evidence.refinement.unresolved.length
-      ? ` Verification incomplete: ${evidence.refinement.unresolved.join(", ")}.` : ""),
+      ? ` Verification incomplete: ${evidence.refinement.unresolved.join(", ")}.` : "") +
+      (evidence.refinement.reasons.includes("sacrifice") && evidence.refinement.sacrificeStatus === "excluded-already-winning"
+        ? " The ordinary sacrifice rule excludes positions with another clearly winning continuation." : "") +
+      (evidence.refinement.sacrificeStatus === "refuted" ? " Verification did not establish a sound qualifying sacrifice." : ""),
     classificationEvidence: { ...classification, opening, legalMovesCount: evidence.legalMovesCount,
       sacrifice: evidence.sacrifice, alternatives: evidence.alternatives?.candidates || [],
       opportunity: evidence.opportunityEvidence },

@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Chess } from "chess.js";
+import { readFileSync } from "node:fs";
+import { proveShortMate } from "../src/mate-proof.js";
 import { GameTree } from "../src/game-tree.js";
 import { evaluatePosition, chessAtNode, positionHistory } from "../src/position-analysis.js";
 import { analyzeMove } from "../src/analysis.js";
@@ -8,6 +10,19 @@ import { lookupOpening } from "../src/openings.js";
 import { classifyEvidence, playerEvaluation, sacrificeCandidates, winningChances, gameAccuracy } from "../src/move-quality.js";
 
 const score = (pawns, mate = 0) => ({ pawns, mate, chances: mate ? mate > 0 ? 100 : 0 : winningChances(pawns) });
+const matingGames = JSON.parse(readFileSync(new URL('./fixtures/mating-sacrifices.json', import.meta.url)));
+for (const fixture of matingGames) test(`${fixture.name}: short mate proof verifies every defense and restores history`, () => {
+  const node = new GameTree(fixture.pgn).mainline[fixture.ply];
+  const chess = chessAtNode(node), fen = chess.fen(), history = chess.history();
+  assert.equal(proveShortMate(chess, 'w', { deadline: Infinity }).proven, true);
+  assert.equal(chess.fen(), fen); assert.deepEqual(chess.history(), history);
+  assert.equal(proveShortMate(chess, 'w', { maxNodes: 0 }).proven, false);
+});
+test("a defender escape and a drawn position cannot become a mate proof", () => {
+  assert.equal(proveShortMate(new Chess('4k3/8/8/7Q/8/8/8/4K3 b - - 0 1'), 'w', { plies: 1, deadline: Infinity }).proven, false);
+  assert.equal(proveShortMate(new Chess(), 'w', { deadline: Infinity, maxNodes: 100 }).proven, false);
+  assert.equal(proveShortMate(new Chess('7k/8/8/8/8/8/8/K7 w - - 0 1'), 'w').proven, false);
+});
 const classify = (before, after, options = {}) => classifyEvidence({ before: score(before), played: score(after),
   lossCp: Math.max(0, (before - after) * 100), legalMovesCount: 20, ...options });
 
@@ -209,7 +224,7 @@ test("an unsound acceptance refutes a Brilliant candidate", async () => {
 test("Miss verifies the opponent's preceding mistake rather than trusting its cached label", async () => {
   const tree = new GameTree("1. h3 e5 2. a3 *");
   const node = tree.mainline[3];
-  node.parent.result = { classificationVersion: 3, chanceLoss: 15 };
+  node.parent.result = { classificationVersion: 4, chanceLoss: 15 };
   for (const opponentReallyErred of [true, false]) {
     const result = await analyzeMove(node, async (position, options) => {
       if (position === node.parent.parent) return options.searchMoves?.length
@@ -224,7 +239,7 @@ test("Miss verifies the opponent's preceding mistake rather than trusting its ca
 
 test("a severe missed opportunity is verified as Miss through the full analysis pipeline", async () => {
   const node = new GameTree("1. h3 e5 2. a3 *").mainline[3];
-  node.parent.result = { classificationVersion: 3, chanceLoss: 30 };
+  node.parent.result = { classificationVersion: 4, chanceLoss: 30 };
   const result = await analyzeMove(node, async (position, options) => {
     if (position === node.parent.parent) return options.searchMoves?.length
       ? search(-3, "e7e5") : search(0, "d7d5");

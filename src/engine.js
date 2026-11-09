@@ -196,8 +196,11 @@ export class EngineQueue {
       const job = this.active;
       this.active = null;
       const bestmove = line.split(/\s+/)[1] || "";
-      const primary = [...job.lines.values()].filter(info => info.rank === 1 && info.pv.split(" ")[0] === bestmove)
-        .sort((a, b) => b.depth - a.depth)[0];
+      const primaries = [...job.lines.values()].filter(info => info.rank === 1 && info.pv.split(" ")[0] === bestmove)
+        .sort((a, b) => b.depth - a.depth);
+      const latest = primaries[0];
+      const primary = primaries.find(info => Array.from({ length: job.multiPv }, (_, i) =>
+        job.lines.get(`${info.depth}:${i + 1}`)).every(Boolean)) || latest;
       if (!primary) {
         this.settle(job, new Error("Engine returned no evaluation. Retry analysis."));
       } else {
@@ -205,10 +208,10 @@ export class EngineQueue {
         const candidates = [...job.lines.values()].filter(info => info.depth === primary.depth)
           .sort((a, b) => a.rank - b.rank).map(info => ({ ...info,
             stable: stable([...job.lines.values()].filter(previous => previous.rank === info.rank)
-              .sort((a, b) => a.depth - b.depth)) }));
+              .filter(previous => previous.depth <= primary.depth).sort((a, b) => a.depth - b.depth)) }));
         const result = { ...primary, bestmove, moveTime: job.time, candidates,
           complete: candidates.length === job.multiPv,
-          stable: stable(job.history), history: job.history.slice(-3) };
+          latestPrimary: latest, stable: candidates[0]?.stable, history: job.history.filter(info => info.depth <= primary.depth).slice(-3) };
         this.cache.set(job.key, result);
         const group = searchKey(job.fen, 0, job);
         if (!this.cacheGroups.has(group)) this.cacheGroups.set(group, new Map());

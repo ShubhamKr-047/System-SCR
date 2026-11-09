@@ -230,7 +230,10 @@ test("candidate snapshots cannot mix depths or mismatch bestmove and score", asy
   workers[0].emit("info depth 15 multipv 2 score cp 10 pv d2d4");
   workers[0].emit("info depth 16 multipv 1 score cp 40 pv e2e4\nbestmove e2e4");
   const result = await pending;
-  assert.equal(result.complete, false); assert.equal(result.candidates.length, 1);
+  assert.equal(result.complete, true); assert.equal(result.candidates.length, 2);
+  assert.equal(result.depth, 15);
+  assert.equal(result.latestPrimary.depth, 16);
+  assert.ok(result.candidates.every(line => line.depth === 15));
 });
 
 test("history and restricted moves have separate caches and options reset between jobs", async () => {

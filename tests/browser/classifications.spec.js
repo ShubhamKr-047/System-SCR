@@ -1,4 +1,22 @@
 import { test, expect } from "@playwright/test";
+import { readFileSync } from "node:fs";
+
+const matingGames = JSON.parse(readFileSync(new URL('../fixtures/mating-sacrifices.json', import.meta.url)));
+for (const game of matingGames) for (const time of ['125', '500', '1000']) {
+  test(`${game.name}: verified mating sacrifice is Brilliant in mode ${time}`, async ({ page }) => {
+    test.setTimeout(120000);
+    await page.route('https://fonts.googleapis.com/**', route => route.abort());
+    await page.route('https://fonts.gstatic.com/**', route => route.abort());
+    await page.goto('/review.html');
+    await page.locator('#pgnFile').setInputFiles({ name: 'mating-sacrifice.pgn', mimeType: 'text/plain', buffer: Buffer.from(game.pgn) });
+    await page.locator('#moveTime').selectOption({ value: time }, { force: true });
+    await page.locator('#summaryReviewBtn').click();
+    await expect(page.locator('#summaryStartBtn')).toBeVisible({ timeout: 100000 });
+    await page.locator('#summaryStartBtn').click();
+    await page.locator(`.move-chip[title="${game.name === 'Opera' ? '16. Qb8+' : '27. Rxa6+'}"]`).click();
+    await expect(page.locator('.feedback-header-box')).toHaveClass(/brilliant/);
+  });
+}
 
 test("whole-game Quick review preserves a verified Brilliant queen sacrifice", async ({ page }) => {
   await page.route("https://fonts.googleapis.com/**", route => route.abort());
