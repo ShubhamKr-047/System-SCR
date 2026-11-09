@@ -38,6 +38,38 @@ test("stop and resume retain labels, selection, and completed searches", async (
   expect(errors).toEqual([]);
 });
 
+test('accuracy and estimated ratings stay hidden through refinement and mode upgrades', async ({ page }) => {
+  await page.evaluate(() => {
+    window.holdRefinement = true;
+    window.heldReviewSearches = [];
+    const WorkerClass = window.Worker;
+    window.Worker = class extends WorkerClass {
+      postMessage(command, ...args) {
+        if (window.holdRefinement && typeof command === 'string' && command.startsWith('go ') &&
+          document.querySelector('#summaryProgressLabel')?.textContent.includes('Checking critical moves')) {
+          window.heldReviewSearches.push(() => super.postMessage(command, ...args));
+        } else super.postMessage(command, ...args);
+      }
+    };
+  });
+  await page.locator('#pgnFile').setInputFiles({ name: 'refinement.pgn', mimeType: 'text/plain',
+    buffer: Buffer.from('1. e4 e5 2. Nf3 d6 3. Bc4 Bg4 4. Nc3 g6 5. Nxe5 *') });
+  await expect(page.locator('#moveTime option[value="125"]')).toHaveText('Quick review');
+  await page.locator('#summaryReviewBtn').click();
+  await expect.poll(() => page.evaluate(() => window.heldReviewSearches.length)).toBeGreaterThan(0);
+  const values = page.locator('#summaryWhiteAcc, #summaryBlackAcc, #summaryWhiteRating, #summaryBlackRating');
+  await expect(values).toHaveText(['—', '—', '—', '—']);
+  await expect(page.locator('#topPlayerAccuracy, #bottomPlayerAccuracy, #topPlayerRatingEstimate, #bottomPlayerRatingEstimate').filter({ visible: true })).toHaveCount(0);
+  await page.evaluate(() => {
+    window.holdRefinement = false;
+    window.heldReviewSearches.splice(0).forEach(send => send());
+  });
+  await expect(page.locator('#summaryStartBtn')).toBeVisible({ timeout: 30000 });
+  await expect(values).not.toHaveText(['—', '—', '—', '—']);
+  await page.locator('#moveTime').selectOption({ value: '1000' }, { force: true });
+  await expect(values).toHaveText(['—', '—', '—', '—']);
+});
+
 test("a stronger completed review satisfies a faster review without launching searches", async ({ page, browserName, context }) => {
   // Exercise the actual WASM worker under reduced CPU speed where available.
   if (browserName === "chromium") {
