@@ -1,5 +1,8 @@
 # Review and classification v3
 
+> See [mating-sacrifice fixes v4](mating-sacrifices-v4.md) for current timing,
+> mate verification and MultiPV snapshot handling.
+
 V3 supersedes the decision rules and runtime policy in move-classification.md.
 Stockfish 19 lite remains local and single-threaded. AI explanations never choose labels.
 

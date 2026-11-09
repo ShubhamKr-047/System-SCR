@@ -1,21 +1,19 @@
 import { CLASSIFICATION_VERSION } from "./move-quality.js";
 
-export const REVIEW_POLICY_VERSION = 3;
+export const REVIEW_POLICY_VERSION = 4;
 export const DEFAULT_REVIEW_TIME = 125;
 
 export function reviewPolicy(time = DEFAULT_REVIEW_TIME) {
   const fast = time <= DEFAULT_REVIEW_TIME;
   const deep = time >= 1000;
   return {
-    targetMs: fast ? 30000 : deep ? 75000 : 45000,
-    initialMs: fast ? 12000 : deep ? 25000 : 18000,
-    reserveMs: fast ? 3000 : deep ? 5000 : 4000,
+    targetMs: fast ? 45000 : deep ? 90000 : 60000,
+    initialMs: fast ? 15000 : deep ? 30000 : 20000,
+    reserveMs: fast ? 5000 : deep ? 7000 : 5000,
     depthTargets: fast ? [14, 17, 18] : deep ? [18, 21, 22] : [16, 19, 20],
     screen: fast ? 100 : Math.min(250, Math.max(150, time * 0.8)),
     confirmation: Math.min(1000, Math.max(600, time)),
-    refinement: Math.min(4000, Math.max(2500, time * 4)),
-    // This is additional engine time, beyond the ordinary first pass.
-    gameRefinement: count => Math.max(2500, count * (fast ? 100 : Math.min(400, time * 0.8)))
+    refinement: Math.min(4000, Math.max(2500, time * 4))
   };
 }
 

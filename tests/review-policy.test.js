@@ -51,7 +51,7 @@ test("elapsed wall time caps optional work even when the engine allowance remain
   let clock = 0;
   await reviewGame(nodes, { now: () => clock, analyze: async (node, options) => {
     if (options.refine) assert.equal(options.refinementBudget, 0);
-    else { assert.ok(options.searchTime <= 125); clock += 15000; }
+    else { assert.ok(options.searchTime <= 125); clock += 25000; }
     save(node, options);
   } });
   assert.ok(nodes.every(node => hasReview(node, DEFAULT_REVIEW_TIME)));
@@ -64,15 +64,16 @@ test("the game refinement budget is shared and can expire without restarting ord
     if (options.refine) budgets.push(options.refinementBudget);
     save(node, options, { spentMs: Math.min(10000, options.refinementBudget || 0) });
   } });
-  assert.deepEqual(budgets, [15000, 5000, 0, 0]);
+  assert.deepEqual(budgets, [25000, 15000, 5000, 0]);
   assert.ok(nodes.every(node => hasReview(node, DEFAULT_REVIEW_TIME)));
 });
 
 test("Fast review cuts ordinary and shared refinement budgets while preserving the deeper profiles", () => {
   assert.equal(DEFAULT_REVIEW_TIME, 125);
   assert.equal(reviewPolicy().screen, 100);
-  assert.equal(reviewPolicy().gameRefinement(80), 8000);
-  assert.equal(reviewPolicy(500).gameRefinement(80), 32000);
+  assert.equal(reviewPolicy().targetMs, 45000);
+  assert.equal(reviewPolicy(500).targetMs, 60000);
+  assert.equal(reviewPolicy(1000).targetMs, 90000);
   assert.equal(reviewPolicy(1000).confirmation, 1000);
 });
 

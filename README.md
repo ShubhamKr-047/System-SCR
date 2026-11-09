@@ -13,7 +13,7 @@ A free Firefox/Zen WebExtension starter for reviewing **completed** Chess.com ga
 ## Important limitations of this first MVP
 
 - The extension adds an “Analyze with Zen” button to supported Chess.com game URLs. Clicking it retrieves the finished game PGN from Chess.com's public monthly archive and opens the separate review page automatically. The game must be completed and publicly available in the archive; if Chess.com has not published it yet, the extension will explain that.
-- The lite engine is intentionally compact. Quick review uses a 0.125-second base search, shows an initial pass across the game, then checks critical moves within a shared budget. Total time depends on game length and CPU speed. Completed analysis survives stop/resume and repeat reviews.
+- The lite engine is intentionally compact. Quick, Thorough and Deep use shared targets of 45, 60 and 90 seconds, with adaptive search time and separate critical-move verification. Short games can finish early; total time depends on game length and CPU speed. Completed analysis survives stop/resume and repeat reviews. See [verified mating sacrifices](docs/mating-sacrifices-v4.md) for the current rules.
 - Move labels use local Stockfish comparisons, verified opening entries, and conservative checks for exceptional moves. They follow SCR's documented rules rather than Chess.com's proprietary model. See [move classification](docs/move-classification.md).
 - This starter needs Node.js/npm to build and fetch the local dependencies once. After building, the review and engine run locally.
 

@@ -1,6 +1,6 @@
 import { Chess } from "chess.js";
 
-export const CLASSIFICATION_VERSION = 3;
+export const CLASSIFICATION_VERSION = 4;
 // Percentage-point losses, calibrated against the human-game curve documented
 // at https://lichess.org/page/accuracy. These are SCR rules, not Chess.com's model.
 export const QUALITY_THRESHOLDS = Object.freeze({ excellent: 2, good: 5, inaccuracy: 10, mistake: 20 });
@@ -105,7 +105,9 @@ export function classifyEvidence({ before, played, isBest, lossCp, legalMovesCou
   const equivalent = Math.abs(before.pawns - played.pawns) <= 0.100001 && lossCp <= 10 && loss <= 0.5 && before.mate === played.mate;
   if ((isBest && loss <= 2) || equivalent || (before.mate > 0 && played.mate > 0)) {
     if (confirmed && sacrifice?.verified && played.chances >= 48) {
-      return result("brilliant", "A sound piece sacrifice: deeper analysis confirms compensation if the opponent accepts it.");
+      return result("brilliant", sacrifice.kind === "forcing-mate"
+        ? "A sound sacrifice forcing checkmate: every legal defensive reply has been verified."
+        : "A sound piece sacrifice: deeper analysis confirms compensation if the opponent accepts it.");
     }
     if (confirmed && critical) return result("great", "A critical find: the strongest alternative substantially worsens the outcome.");
     if (book) return result("book", `Recognized opening line: ${opening.eco} — ${opening.name}.`);
