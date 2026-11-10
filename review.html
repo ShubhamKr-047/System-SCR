@@ -66,20 +66,12 @@
           <input id="pgnFile" type="file" accept=".pgn,.txt,text/plain" hidden>
 
           <!-- PASTE PGN -->
-          <button id="togglePastePgn" class="menu-item-btn" type="button">
+          <button id="togglePastePgn" class="menu-item-btn" type="button" aria-controls="pasteDrawer" aria-expanded="false" aria-haspopup="dialog">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
               <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
             </svg>
             <span>Paste PGN</span>
-          </button>
-
-          <!-- LOAD GAME -->
-          <button id="loadPgn" class="menu-item-btn" type="button">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 4v16l16-8z" />
-            </svg>
-            <span>Load Game</span>
           </button>
 
           <!-- SPEED SELECTOR -->
@@ -128,6 +120,21 @@
             </label>
           </div>
 
+          <!-- MOVE CLASSIFICATION TOGGLE -->
+          <div class="menu-speed-row">
+            <span class="menu-speed-label">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <circle cx="12" cy="12" r="9"></circle>
+                <path d="m8 12 3 3 5-6"></path>
+              </svg>
+              <span>Move Classification</span>
+            </span>
+            <label class="toggle-switch">
+              <input id="toggleMoveClassification" type="checkbox" aria-label="Move classification" checked />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
           <!-- OPTIONAL AI COACHING -->
           <div class="menu-speed-row">
             <span class="menu-speed-label">
@@ -163,18 +170,19 @@
           </div>
         </div>
 
-        <!-- COLLAPSIBLE PASTE DRAWER INSIDE MENU -->
-        <div id="pasteDrawer" class="paste-drawer" style="display: none;">
-          <textarea id="pgnText" rows="4" spellcheck="false"
-            placeholder='[Event "Live Chess"] 1. e4 e5 ... (Paste PGN here)'></textarea>
-          <div class="drawer-actions">
-            <span id="importStatus" class="status-msg">Paste PGN text and click Load</span>
-            <button id="drawerLoadBtn" class="dock-btn primary-sm" type="button">Load</button>
-          </div>
-        </div>
       </div>
     </div>
   </header>
+
+  <div id="pasteDrawer" class="paste-drawer" popover="manual" role="dialog" aria-label="Paste PGN">
+    <label for="pgnText">Paste PGN</label>
+    <textarea id="pgnText" rows="7" spellcheck="false"
+      placeholder='[Event "Live Chess"]&#10;&#10;1. e4 e5 ...'></textarea>
+    <p id="importStatus" class="status-msg" role="status" hidden></p>
+    <div class="drawer-actions">
+      <button id="drawerLoadBtn" class="dock-btn primary-sm" type="button">Load</button>
+    </div>
+  </div>
 
   <!-- MAIN SUITE LAYOUT (CENTERED BOARD + RIGHT ANALYSIS SIDEBAR) -->
   <main class="main-container">
@@ -367,7 +375,7 @@
 
           <div id="summaryProgressBox" class="summary-progress-box-inline" style="display:none;">
             <div class="summary-progress-bar-row">
-              <span id="summaryProgressLabel" class="summary-progress-label" aria-live="polite">Reviewing moves</span>
+              <span id="summaryProgressLabel" class="summary-progress-label" aria-live="polite">Evaluating...</span>
               <div class="summary-progress-actions">
                 <span id="summaryProgressPct" class="summary-progress-pct">0%</span>
                 <button id="summaryStopReview" type="button" class="summary-stop-review" title="Stop review and retain completed analysis">Stop</button>

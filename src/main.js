@@ -37,6 +37,7 @@ const state = {
   legalMoves: [],
   showBestMoveArrow: localStorage.getItem("zen-chess-show-arrow") !== "false",
   showEvaluationBar: localStorage.getItem('zen-chess-show-eval-bar') !== 'false',
+  showMoveClassification: localStorage.getItem('zen-chess-show-classification') !== 'false',
   aiCoachEnabled: localStorage.getItem('zen-chess-ai-coach-enabled') !== 'false',
   tree: null,
   line: [],
@@ -50,11 +51,13 @@ const state = {
 function setStatus(message, error = false) {
   const el = $("importStatus");
   if (el) {
-    el.textContent = message;
+    el.textContent = error ? message : '';
+    el.hidden = !error;
     el.classList.toggle("error", error);
   }
   if (!state.tree) {
-    $("emptyImportStatus").textContent = message;
+    $("emptyImportStatus").textContent = error ? message : '';
+    $("emptyImportStatus").hidden = !error;
     $("emptyImportStatus").classList.toggle("error", error);
     if (error) $("emptyImportStatus").scrollIntoView({ block: "nearest" });
   }
@@ -245,6 +248,7 @@ const hamburgerMenu = $("hamburgerMenu");
 const closeHamburgerBtn = $("closeHamburgerBtn");
 
 function closeHamburger() {
+  closePastePanel();
   if (hamburgerMenu) hamburgerMenu.style.display = "none";
   if (topbarMenuBtn) {
     topbarMenuBtn.classList.remove("active");
@@ -255,6 +259,7 @@ function closeHamburger() {
 function toggleHamburgerMenu(triggerBtn) {
   if (!hamburgerMenu) return;
   const isHidden = hamburgerMenu.style.display === "none";
+  if (!isHidden) closePastePanel();
   hamburgerMenu.style.display = isHidden ? "block" : "none";
   if (triggerBtn) {
     triggerBtn.classList.toggle("active", isHidden);
@@ -279,7 +284,7 @@ if (closeHamburgerBtn) {
 // Click outside to close
 document.addEventListener("click", (e) => {
   if (!hamburgerMenu) return;
-  if (!hamburgerMenu.contains(e.target) && !topbarMenuBtn?.contains(e.target)) {
+  if (!hamburgerMenu.contains(e.target) && !topbarMenuBtn?.contains(e.target) && !$('pasteDrawer').contains(e.target)) {
     closeHamburger();
   }
 });
@@ -321,27 +326,42 @@ $("emptyPgnText").addEventListener("keydown", event => {
   }
 });
 
-$("loadPgn").addEventListener("click", () => {
-  readImport();
-  if (state.moves.length) closeHamburger();
-});
-
 $("pgnText").addEventListener("keydown", e => {
   if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-    readImport();
-    if (state.moves.length) closeHamburger();
+    e.preventDefault();
+    if (readImport()) closeHamburger();
   }
 });
 
-// Toggle Paste PGN Drawer
+// Keep the paste panel in the top layer, outside the scrolling menu.
+function closePastePanel() {
+  const panel = $('pasteDrawer');
+  if (panel.matches(':popover-open')) panel.hidePopover();
+  $('togglePastePgn').classList.remove('active');
+  $('togglePastePgn').setAttribute('aria-expanded', 'false');
+}
+function positionPastePanel() {
+  const panel = $('pasteDrawer');
+  if (!panel.matches(':popover-open')) return;
+  const menu = $('hamburgerMenu').getBoundingClientRect();
+  const anchor = $('togglePastePgn').getBoundingClientRect();
+  const beside = menu.left >= 220;
+  const width = Math.min(360, beside ? menu.left - 24 : innerWidth - 24);
+  panel.style.width = `${width}px`;
+  panel.style.left = `${beside ? menu.left - width - 10 : 12}px`;
+  panel.style.top = `${Math.max(12, Math.min(anchor.top, innerHeight - panel.getBoundingClientRect().height - 12))}px`;
+}
 const togglePasteBtn = $("togglePastePgn");
 const pasteDrawer = $("pasteDrawer");
 if (togglePasteBtn && pasteDrawer) {
   togglePasteBtn.addEventListener("click", () => {
-    const isHidden = pasteDrawer.style.display === "none";
-    pasteDrawer.style.display = isHidden ? "block" : "none";
-    togglePasteBtn.classList.toggle("active", isHidden);
-    if (isHidden) {
+    const isHidden = !pasteDrawer.matches(':popover-open');
+    if (!isHidden) closePastePanel();
+    else {
+      pasteDrawer.showPopover();
+      positionPastePanel();
+      togglePasteBtn.classList.add('active');
+      togglePasteBtn.setAttribute('aria-expanded', 'true');
       $("pgnText").focus();
     }
   });
@@ -350,14 +370,18 @@ if (togglePasteBtn && pasteDrawer) {
 const drawerLoadBtn = $("drawerLoadBtn");
 if (drawerLoadBtn) {
   drawerLoadBtn.addEventListener("click", () => {
-    readImport();
-    if (state.moves.length) {
-      if (pasteDrawer) pasteDrawer.style.display = "none";
-      togglePasteBtn?.classList.remove("active");
-      closeHamburger();
-    }
+    if (readImport()) closeHamburger();
   });
 }
+window.addEventListener('resize', positionPastePanel);
+hamburgerMenu.addEventListener('scroll', positionPastePanel);
+new ResizeObserver(positionPastePanel).observe(pasteDrawer);
+pasteDrawer.addEventListener('keydown', event => {
+  if (event.key === 'Escape') {
+    event.preventDefault(); event.stopPropagation();
+    closePastePanel(); togglePasteBtn.focus();
+  }
+});
 
 // AI provider settings
 function updateAiUi(refreshInput = true) {
@@ -468,6 +492,14 @@ $('toggleAiCoach').addEventListener('change', () => {
     if (!state.aiCoachEnabled) cancelPendingCoaching();
     updateAiUi(false);
     renderFeedback(state.tree?.current?.result || null);
+});
+
+const classificationToggle = $('toggleMoveClassification');
+classificationToggle.checked = state.showMoveClassification;
+classificationToggle.addEventListener('change', () => {
+  state.showMoveClassification = classificationToggle.checked;
+  localStorage.setItem('zen-chess-show-classification', String(state.showMoveClassification));
+  if (state.tree) refreshAnalysisView({ summary: false, announce: false });
 });
 
 // Returning keeps all branches and their evaluations in the tree.
@@ -804,7 +836,7 @@ function refreshPositionAnalysis() {
     : node.result ? "Move analyzed" : "Engine idle";
 }
 
-function refreshAnalysisView({ moveNode, summary = true } = {}) {
+function refreshAnalysisView({ moveNode, summary = true, announce = true } = {}) {
   syncActiveLine();
   renderMoves(moveNode);
   if (summary) renderSummary();
@@ -817,7 +849,7 @@ function refreshAnalysisView({ moveNode, summary = true } = {}) {
   // Engine completion never replaces the squares underneath a user's click.
   $("board").querySelectorAll(".square-badge").forEach(badge => badge.remove());
   $("board").querySelectorAll(".brilliant-move").forEach(square => square.classList.remove("brilliant-move"));
-  if (node.result && node.move) {
+  if (state.showMoveClassification && node.result && node.move) {
     const square = $("board").querySelector(`[data-square="${node.move.to}"]`);
     if (!square) return;
     const result = node.result;
@@ -830,7 +862,7 @@ function refreshAnalysisView({ moveNode, summary = true } = {}) {
     square.append(badge);
     const isBrilliant = result.key === "brilliant";
     square.classList.toggle("brilliant-move", isBrilliant);
-    if (isBrilliant) {
+    if (isBrilliant && announce) {
       playSound("brilliant");
     }
   }
@@ -1163,8 +1195,8 @@ function renderBoard(index) {
 
       // Move classification badge on the move's destination square
       let badgeHtml = "";
-      const isBrilliant = Boolean(!state.preview && currentResult?.key === "brilliant" && lastMove && sqName === lastMove.to);
-      if (!state.preview && currentResult && lastMove && sqName === lastMove.to) {
+      const isBrilliant = Boolean(state.showMoveClassification && !state.preview && currentResult?.key === "brilliant" && lastMove && sqName === lastMove.to);
+      if (state.showMoveClassification && !state.preview && currentResult && lastMove && sqName === lastMove.to) {
         badgeHtml = `<div class="square-badge ${currentResult.key}" style="background-color: ${currentResult.color}; color: ${currentResult.textColor};" title="${esc(currentResult.label)}: ${esc(currentResult.classificationReason || currentResult.explanation)}">${esc(currentResult.sign)}</div>`;
       }
 
@@ -2205,7 +2237,7 @@ async function startReview() {
   // Resume at the selected position and retain compatible results and searches.
   renderEvalGraph();
   renderSummary();
-  updateAnalysisProgress(0, nodes.length, "Starting review...");
+  updateAnalysisProgress(0, nodes.length, "Evaluating...");
 
   switchTab("summary");
   $("startReview").style.display = "none";
@@ -2216,7 +2248,7 @@ async function startReview() {
       analyze: (node, options) => ensureMoveAnalysis(node, { ...options, priority: 0 }),
       onProgress: ({ phase, completed, total }) => {
         if (state.tree !== tree || signal.aborted) return;
-        const label = phase === "refinement" ? "Checking critical moves" : phase === "done" ? "Review complete" : "Reviewing moves";
+        const label = phase === "refinement" ? "Checking critical moves" : phase === "done" ? "Review complete" : "Evaluating...";
         $("engineStatus").textContent = `${label}: ${completed} of ${total}`;
         // Reserve the last fifth for refinement, so progress stays monotonic.
         const fraction = phase === "done" ? 1 : phase === "initial" ? completed / Math.max(1, total) * 0.8

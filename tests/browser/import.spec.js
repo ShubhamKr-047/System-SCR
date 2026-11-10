@@ -24,7 +24,7 @@ test("empty board offers file import and recovers from an invalid file", async (
   await expect(page.locator("#emptyBoardState")).toBeHidden();
   await expect(page.locator("#board .square")).toHaveCount(64);
   await expect(page.locator("#bottomPlayerName")).toHaveText("Alice");
-  await page.locator("#nextMove").click();
+  await page.keyboard.press('ArrowRight');
   await expect(page.locator("#moveCounter")).toHaveText("1. e4");
   expect(errors).toEqual([]);
 });
@@ -46,7 +46,7 @@ test("paste imports directly on a small board with validation and keyboard loadi
   await expect(page.locator("#emptyBoardState")).toBeHidden();
   await expect(page.locator("#board .square")).toHaveCount(64);
   await expect(page.locator("#hamburgerMenu")).toBeHidden();
-  await page.locator("#nextMove").click();
+  await page.keyboard.press('ArrowRight');
   await expect(page.locator("#moveCounter")).toHaveText("1. d4");
 });
 
@@ -58,5 +58,6 @@ test("clicking analysis board starts a fresh new position ready to play", async 
   await expect(page.locator("#moveCounter")).toHaveText("Start");
   await expect(page.locator("#bottomPlayerName")).toHaveText("White");
   await expect(page.locator("#topPlayerName")).toHaveText("Black");
-  await expect(page.locator("#reviewProgress")).toHaveText("Analysis board");
+  await expect(page.locator('#importStatus')).toBeHidden();
+  await expect(page.getByText('Analysis board ready.', { exact: false })).toHaveCount(0);
 });

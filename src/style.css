@@ -542,7 +542,8 @@ body.chesscom-theme {
   display: grid;
   place-items: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
-  z-index: 5;
+  /* Above engine/planning arrows (6) and moving pieces (8). */
+  z-index: 10;
   font-size: 14px;
   font-weight: 800;
   border: 2px solid var(--bg-card);
@@ -760,10 +761,23 @@ body.chesscom-theme {
 
 /* MAIN CONTROL ROW: [⏮] [◀] [⚡ Analyze / ▶ Start] [▶] [⏭] [☰] */
 .sidebar-nav-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(96px, 1.9fr) repeat(2, minmax(0, 1fr));
   align-items: center;
   gap: 6px;
   width: 100%;
+}
+
+.sidebar-nav-bar > .sidebar-nav-btn {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  font-size: 17px;
+}
+
+.sidebar-nav-bar .action-btn-primary,
+.sidebar-nav-bar .action-btn-stop {
+  height: 40px;
 }
 
 .sidebar-nav-btn {
@@ -1290,13 +1304,24 @@ body.chesscom-theme {
 #promotionDialog button:focus-visible { outline: 2px solid #b4d995; outline-offset: 2px; }
 #promotionDialog .promotion-close { position: absolute; top: 4px; right: 6px; width: 28px; height: 28px; padding: 0; font-size: 24px; line-height: 1; }
 
-/* COLLAPSIBLE PASTE DRAWER */
+/* Paste PGN panel beside the hamburger menu. */
 .paste-drawer {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line-subtle);
-  animation: slideDown 0.15s ease;
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: min(360px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: var(--text-main);
+  box-shadow: 0 10px 30px #0008;
+  font: 12px/1.5 var(--font-ui);
 }
+
+.paste-drawer > label { display: block; margin-bottom: 8px; font-weight: 700; }
 
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-4px); }
@@ -1304,9 +1329,11 @@ body.chesscom-theme {
 }
 
 .paste-drawer textarea {
+  display: block;
   width: 100%;
   resize: vertical;
-  min-height: 60px;
+  min-height: 100px;
+  height: min(180px, 35dvh);
   border: 1px solid var(--line-subtle);
   border-radius: 6px;
   background: #191816;
@@ -1319,10 +1346,12 @@ body.chesscom-theme {
 
 .drawer-actions {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  margin-top: 6px;
+  margin-top: 12px;
 }
+
+.drawer-actions button { min-width: 90px; }
 
 .status-msg {
   font-size: 11px;
@@ -2361,7 +2390,7 @@ body.resizing-feedback {
 .perf-vs-divider .vs-text {
   font-size: 10px;
   font-weight: 800;
-  color: var(--text-dim);
+  color: #ffffff;
   background: #252320;
   padding: 3px 6px;
   border-radius: 4px;
@@ -2770,6 +2799,15 @@ body.resizing-feedback {
   font-size: 11px;
   font-weight: 700;
   color: var(--text-muted);
+}
+
+.summary-progress-label {
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.1px;
+  color: var(--text-main);
 }
 
 .summary-progress-actions {
