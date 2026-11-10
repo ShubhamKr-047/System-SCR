@@ -3,9 +3,23 @@
   "name": "System SCR",
   "version": "0.2.0",
   "description": "Local Stockfish game analysis and review for Zen Browser.",
+  "icons": {
+    "16": "icons/rook-16.png",
+    "32": "icons/rook-32.png",
+    "48": "icons/rook-48.png",
+    "96": "icons/rook-96.png",
+    "128": "icons/rook-128.png"
+  },
   "action": {
     "default_title": "System SCR",
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/rook-16.png",
+      "32": "icons/rook-32.png",
+      "48": "icons/rook-48.png",
+      "96": "icons/rook-96.png",
+      "128": "icons/rook-128.png"
+    }
   },
   "permissions": [
     "storage",
