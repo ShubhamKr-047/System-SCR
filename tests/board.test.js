@@ -1,8 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Chess } from "chess.js";
+import { pieceTransition } from '../src/piece-animation.js';
 import { squareCenter, squareAt, annotationBrush } from "../src/board-overlay.js";
 import { legalBestMove, evaluatePosition } from "../src/position-analysis.js";
+
+for (const [name, fen, san, expected] of [
+  ['pawn move', new Chess().fen(), 'e4', [{from:'e2',to:'e4'}]],
+  ['castling', 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1', 'O-O', [{from:'e1',to:'g1'},{from:'h1',to:'f1'}]],
+  ['en passant', '7k/8/8/3pP3/8/8/8/K7 w - d6 0 1', 'exd6', [{from:'e5',to:'d6'}]],
+  ['underpromotion', '7k/P7/8/8/8/8/8/7K w - - 0 1', 'a8=N', [{from:'a7',to:'a8'}]]
+]) test(`animation maps ${name} and undo to the correct pieces`, () => {
+  const chess = new Chess(fen); chess.move(san);
+  assert.deepEqual(pieceTransition(fen,chess.fen()),expected);
+  assert.deepEqual(pieceTransition(chess.fen(),fen),expected.map(p=>({from:p.to,to:p.from})));
+  assert.equal(pieceTransition(fen,fen),null);
+});
+test('animation does not invent a transition across a multi-move jump',()=>{
+  const chess=new Chess(), start=chess.fen();chess.move('e4');chess.move('e5');
+  assert.equal(pieceTransition(start,chess.fen()),null);
+});
 
 test("every square maps back correctly across board orientations and sizes", () => {
   for (const size of [320, 517, 820]) {
