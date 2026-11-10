@@ -50,7 +50,7 @@ body.chesscom-theme {
   margin: 0;
   background-color: var(--bg-main);
   color: var(--text-main);
-  font-family: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.4;
   height: 100vh;
@@ -170,7 +170,7 @@ body.chesscom-theme {
   text-align: center;
   color: #17241c;
   pointer-events: none;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-numeric);
   letter-spacing: -0.2px;
   line-height: 1;
 }
@@ -269,7 +269,7 @@ body.chesscom-theme {
   color: #ffffff;
   font-size: 13px;
   font-weight: 700;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-numeric);
 }
 
 .accuracy-pill svg {
@@ -290,7 +290,7 @@ body.chesscom-theme {
   color: #ffffff;
   font-size: 13px;
   font-weight: 700;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-numeric);
 }
 
 .rating-pill svg {
@@ -304,7 +304,7 @@ body.chesscom-theme {
   font-size: 11px;
   font-weight: 700;
   color: #d1d5db;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-numeric);
 }
 
 .board-container {
@@ -647,7 +647,7 @@ body.chesscom-theme {
   padding: 10px;
   background: var(--bg-main);
   color: var(--text-main);
-  font: 12px/1.6 'Space Grotesk', sans-serif;
+  font: 12px/1.6 var(--font-ui);
 }
 .board-paste-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .board-paste-footer span { color: var(--text-dim); font-size: 10px; }
@@ -970,7 +970,7 @@ body.chesscom-theme {
 .menu-kbd {
   margin-left: auto;
   font-size: 10px;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-numeric);
   background: #171614;
   padding: 2px 5px;
   border-radius: 3px;
@@ -1044,7 +1044,7 @@ body.chesscom-theme {
   color: #ffffff;
   padding: 5px 8px;
   font-size: 11px;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-ui);
   min-width: 0;
 }
 
@@ -1181,7 +1181,7 @@ body.chesscom-theme {
   border-radius: 4px;
   background: rgba(129, 182, 76, .12);
   color: #c4dea8;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-ui);
   font-size: 10px;
   white-space: nowrap;
 }
@@ -1291,7 +1291,7 @@ body.chesscom-theme {
   background: #191816;
   color: var(--text-main);
   padding: 8px 10px;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-ui);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -1587,7 +1587,7 @@ body.resizing-feedback {
 .feedback-move-text {
   font-size: 15px;
   font-weight: 800;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-numeric);
 }
 
 .eval-cards {
@@ -1614,7 +1614,7 @@ body.resizing-feedback {
 .eval-card strong {
   font-size: 14px;
   font-weight: 700;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-numeric);
   color: var(--text-main);
 }
 
@@ -1642,7 +1642,7 @@ body.resizing-feedback {
 }
 
 .pv-line {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-numeric);
   font-size: 11px;
   color: var(--chess-green) !important;
   font-weight: 600;
@@ -2087,7 +2087,7 @@ body.resizing-feedback {
   background-color: transparent;
   color: var(--text-main);
   padding: 4px 7px;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-ui);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -2195,7 +2195,7 @@ body.resizing-feedback {
 .progress-pct-text {
   font-size: 15px;
   font-weight: 800;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-numeric);
   color: var(--chess-green);
 }
 
@@ -2305,7 +2305,7 @@ body.resizing-feedback {
 }
 
 .perf-val {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-numeric);
   font-weight: 800;
   line-height: 1.1;
 }
@@ -2373,7 +2373,7 @@ body.resizing-feedback {
   font-size: 24px;
   font-weight: 800;
   color: var(--chess-green);
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-numeric);
 }
 
 .acc-label {
@@ -2409,7 +2409,7 @@ body.resizing-feedback {
 }
 
 .breakdown-count {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-numeric);
   font-size: 15px;
   font-weight: 800;
   display: flex;
@@ -2600,7 +2600,7 @@ body.resizing-feedback {
 }
 
 .eval-graph-score-pill {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-numeric);
   font-size: 11px;
   font-weight: 700;
   padding: 2px 7px;
@@ -2671,7 +2671,7 @@ body.resizing-feedback {
 }
 
 .eval-graph-tooltip-score {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-numeric);
   font-weight: 800;
 }
 
@@ -2773,7 +2773,7 @@ body.resizing-feedback {
 }
 
 .summary-progress-pct {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: var(--font-numeric);
   font-size: 14px;
   font-weight: 800;
   color: var(--chess-green);
@@ -2836,4 +2836,37 @@ body.resizing-feedback {
   border-color: var(--chess-green);
   color: #ffffff;
   transform: translateX(-1px);
+}
+
+/* Semantic typography: section headings, interface text, and numerical data. */
+.menu-title,
+.variation-heading,
+.continuation-heading,
+.eval-graph-title-group,
+.feedback-title-group {
+  font-family: var(--font-heading);
+}
+
+.player-rating,
+.move-number,
+.coord-rank,
+.coord-file,
+input[type="number"] {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+}
+
+.accuracy-pill,
+.rating-pill,
+.eval-bar-score,
+.eval-pill,
+.eval-card strong,
+.perf-val,
+.acc-val,
+.breakdown-count,
+.progress-pct-text,
+.summary-progress-pct,
+.eval-graph-score-pill,
+.eval-graph-tooltip-score {
+  font-variant-numeric: tabular-nums;
 }
