@@ -1858,7 +1858,7 @@ function renderEvalGraph() {
       </defs>
       <line x1="${padX}" y1="${midY}" x2="${width - padX}" y2="${midY}" stroke="rgba(255, 255, 255, 0.2)" stroke-dasharray="4,4" stroke-width="1.2" />
       <line x1="${padX}" y1="${midY}" x2="${width - padX}" y2="${midY}" stroke="url(#evalZeroGrad)" stroke-width="2" />
-      <text x="${width / 2}" y="${midY + 22}" fill="rgba(255, 255, 255, 0.35)" font-size="11" font-weight="600" text-anchor="middle" font-family="'Montserrat', sans-serif">Click Review to evaluate moves</text>
+      <text x="${width / 2}" y="${midY + 22}" fill="rgba(255, 255, 255, 0.35)" font-size="11" font-weight="600" text-anchor="middle" font-family="'Space Grotesk', sans-serif">Click Review to evaluate moves</text>
     `;
     return;
   }
