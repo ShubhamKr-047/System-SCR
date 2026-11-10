@@ -36,6 +36,8 @@ const state = {
   selectedSquare: null,
   legalMoves: [],
   showBestMoveArrow: localStorage.getItem("zen-chess-show-arrow") !== "false",
+  showEvaluationBar: localStorage.getItem('zen-chess-show-eval-bar') !== 'false',
+  aiCoachEnabled: localStorage.getItem('zen-chess-ai-coach-enabled') !== 'false',
   tree: null,
   line: [],
   session: new AbortController(),
@@ -359,6 +361,8 @@ if (drawerLoadBtn) {
 
 // AI provider settings
 function updateAiUi(refreshInput = true) {
+  $("toggleAiCoach").checked = state.aiCoachEnabled;
+  $("aiCoachSettings").hidden = !state.aiCoachEnabled;
   const hasKey = hasApiKey();
   const provider = PROVIDERS[getProvider()];
   $("aiProvider").value = getProvider();
@@ -449,6 +453,22 @@ if (arrowToggle) {
     if (state.showBestMoveArrow) requestQuickAnalysisForCurrentPosition({ retry: true });
   });
 }
+
+const evaluationToggle = $('toggleEvaluationBar');
+evaluationToggle.checked = state.showEvaluationBar;
+$('evalBar').hidden = !state.showEvaluationBar;
+evaluationToggle.addEventListener('change', () => {
+  state.showEvaluationBar = evaluationToggle.checked;
+  localStorage.setItem('zen-chess-show-eval-bar', String(state.showEvaluationBar));
+  $('evalBar').hidden = !state.showEvaluationBar;
+});
+$('toggleAiCoach').addEventListener('change', () => {
+    state.aiCoachEnabled = $('toggleAiCoach').checked;
+    localStorage.setItem('zen-chess-ai-coach-enabled', String(state.aiCoachEnabled));
+    if (!state.aiCoachEnabled) cancelPendingCoaching();
+    updateAiUi(false);
+    renderFeedback(state.tree?.current?.result || null);
+});
 
 // Returning keeps all branches and their evaluations in the tree.
 $("resetVariationBtn").addEventListener("click", () => {
@@ -1667,7 +1687,7 @@ function renderFeedback(result) {
   $("feedbackContent").style.setProperty("--move-accent", result.color);
   const providerId = getProvider();
   const provider = PROVIDERS[providerId];
-  const isEligible = isCoachingEligible(result);
+  const isEligible = state.aiCoachEnabled && isCoachingEligible(result);
   const ai = isEligible ? getCoachingState(result, beforeFen) : null;
   const local = getLocalDetailedFeedback(result);
   const coaching = ai?.status === "ready" ? ai.coaching : null;
@@ -1758,6 +1778,7 @@ function renderFeedback(result) {
   });
 
   const request = (retry = false) => {
+    if (!state.aiCoachEnabled) return;
     const key = getApiKey();
     const selectedProvider = getProvider();
     const promise = generateCoaching(result, beforeFen, { retry });

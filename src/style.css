@@ -149,6 +149,13 @@ body.chesscom-theme {
   flex-shrink: 0;
 }
 
+#evalBar[hidden], #aiCoachSettings[hidden], #aiStatus[hidden] { display: none; }
+
+.toggle-switch input:focus-visible + .toggle-slider {
+  outline: 2px solid var(--chess-green);
+  outline-offset: 3px;
+}
+
 .eval-bar.flipped {
   justify-content: flex-start;
 }
@@ -993,8 +1000,12 @@ body.chesscom-theme {
   align-items: center;
   justify-content: space-between;
   padding: 7px 10px;
-  border-top: 1px solid var(--line-subtle);
   margin-top: 4px;
+}
+
+.menu-speed-setting {
+  border-top: 1px solid var(--line-subtle);
+  padding-top: 10px;
 }
 
 .menu-speed-label {

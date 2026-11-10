@@ -54,7 +54,7 @@ test('accuracy and estimated ratings stay hidden through refinement and mode upg
   });
   await page.locator('#pgnFile').setInputFiles({ name: 'refinement.pgn', mimeType: 'text/plain',
     buffer: Buffer.from('1. e4 e5 2. Nf3 d6 3. Bc4 Bg4 4. Nc3 g6 5. Nxe5 *') });
-  await expect(page.locator('#moveTime option[value="125"]')).toHaveText('Quick review');
+  await expect(page.locator('#moveTime option[value="125"]')).toHaveText('Quick');
   await page.locator('#summaryReviewBtn').click();
   await expect.poll(() => page.evaluate(() => window.heldReviewSearches.length)).toBeGreaterThan(0);
   const values = page.locator('#summaryWhiteAcc, #summaryBlackAcc, #summaryWhiteRating, #summaryBlackRating');
