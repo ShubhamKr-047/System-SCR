@@ -318,6 +318,7 @@ body.chesscom-theme {
 
 /* CHESS.COM BOARD DESIGN */
 .board.chesscom-board {
+  position: relative;
   touch-action: none;
   width: 100%;
   height: 100%;
@@ -329,6 +330,15 @@ body.chesscom-theme {
   background-color: var(--board-light);
   user-select: none;
   box-sizing: border-box;
+}
+
+.move-animation-piece {
+  position: absolute;
+  z-index: 8;
+  pointer-events: none;
+  user-select: none;
+  object-fit: contain;
+  will-change: transform;
 }
 
 .square {

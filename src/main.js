@@ -8,6 +8,7 @@ import { analyzeMove } from "./analysis.js";
 import { DEFAULT_REVIEW_TIME, hasReview, reviewGame } from "./review-policy.js";
 import { BoardOverlay } from "./board-overlay.js";
 import { BoardInput } from "./board-input.js";
+import { PieceAnimator } from './piece-animation.js';
 import { evaluatePosition, legalBestMove } from "./position-analysis.js";
 import { playSound } from "./audio.js";
 import { initSidebarResize } from "./sidebar-resize.js";
@@ -700,6 +701,8 @@ $("backToSummaryBtn")?.addEventListener("click", () => {
 });
 
 const overlay = new BoardOverlay($("boardArrows"), () => state.flipped, $("board"));
+const pieceAnimator = new PieceAnimator($("board"));
+$("promotionDialog").addEventListener('close', () => { pieceAnimator.drop = null; });
 const boardInput = new BoardInput({
   board: $("board"), overlay,
   context: boardContext,
@@ -709,7 +712,10 @@ const boardInput = new BoardInput({
     state.legalMoves = boardContext().chess.moves({ square, verbose: true });
     updateSelectionHints();
   },
-  move: executeUserMove,
+  move: (from, to) => {
+    pieceAnimator.drop = { from, to };
+    executeUserMove(from, to);
+  },
   clearSelection: clearBoardSelection
 });
 $("board").addEventListener("pointerdown", () => {
@@ -1146,7 +1152,9 @@ function renderBoard(index) {
     }
   }
 
-  $("board").innerHTML = html;
+  pieceAnimator.render({ fen, flipped: state.flipped, tree: state.tree }, () => {
+    $("board").innerHTML = html;
+  });
 
   // Draw best move arrow if available
   drawBestMoveArrow();
