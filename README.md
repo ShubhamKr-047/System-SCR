@@ -1,152 +1,245 @@
-# Zen Chess Review (starter MVP)
+# System SCR
 
-A free Firefox/Zen WebExtension starter for reviewing **completed** Chess.com games with a local Stockfish WebAssembly engine. It opens a separate review page. It does not read or analyze live games.
+System SCR is a chess game review extension for Zen Browser and Firefox. Review imported PGNs with a bundled Stockfish 19 engine, explore variations, and optionally request move explanations from Gemini or Groq.
 
-## What is included
+Stockfish runs locally in a single-threaded WebAssembly worker. An AI API key is optional and never determines move classifications.
 
-- Separate review page with a board, move list, navigation, PGN import, and feedback panel.
-- PGN import by file or pasted text.
-- Local Stockfish integration (lite, single-threaded build) with Quick, Thorough and Deep review policies.
-- Heuristic move labels based on evaluation changes.
-- Local Stockfish analysis works without an API key. Optional Gemini or Groq explanations use your selected provider's API key and usage limits.
+## Features
 
-## Important limitations of this first MVP
+- PGN file and text import, plus a Chess.com **Analyze** launcher for public completed games.
+- Quick, Balanced, and Deep whole-game reviews with selective critical-move verification.
+- Eleven move classifications, evaluation graph, accuracy, estimated performance ratings, and classification explanations.
+- Interactive board with animated moves, legal move hints, drag-and-drop, promotion selection, and nested variations.
+- Navigation, autoplay, engine continuation previews, board flipping, and colored planning arrows and circles.
+- Menu switches for the best-move arrow, evaluation bar, move classification badges, and AI Coach.
+- Resizable sidebar, rook branding, and bundled fonts: Space Grotesk for headings, Inter for UI, and JetBrains Mono for numerical data.
 
-- The extension adds an “Analyze with Zen” button to supported Chess.com game URLs. Clicking it retrieves the finished game PGN from Chess.com's public monthly archive and opens the separate review page automatically. The game must be completed and publicly available in the archive; if Chess.com has not published it yet, the extension will explain that.
-- The lite engine is intentionally compact. Quick, Thorough and Deep use shared targets of 45, 60 and 90 seconds, with adaptive search time and separate critical-move verification. Short games can finish early; total time depends on game length and CPU speed. Completed analysis survives stop/resume and repeat reviews. See [classification v5](docs/classification-v5.md) for the current rules.
-- Move labels use local Stockfish comparisons, verified opening entries, and conservative checks for exceptional moves. They follow SCR's documented rules rather than Chess.com's proprietary model. See [move classification](docs/move-classification.md).
-- This starter needs Node.js/npm to build and fetch the local dependencies once. After building, the review and engine run locally.
+**Known issue:** the Analyze launcher does not reliably appear immediately after a live Chess.com game finishes. The latest detection changes have synthetic browser coverage, but the reported real-game failure remains unresolved. Manual PGN import is the reliable fallback.
 
-## Automatic import behavior
+## Build and install
 
-The content script adds a fixed “Analyze with Zen” button on Chess.com live/daily game URLs. It requests the game's callback metadata, then looks up the exact game URL in the public monthly archive and transfers the PGN to the extension review page using `storage.local`. It does not inspect or analyze the live board. Only a PGN present in the public finished-game archive is accepted. Chess.com callback endpoints are undocumented and may change; if the import fails, retry later or use manual PGN import as a fallback.
-
-## Build on Windows
-
-1. Install a current Node.js LTS release from https://nodejs.org/ (npm is included).
-2. Extract this folder somewhere simple, e.g. `C:\Users\YourName\Documents\zen-chess-review`.
-3. Open Command Prompt or PowerShell in that folder.
-4. Run:
-
-   ```powershell
-   npm install
-   npm run build
-   ```
-
-   This downloads `chess.js`, Vite, and the Stockfish npm package, then copies the Stockfish single-threaded WASM files into the extension. The build output is in `dist`.
-
-5. Open Zen Browser and enter `about:debugging` in the address bar.
-6. Choose **This Firefox** → **Load Temporary Add-on**.
-7. Open the `dist` folder and select `manifest.json`.
-8. Click the Zen Chess Review toolbar icon → **Open Game Review**.
-9. On Chess.com, open a completed game. Click **Share** → **PGN** → **Download**. On the review page's empty board, choose **Import PGN file** to load the downloaded game, then select **Review** in Game Summary. Alternatively, select **Paste PGN**, paste the game, and select **Load game** (or press Ctrl/Cmd + Enter). Import controls also remain available in the menu.
-
-Temporary add-ons may be removed when Zen restarts. To test code changes, rebuild and use the extension's Reload button in `about:debugging`.
-
-## Troubleshooting
-
-- **Build says Stockfish files could not be found:** inspect `node_modules\stockfish\bin`. Package layouts can change between versions. Update `scripts/copy-engine.mjs` to match the installed file names, then run `npm run build` again.
-- **Engine fails to start:** confirm `dist\engine` contains both `stockfish-19-lite-single.js` and `stockfish-19-lite-single.wasm`; reload the extension.
-- **PGN won't load:** use a PGN downloaded from Chess.com or paste the full PGN including move text.
-- **Review takes too long:** choose Quick review (Recommended). Stop and use Resume review to continue later without losing completed work.
-- **Extension is not retained after restart:** temporary loading is for development. A permanent Firefox/Zen install generally requires a signed add-on package.
-
-## Engine settings
-
-- Single-threaded WASM engine: one CPU worker, so the thread setting cannot be increased.
-- Base search time: Quick 125 / Thorough 500 / Deep 1000 ms. Critical candidates get selective checks with a per-move and shared game budget. Quick prioritizes speed and may differ on fine move labels; use Thorough or Deep for closer analysis. See [runtime budgets and benchmarks](docs/move-classification.md#runtime-cost-and-verification).
-- Selecting an unevaluated position requests a quick local evaluation. New variation moves are analyzed automatically using the selected per-position time.
-
-## Exploring variations
-
-1. Select a position in the original game's move list and play an alternative move on the board.
-2. Continue playing to explore the line. Stockfish evaluates each new move and adds its classification, recommended continuation, and coaching feedback.
-3. Click **Back to game** beside the original-position label to return to the exact original-game position where that variation started. The next navigation step follows the original game's continuation.
-4. Reopen any saved variation by clicking its moves in the indented move list. Branches can be expanded or collapsed; playing a different reply within a variation creates a nested branch. **Parent branch** returns to the nearest nested fork.
-
-Left/Right arrows and the navigation buttons follow the selected line. Up goes to the imported game's initial position; Down goes to the selected line's end. Pawn promotion offers Queen, Rook, Bishop, and Knight.
-
-The Game Summary always describes the original game. Exploring alternatives preserves its evaluations, classifications, accuracy, and rating estimates. Moving pieces during a full-game review stops that review safely. Use **Review** in Game Summary to run the analysis again.
-
-Variations and their analyses remain available in the current review session. Loading another PGN or reloading the page clears them. Saving studies across sessions and exporting PGNs with variations are not included.
-
-## Playback controls
-
-Playing a move opens the Moves view automatically. Game options, PGN import, engine settings, and AI keys are available from the single menu at the top right of the navbar.
-
-**AutoPlay** in Moves plays the original game's moves, starting after the selected original position. **Pause** holds the current position; starting again at the end replays from the beginning. When exploring a variation, AutoPlay starts the original game from its beginning. Manual navigation, moving a piece, returning to Game Summary, and importing a game stop autoplay. Full-game analysis and its completion bar remain in Game Summary under **Review**.
-
-Stockfish's recommendation and **Show Move** are always shown in their own card as soon as a move is analyzed, without an API key or clicking **Explain**. The card remains available while AI loads, after AI finishes, and if a provider fails.
-
-The **Show Move** button on the right of **Stockfish recommended continuation** is vertically centered in the card and previews the displayed engine line on the board from the position before the reviewed move. Moves start dark green and turn light green individually as they play. This works with local feedback and Gemini/Groq coaching. **Back to move** or Escape restores the exact selected position and resets the move colors. The preview does not add moves or variations, change the original game, or make another AI request. Board moves are disabled during the preview; exit it before exploring another line.
-
-## Moving pieces and planning on the board
-
-Click a piece and its destination, or drag it onto a legal square. Legal destinations appear while dragging. Dropping outside the board or on an illegal square cancels the move. Promotion opens the Queen/Rook/Bishop/Knight picker. Escape cancels an unfinished drag or drawing; navigation, board flipping, and game import also cancel active gestures.
-
-The engine's best-move arrow is translucent light blue. Selecting pieces leaves its analysis request running. If the engine cannot provide a legal suggestion, use **Retry** beside its status; terminal positions have no best-move arrow.
-
-The board uses Lichess's default cream and brown colors. When a new variation position is still being analyzed, the evaluation bar holds its last score and moves to the new evaluation when available. Loading another game resets the display.
-
-Right-drag between any two squares to draw a planning arrow, or right-click a square to add a circle. Repeat an annotation to remove it. Drawing over the same endpoints with another color changes its color:
-
-| Modifier with right-click/drag | Color |
-| --- | --- |
-| None | Green |
-| Ctrl | Red |
-| Alt (or Meta) | Blue |
-| Ctrl + Alt | Yellow |
-
-Planning annotations remain visible while the engine updates and when you flip the board. Left-clicking the board, making a move, navigating to another position, or loading a game clears them. The best-move arrow toggle affects only the engine suggestion. Planning arrows do not change the game or start engine analysis.
-
-## Optional Gemini or Groq explanations
-
-Without an API key for the selected provider, move feedback and Stockfish analysis run locally as before. Open **Menu > AI Coach**, choose **Gemini** or **Groq**, create a key in [Google AI Studio](https://aistudio.google.com/app/apikey) or [Groq Console](https://console.groq.com/keys), paste it, and select **Save**. Select an analyzed move to verify the connection. The status distinguishes a saved key from a successful connection. Each provider's pricing, access requirements, and quota limits apply.
-
-AI requests are manual: select **Ask AI** for an eligible analyzed move to request an explanation. Saving a key, navigating, flipping the board, or updating Stockfish analysis does not automatically send an AI request. Book and forced moves retain local feedback. Previously requested explanations can be reopened from the cache without another call. Long explanations scroll within the feedback area while the move list and footer keep their own space.
-
-Drag the divider above **Moves / Game Summary** up to expand the lower section, or down to expand feedback. Your chosen split is remembered after reloading and adapts to smaller screens. Focus the divider and use **Up / Down** to adjust it or **Home / End** to reach its limits. Double-click the divider to restore the automatic layout.
-
-With a working key, the feedback panel shows one compact move insight: a specific headline, a short explanation of the key consequence, and one practical next step. Stockfish's recommended continuation stays in its own independent card below the explanation. It skips separate tactical and positional sections and repeated provider attribution. It uses the before/after positions, board facts, and legally replayed Stockfish lines for the selected original-game or variation move. Scores and classifications remain Stockfish-based; the selected AI provider supplies language, which can still contain mistakes. The local explanation remains available while loading or when a request fails. **Retry AI** retries that position; otherwise failed requests are not repeatedly sent on each render.
-
-Keys are saved separately in this browser profile. Existing Gemini keys continue to work. Gemini authenticates only with Google using `x-goog-api-key`; Groq uses `Authorization: Bearer` only at `api.groq.com`. Only the selected provider receives the position, played move, board facts, and engine evidence. Player names and the full PGN are not included. Switching providers cancels pending requests and retains both saved keys; it does not automatically try another provider after a failure. **Clear API key** removes only the selected provider's key and returns its feedback to local mode, even if the other provider has a saved key. The selected provider is remembered after reloading.
-
-Explanations are cached in memory by provider, model, position, and engine evidence. The Groq adapter uses `openai/gpt-oss-120b` with strict JSON schema output; the Gemini adapter uses `gemini-3.8-flash`.
-
-## Development checks
-
-Use Node.js 22.20+ or a newer supported LTS release. After `npm ci`:
+Use Node.js 22.20+ and npm:
 
 ```powershell
-npm test
-npx playwright install chromium firefox
-npm run test:browser
+git clone https://github.com/ShubhamKr-047/System-SCR.git
+cd System-SCR
+npm ci
+npm run build
 ```
 
-Unit tests cover branching, return positions, special moves, board coordinates, suggestion validation, and engine queue cancellation/recovery. Browser tests exercise the generated review page in Chromium and Firefox with the packaged Stockfish worker and WASM, including drag-and-drop, planning annotations, gesture cancellation, variations, and game summaries. Controlled delayed-worker tests also verify suggestion recovery and uninterrupted requests during piece selection.
+The build copies Stockfish's JavaScript/WASM files from the installed npm package and generates the extension in `dist/`.
 
-Gemini and Groq client checks use local HTTP contract simulations, require Postman CLI 1.75+, and need no real API key or Postman login:
+1. In Zen or Firefox, open `about:debugging`.
+2. Select **This Firefox > Load Temporary Add-on**.
+3. Select `dist/manifest.json`.
+4. Open the rook extension icon and select **Open System SCR**.
+
+The manifest requires Firefox 128 or later. Temporary add-ons may be removed when the browser restarts. Permanent installation generally requires a signed Firefox add-on package; this build does not sign one.
+
+After code changes, rebuild, reload the extension in `about:debugging`, and reload Chess.com tabs and the review page.
+
+For review-page development without installing the extension:
+
+```powershell
+npm run dev
+```
+
+Open the local URL printed by Vite with `/review.html` appended. Extension-only behavior, including the Chess.com launcher, requires an installed extension.
+
+## Review a game
+
+1. Open System SCR from the extension popup.
+2. Import a `.pgn` file or paste the full game on the empty-board screen. Import controls also remain available in the hamburger menu.
+3. For **Menu > Paste PGN**, enter the moves in the panel beside the menu and select **Load**, or press Ctrl/Cmd + Enter.
+4. Choose **Quick**, **Balanced**, or **Deep** under **Menu > Speed**.
+5. Start **Review** in **Game Summary**.
+
+Accuracy and estimated performance ratings remain hidden until the full review completes. Rating estimates describe this game's performance; they are not official ratings or predictions of actual playing strength.
+
+Stop/resume preserves completed analysis within the current session. Repeating a completed review at the same quality reuses compatible results; selecting a higher quality can trigger additional analysis. Loading another PGN or reloading the page clears the current game and variations.
+
+### Chess.com import
+
+The rook **Analyze** button requests game metadata, finds the exact completed game in the player's public monthly archive, and opens its PGN in System SCR. Numbered live/daily game and analysis URLs are recognized; the content script also attempts to detect completed games on Chess.com's play pages.
+
+Import requires a publicly archived completed game. Archive publication can lag behind the result, so a visible button does not guarantee immediate import. The callback endpoint used for metadata is undocumented and can change.
+
+If the button is missing, try opening the completed game from your profile. If detection or retrieval still fails, download the PGN from Chess.com's Share/PGN controls and import it manually. Immediate post-game detection and archive availability are not guaranteed.
+
+## Review speed and engine searches
+
+| Menu mode | Whole-game target | Depth targets: initial / alternatives / verification |
+| --- | --- | --- |
+| Quick | 45 seconds | 14 / 17 / 18 |
+| Balanced | 60 seconds | 16 / 19 / 20 |
+| Deep | 90 seconds | 18 / 21 / 22 |
+
+Older design documents call Balanced **Thorough**. The UI now calls it Balanced; the underlying middle review policy is the same.
+
+These are adaptive targets, not fixed delays or guaranteed deadlines. Short games and cached reviews can finish sooner. Long games, engine startup, hardware, and CPU load can increase runtime. Searches may finish below their target depth when their time expires.
+
+Ordinary searches use one principal variation. Alternative comparisons use two; a played move outside those lines receives a restricted search. Critical candidates receive additional checks within the shared game budget. The bundled engine uses one worker and cannot be made multithreaded through a setting.
+
+Quick has less verification time and can differ from deeper modes on subtle or long combinations. Incomplete exceptional-move evidence falls back to a supported ordinary label. A completed progress bar means the workflow finished; it does not mean every tactical possibility was exhaustively proved.
+
+## Move classifications
+
+| Label | Basis |
+| --- | --- |
+| Brilliant | A near-best piece sacrifice with verified compensation or a qualifying mating continuation. Ordinary exchanges and immediate routine recaptures do not suffice. |
+| Great | A verified critical resource with a significant gap to a reliably searched strongest alternative. |
+| Best | The engine's top choice within tolerance, a close equivalent, or a move preserving a forced win by mate. |
+| Excellent / Good | Small losses in estimated winning chances. |
+| Book | A qualifying position-and-move match in the bundled opening index. |
+| Forced | Exactly one legal move; excluded from accuracy calculations. |
+| Inaccuracy / Mistake / Blunder | Increasing loss of estimated winning chances, with explicit mate-transition handling. |
+| Miss | A verified missed opportunity created by the opponent's preceding error, measured from each player's correct perspective. |
+
+Classification reasons are available on move badges and feedback headings. Brilliant precedes Great when its evidence is established. Miss requires verified historical evidence; simply losing an advantage is insufficient.
+
+See [classification v5](docs/classification-v5.md) for current rules. Earlier documents provide context and provenance: [v4 mating-sacrifice changes](docs/mating-sacrifices-v4.md), [v3 architecture](docs/review-v3.md), and [original classification reference](docs/move-classification.md). Later versions supersede conflicting earlier rules and timing tables.
+
+These are SCR's heuristics, not Chess.com's proprietary classifier. Bounded searches and sacrifice checks can miss unusual or long tactics. Regression fixtures protect known examples; they do not establish universal accuracy or agreement with every human annotation. The opening index is bundled locally from the CC0 Lichess opening dataset and supports transpositions.
+
+## Board controls and variations
+
+Click a piece and destination, or drag it to a legal square. Illegal drops cancel the move. Promotion offers queen, rook, bishop, and knight. **Menu > Analysis Board** starts a fresh board for independent study.
+
+Playing an alternative from an imported position creates a variation. Continue the line, select moves in the indented move list, or create nested branches. **Back to game** returns to the original position where the variation began; **Parent branch** returns to a nested fork. Summary statistics stay attached to the original game. Moving pieces during a full-game review stops that review.
+
+| Control | Action |
+| --- | --- |
+| Left / Right | Previous / next move in the selected line |
+| Up / Down | Imported game's initial position / selected line's end |
+| F | Flip the board |
+| Playback buttons | Start, previous, play/pause, next, end |
+| Escape | Cancel active drawing or dragging, or leave an engine preview |
+
+Autoplay follows the original game. When started from a variation, it starts the original game from the beginning. Manual navigation and board interaction stop playback.
+
+**Show Move** previews the engine's recommended continuation from before the reviewed move. **Back to move** or Escape restores the selected position. Previewing does not create variations or request AI explanations.
+
+### Planning annotations and display
+
+Right-drag between squares to draw an arrow; right-click a square to add a circle. Repeat the same annotation to remove it.
+
+| Modifier | Color |
+| --- | --- |
+| None | Orange |
+| Ctrl | Red |
+| Alt or Meta | Blue |
+| Shift | Green |
+| Ctrl + Alt | Yellow |
+
+Annotations survive board flips and engine updates. Left-clicking, making a move, navigating, or importing another game clears them. Classification badges render above engine and custom arrows. The classification switch controls board badges; analysis and summary classifications remain available.
+
+The best-move arrow switch affects the engine suggestion independently of custom annotations. Evaluation bar visibility has its own switch.
+
+Drag the divider above **Moves / Game Summary** to resize the sidebar sections. Focus it and use Up/Down or Home/End for keyboard adjustment; double-click to restore the automatic split. The chosen split is remembered.
+
+## Optional AI Coach
+
+Local Stockfish analysis and feedback work without an API key. To request additional explanations:
+
+1. Enable **Menu > AI Coach** and select Gemini or Groq.
+2. Create a key in [Google AI Studio](https://aistudio.google.com/app/apikey) or [Groq Console](https://console.groq.com/keys).
+3. Paste the selected provider's key and select **Save**.
+4. Select an eligible analyzed move and choose **Ask AI**.
+
+Requests are manual. Saving a key, navigating, or flipping the board does not automatically request an explanation. Book and forced moves retain local feedback. Previously requested explanations can be reused from the in-memory cache; **Retry AI** retries a failed request.
+
+Keys are stored separately in the browser profile. Switching providers retains both keys; clearing a key removes only the selected provider's key. Connection status distinguishes a saved key from a successful request. Local feedback remains available if a provider fails, and engine continuations stay independent of AI output.
+
+The adapters are configured for `gemini-3.8-flash` and `openai/gpt-oss-120b`. These are repository configuration values, not guarantees of account access or model availability. Provider access, pricing, and quotas apply. AI explanations can contain errors and do not change engine scores or labels.
+
+## Privacy and permissions
+
+PGN analysis runs in the browser. Manual review requires no server or AI account. Building initially downloads npm dependencies; the engine, opening index, fonts, pieces, and sounds are then packaged locally.
+
+| Permission or host access | Purpose |
+| --- | --- |
+| `storage` | Transfer imported Chess.com PGNs to the review page. |
+| `tabs` | Open the review page. |
+| `www.chess.com` | Inject the Analyze launcher and fetch game metadata. |
+| `api.chess.com` | Retrieve public completed-game archives. |
+| Google Gemini / Groq API hosts | Send an explicitly requested explanation to the selected provider. |
+
+AI requests include the selected position, played move, board facts, and engine evidence. Player names and the full PGN are not included. Gemini keys are sent to Google; Groq keys are sent to Groq. No automatic provider fallback is used. Keys and UI preferences use browser-local storage; explanation caches and variation analysis are session-local.
+
+Use System SCR for completed-game review and independent study. Do not use engine assistance during an ongoing competitive game.
+
+## Development and verification
+
+```powershell
+# Unit tests
+npm test
+
+# Production extension build
+npm run build
+
+# Install browser runtimes once, then build and run browser tests
+npx playwright install chromium firefox
+npm run test:browser
+
+# Focused launcher tests after a build
+npx playwright test tests/browser/chesscom-launcher.spec.js
+```
+
+Browser tests run in Chromium and Firefox against the generated review page. They cover board interaction, menus, animations, variations, playback, classification, and progress. Chromium coverage does not establish Chrome extension compatibility; the manifest targets Firefox/Zen.
+
+Launcher tests use synthetic Chess.com DOM fixtures and mocked extension messages. They do not verify live Chess.com markup or immediate post-game behavior.
+
+Optional coaching tests require Postman CLI 1.75+ and local simulations without real API keys:
 
 ```powershell
 npm run test:coaching
 ```
 
-These checks exercise success, caching, deeper Stockfish analysis, key removal, late responses, explicit retry, invalid keys, quota limits, server failures, invalid/blocked responses, safe text rendering, and timeouts in both browsers. They establish client behavior against fixtures; live provider access and chess explanation quality require a separate manual check with your own key. See [simulation details](postman/README.md).
+See [simulation setup and coverage](postman/README.md). These checks establish client behavior against fixtures, not live provider access or explanation quality.
 
-To load the extension itself in Firefox/Zen, run `npm run build`, open `about:debugging`, select **This Firefox > Load Temporary Add-on**, and choose `dist/manifest.json`.
+Engine benchmark commands:
 
-## Privacy and fair play
+```powershell
+node scripts/benchmark-mating-sacrifices.mjs
+node scripts/benchmark-classifications.mjs --compare
+node scripts/benchmark-review.mjs --time=125
+node scripts/benchmark-review.mjs --time=500
+node scripts/benchmark-review.mjs --time=1000
+```
 
-- With no key for the selected AI provider, PGN and chess analysis stay in the browser after dependencies are installed. With a key saved, the selected position and engine context are sent only to that provider for explanations, as described above.
-- Use this only for completed games or independent study. Do not use engine analysis during live games.
-- Stockfish is GPL-licensed. Keep the upstream license notice with the distributed engine and comply with its license if redistributing builds.
+Reports are written under the ignored `logs/` directory. Results depend on the machine and fixture corpus.
 
-## Move classification
+### Repository layout
 
-All eleven labels are supported: Brilliant, Great, Best, Excellent, Good, Book, Forced, Inaccuracy, Mistake, Miss, and Blunder. Quality reflects the loss of estimated winning chances, with explicit handling of mate and draw outcomes. Book requires a match in a bundled opening database; accurate early moves alone do not qualify. Great compares alternatives, and Brilliant additionally verifies a real piece sacrifice and compensation. Uncertain exceptional candidates retain their ordinary quality label.
+| Path | Contents |
+| --- | --- |
+| `src/` | UI, board interaction, engine queue, classification, scheduling, and coaching |
+| `content.js` / `background.js` | Chess.com launcher and completed-game retrieval |
+| `manifest.json` | Firefox/Zen extension configuration |
+| `public/` | Branding, pieces, fonts, sounds, and generated engine assets |
+| `scripts/` | Engine copying, opening-data generation, and benchmarks |
+| `tests/` | Unit tests, browser tests, and chess fixtures |
+| `docs/` | Versioned classification design and validation notes |
+| `postman/` | Local coaching simulations |
+| `dist/` | Generated extension; not committed |
 
-Move badges and the feedback heading expose the classification reason on hover. Original-game summary counts include Forced moves; forced replies do not affect accuracy. Accuracy now uses changes in estimated chances, with extra weight for critical stretches. The performance rating remains a heuristic estimate.
+## Troubleshooting
 
-The opening index contains 8,192 position/move entries from 3,865 named lines in the CC0 Lichess opening dataset. It is bundled locally and supports transpositions; normal builds and reviews do not download opening data. Engine history follows the actual game or variation so repetition and draw rules are respected.
+| Problem | What to check |
+| --- | --- |
+| No Analyze button after a game | Known issue. Open the game from your profile or import its PGN manually. |
+| Game not found in archive | Confirm it is public and completed; retry later or import the PGN. |
+| Changes do not appear | Rebuild, reload the extension, then reload Chess.com and the review page. |
+| Stockfish files missing | Run `npm ci` and rebuild; check `scripts/copy-engine.mjs` against the installed package layout. |
+| Engine cannot start | Confirm `dist/engine/` contains `stockfish-19-lite-single.js` and `.wasm`, then reload. |
+| PGN cannot load | Import complete PGN move text, preferably exported from the game's site. |
+| Review takes too long | Choose Quick, reduce competing CPU load, or stop and resume. Targets are not hard deadlines. |
+| Accuracy or rating hidden | Wait for full review completion. |
+| AI explanation fails | Check provider, key, model access, and quota; local analysis remains available. |
+| Extension disappears on restart | Reload the temporary add-on; permanent installation requires an appropriate signed package. |
 
-See [the classification rules, data provenance, limitations, and verification commands](docs/move-classification.md). This feature requires no AI key and does not request AI explanations automatically.
+## Third-party assets and licensing
+
+Stockfish is GPL-licensed. The build includes upstream `Copying.txt`; preserve it and meet upstream license obligations, including applicable source requirements, when redistributing engine builds.
+
+The opening dataset comes from [Lichess chess openings](https://github.com/lichess-org/chess-openings), published under CC0. Font license notices are bundled in `public/fonts/`. Review relevant upstream licenses before redistributing third-party assets.
