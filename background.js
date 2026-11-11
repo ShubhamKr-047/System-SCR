@@ -62,12 +62,16 @@ async function retrieveCompletedGame(rawUrl) {
   };
 }
 
-api.runtime.onMessage.addListener((message) => {
+api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  let response;
   if (message?.type === "ZEN_FETCH_COMPLETED_GAME") {
-    return retrieveCompletedGame(message.url).catch(error => ({ ok: false, error: error.message || String(error) }));
+    response = retrieveCompletedGame(message.url);
   }
   if (message?.type === "ZEN_OPEN_REVIEW" && message.url) {
-    return api.tabs.create({ url: message.url }).then(() => ({ ok: true }));
+    response = api.tabs.create({ url: message.url }).then(() => ({ ok: true }));
   }
-  return undefined;
+  if (!response) return undefined;
+  response.then(sendResponse, error => sendResponse({ ok: false, error: error.message || String(error) }));
+  // Keep asynchronous responses compatible with Chrome and Firefox.
+  return true;
 });

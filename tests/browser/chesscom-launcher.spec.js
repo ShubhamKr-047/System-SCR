@@ -1,6 +1,25 @@
 import {test,expect} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 const source=readFileSync(new URL('../../content.js',import.meta.url),'utf8');
+const background=readFileSync(new URL('../../background.js',import.meta.url),'utf8');
+test('background responds asynchronously to imports and review requests',async({page})=>{
+  await page.goto('/popup.html');
+  await page.evaluate(()=>{
+    window.browser={runtime:{onMessage:{addListener:listener=>{window.backgroundListener=listener;}}},
+      tabs:{create:async options=>{window.openedReview=options.url;}}};
+  });
+  await page.addScriptTag({content:background});
+  const result=await page.evaluate(async()=>{
+    const send=message=>new Promise(resolve=>{
+      const keptOpen=window.backgroundListener(message,{},response=>resolve({keptOpen,response}));
+    });
+    return {invalid:await send({type:'ZEN_FETCH_COMPLETED_GAME',url:'https://www.chess.com/'}),
+      opened:await send({type:'ZEN_OPEN_REVIEW',url:'https://extension.test/review.html'})};
+  });
+  expect(result.invalid).toEqual({keptOpen:true,response:{ok:false,error:'Open a Chess.com live or daily game page first.'}});
+  expect(result.opened).toEqual({keptOpen:true,response:{ok:true}});
+  expect(await page.evaluate(()=>window.openedReview)).toBe('https://extension.test/review.html');
+});
 async function setup(page,path='/play/online',html='<div class="board" data-game-id="123456">Playing</div>') {
   await page.route('https://www.chess.com/**',route=>route.fulfill({contentType:'text/html',body:`<html><body>${html}</body></html>`}));
   await page.goto('https://www.chess.com'+path);
@@ -14,6 +33,20 @@ async function setup(page,path='/play/online',html='<div class="board" data-game
   await page.addScriptTag({content:source});
 }
 const launcher=page=>page.locator('#zen-chess-review-launcher');
+test('connection failures explain reload recovery and use real line breaks',async({page})=>{
+  await setup(page,'/game/live/123456');
+  await page.evaluate(()=>{
+    window.browser.runtime.sendMessage=async()=>{throw new Error('Could not establish connection. Receiving end does not exist.');};
+  });
+  let message;
+  page.once('dialog',async dialog=>{message=dialog.message();await dialog.accept();});
+  await launcher(page).click();
+  expect(message).toContain('\n\nReload System SCR');
+  expect(message).not.toContain('\\n');
+  expect(message).not.toContain('archive may still be updating');
+  await expect(launcher(page)).toBeEnabled();
+  await expect(launcher(page)).toHaveText('Analyze');
+});
 test('a result on the same live page shows Analyze despite continuous clock mutations',async({page})=>{
   await setup(page);
   await expect(launcher(page)).toHaveCount(0);
