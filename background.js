@@ -2,18 +2,19 @@ const api = globalThis.browser ?? globalThis.chrome;
 
 function parseGameUrl(rawUrl) {
   const url = new URL(rawUrl);
-  const match = url.pathname.match(/\/(?:game|analysis\/game)\/(live|daily)\/(\d+)/);
+  if (url.protocol !== 'https:' || !['www.chess.com', 'chess.com'].includes(url.hostname)) throw new Error('Unsupported game URL.');
+  const match = url.pathname.match(/^\/(?:game|analysis\/game)\/(?:(live|daily)\/)?(\d+)\/?$/);
   if (!match) throw new Error("Open a Chess.com live or daily game page first.");
-  return { kind: match[1], id: match[2] };
+  return { kind: match[1] || 'live', id: match[2] };
 }
 
 async function fetchJson(url) {
-  const response = await fetch(url, { credentials: "omit", cache: "no-store" });
+  const response = await fetch(url, { credentials: "omit", cache: "no-store", signal: AbortSignal.timeout(10000) });
   if (!response.ok) throw new Error(`Chess.com returned HTTP ${response.status}.`);
   return response.json();
 }
 
-async function retrieveCompletedGame(rawUrl) {
+async function gameMetadata(rawUrl) {
   const { kind, id } = parseGameUrl(rawUrl);
   const callbackUrl = `https://www.chess.com/callback/${kind}/game/${id}`;
   let callback;
@@ -23,6 +24,13 @@ async function retrieveCompletedGame(rawUrl) {
     throw new Error(`Couldn't read Chess.com's game data (${e.message}).`);
   }
   const game = callback?.game;
+  if (String(game?.id) !== id || typeof game?.isFinished !== 'boolean') throw new Error('Could not verify the current game status.');
+  return { game, kind, id };
+}
+
+async function retrieveCompletedGame(rawUrl) {
+  const { game, kind, id } = await gameMetadata(rawUrl);
+  if (game.isFinished !== true) throw new Error('This game is still in progress. Analyze is available after it finishes.');
   const headers = game?.pgnHeaders || {};
   const username = String(headers.White || "").trim().toLowerCase();
   const date = String(headers.Date || "");
@@ -64,6 +72,9 @@ async function retrieveCompletedGame(rawUrl) {
 
 api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   let response;
+  if (message?.type === 'ZEN_GAME_STATUS') {
+    response = gameMetadata(message.url).then(({game, id}) => ({ok:true, gameId:id, finished:game.isFinished}));
+  }
   if (message?.type === "ZEN_FETCH_COMPLETED_GAME") {
     response = retrieveCompletedGame(message.url);
   }

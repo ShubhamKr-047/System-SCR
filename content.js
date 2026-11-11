@@ -1,14 +1,15 @@
 (() => {
   const BUTTON_ID = "zen-chess-review-launcher";
   let insertTimer = null;
+  let status = { url: null, finished: false, pending: false, next: 0, failures: 0 };
   const ROOK = '<svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M4 3h4v4h2V3h4v4h2V3h4v7l-3 2v6h2v3H5v-3h2v-6l-3-2V3zm5 9v6h6v-6H9z"/></svg>';
 
   function canonicalGame(raw) {
     try {
       const url = new URL(raw, location.origin);
       if (!['www.chess.com', 'chess.com'].includes(url.hostname)) return null;
-      const match = url.pathname.match(/^\/(?:game|analysis\/game)\/(live|daily)\/(\d+)\/?$/);
-      if (match) return `${location.origin}/game/${match[1]}/${match[2]}`;
+      const match = url.pathname.match(/^\/(?:game|analysis\/game)\/(?:(live|daily)\/)?(\d+)\/?$/);
+      if (match) return `${location.origin}/game/${match[1] || 'live'}/${match[2]}`;
       const id = url.searchParams.get('gameId');
       if (/^\/analysis(?:\/|$)/.test(url.pathname) && /^\d+$/.test(id || '')) return `${location.origin}/game/live/${id}`;
     } catch { /* Links can be incomplete during live page updates. */ }
@@ -44,7 +45,25 @@
 
   function addButton() {
     const context = gameContext();
+    const url = context?.url || null;
+    if (status.url !== url) status = { url, finished: false, pending: false, next: 0, failures: 0 };
+    if (url && !status.finished && !status.pending && !document.hidden && Date.now() >= status.next) {
+      const request = status;
+      request.pending = true;
+      const api = globalThis.browser ?? globalThis.chrome;
+      Promise.resolve().then(() => api.runtime.sendMessage({type:'ZEN_GAME_STATUS', url})).then(response => {
+        if (status !== request || gameContext()?.url !== url) return;
+        if (!response?.ok || String(response.gameId) !== url.split('/').pop() || typeof response.finished !== 'boolean') throw new Error('Unverified game status');
+        request.finished = response.finished === true;
+        request.failures = 0;
+      }).catch(() => { request.failures++; }).finally(() => {
+        request.pending = false;
+        request.next = Date.now() + Math.min(60000, 5000 * 2 ** Math.min(request.failures, 4));
+        scheduleButton();
+      });
+    }
     const existing = document.getElementById(BUTTON_ID);
+    if (!status.finished) { existing?.remove(); return; }
     if (!context) { existing?.remove(); return; }
     if (existing) {
       if (existing.dataset.gameUrl !== (context.url || '')) {
@@ -140,4 +159,7 @@
   }, 400);
   window.addEventListener('popstate', scheduleButton);
   window.addEventListener('pageshow', scheduleButton);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { status.next = 0; scheduleButton(); }
+  });
 })();
