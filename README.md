@@ -1,6 +1,6 @@
 # System SCR
 
-System SCR is a chess game review extension for Zen Browser and Firefox. Review imported PGNs with a bundled Stockfish 19 engine, explore variations, and optionally request move explanations from Gemini or Groq.
+System SCR is a chess game review extension for Chrome, Zen Browser, and Firefox. Review imported PGNs with a bundled Stockfish 19 engine, explore variations, and optionally request move explanations from Gemini or Groq.
 
 Stockfish runs locally in a single-threaded WebAssembly worker. An AI API key is optional and never determines move classifications.
 
@@ -37,6 +37,8 @@ The build copies Stockfish's JavaScript/WASM files from the installed npm packag
 The manifest requires Firefox 128 or later. Temporary add-ons may be removed when the browser restarts. Permanent installation generally requires a signed Firefox add-on package; this build does not sign one.
 
 After code changes, rebuild, reload the extension in `about:debugging`, and reload Chess.com tabs and the review page.
+
+For Chrome/Chromium 121 or later, open `chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and choose the `dist/` folder. After rebuilding, click **Reload** on System SCR and refresh Chess.com tabs. The shared manifest uses a service worker in Chromium and background scripts in Firefox.
 
 For review-page development without installing the extension:
 
@@ -185,7 +187,7 @@ npm run test:browser
 npx playwright test tests/browser/chesscom-launcher.spec.js
 ```
 
-Browser tests run in Chromium and Firefox against the generated review page. They cover board interaction, menus, animations, variations, playback, classification, and progress. Chromium coverage does not establish Chrome extension compatibility; the manifest targets Firefox/Zen.
+Browser tests run in Chromium and Firefox against the generated review page. They cover board interaction, menus, animations, variations, playback, classification, and progress. An additional Chromium test loads the built extension and checks background messaging, PGN transfer, and opening the review using controlled game responses. Firefox launcher tests use mocked extension APIs; they do not install a Firefox add-on.
 
 Launcher tests use synthetic Chess.com DOM fixtures and mocked extension messages. They do not verify live Chess.com markup or immediate post-game behavior.
 

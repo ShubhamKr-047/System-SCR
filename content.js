@@ -104,9 +104,12 @@
         if (!button.isConnected || button.dataset.gameUrl !== gameUrl) return;
         button.innerHTML = `${ROOK}<span>Analyze</span>`;
         button.style.opacity = "1";
-        alert("System SCR could not import this game automatically.\\n\\n" +
+        const connectionError = /receiving end does not exist|could not establish connection|extension context invalidated/i.test(error?.message || '');
+        alert("System SCR could not import this game automatically.\n\n" +
           (error?.message || "The game may be private, ongoing, or not yet available in Chess.com's public archive.") +
-          "\\n\\nIf the game just finished, its public archive may still be updating. Try Analyze again shortly.");
+          (connectionError
+            ? "\n\nReload System SCR in your browser's extensions page, then refresh this Chess.com tab and try Analyze again."
+            : "\n\nIf the game just finished, its public archive may still be updating. Try Analyze again shortly."));
       }
     });
     document.body.appendChild(button);
