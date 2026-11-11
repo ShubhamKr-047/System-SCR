@@ -14,7 +14,7 @@ Stockfish runs locally in a single-threaded WebAssembly worker. An AI API key is
 - Menu switches for the best-move arrow, evaluation bar, move classification badges, and AI Coach.
 - Resizable sidebar, rook branding, and bundled fonts: Space Grotesk for headings, Inter for UI, and JetBrains Mono for numerical data.
 
-**Known issue:** the Analyze launcher does not reliably appear immediately after a live Chess.com game finishes. The latest detection changes have synthetic browser coverage, but the reported real-game failure remains unresolved. Manual PGN import is the reliable fallback.
+**Analyze availability:** On numbered game pages, the launcher waits for Chess.com metadata to confirm that the matching game has finished. It checks about every five seconds while the tab is visible, backs off on failures, and stops after completion. Live end-of-game timing still needs manual verification; manual PGN import remains available.
 
 ## Build and install
 
@@ -62,7 +62,7 @@ Stop/resume preserves completed analysis within the current session. Repeating a
 
 ### Chess.com import
 
-The rook **Analyze** button requests game metadata, finds the exact completed game in the player's public monthly archive, and opens its PGN in System SCR. Numbered live/daily game and analysis URLs are recognized; the content script also attempts to detect completed games on Chess.com's play pages.
+The rook **Analyze** button requests game metadata, finds the exact completed game in the player's public monthly archive, and opens its PGN in System SCR. `/game/<id>`, numbered live/daily game and analysis URLs are recognized; the content script also attempts to detect completed games on Chess.com's play pages.
 
 Import requires a publicly archived completed game. Archive publication can lag behind the result, so a visible button does not guarantee immediate import. The callback endpoint used for metadata is undocumented and can change.
 
@@ -229,7 +229,7 @@ Reports are written under the ignored `logs/` directory. Results depend on the m
 
 | Problem | What to check |
 | --- | --- |
-| No Analyze button after a game | Known issue. Open the game from your profile or import its PGN manually. |
+| No Analyze button after a game | Keep the tab visible for the completion check. If metadata is unavailable, open the completed game from your profile or import its PGN manually. |
 | Game not found in archive | Confirm it is public and completed; retry later or import the PGN. |
 | Changes do not appear | Rebuild, reload the extension, then reload Chess.com and the review page. |
 | Stockfish files missing | Run `npm ci` and rebuild; check `scripts/copy-engine.mjs` against the installed package layout. |

@@ -15,7 +15,7 @@ test('installed Chromium extension imports a game through its background worker'
     await worker.evaluate(() => {
       globalThis.fetch = async url => {
         if (String(url).includes('/callback/live/game/123456')) return new Response(JSON.stringify({
-          game: { pgnHeaders: { White: 'Alice', Black: 'Bob', Date: '2026.11.10' } }
+          game: { id:123456, isFinished:true, pgnHeaders: { White: 'Alice', Black: 'Bob', Date: '2026.11.10' } }
         }));
         if (String(url).includes('/pub/player/alice/games/2026/11')) return new Response(JSON.stringify({
           games: [{ url: 'https://www.chess.com/game/live/123456', pgn: '[White "Alice"]\n[Black "Bob"]\n\n1. e4 e5 *' }]
@@ -27,7 +27,7 @@ test('installed Chromium extension imports a game through its background worker'
     await page.route('https://www.chess.com/**', route => route.fulfill({
       contentType: 'text/html', body: '<html><body>Completed game</body></html>'
     }));
-    await page.goto('https://www.chess.com/game/live/123456');
+    await page.goto('https://www.chess.com/game/123456');
     const launcher = page.locator('#zen-chess-review-launcher');
     await expect(launcher).toHaveText('Analyze');
     await expect(launcher.locator('svg')).toBeVisible();
