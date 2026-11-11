@@ -1,0 +1,15 @@
+purpose: Verify concise evidence-based coaching request and response handling.
+sources:
+  - src/coaching.js defines the shared Gemini/Groq request contract.
+  - src/coaching-evidence.js builds locally replayed facts and selected lines.
+assumptions:
+  - Provider success fixtures are illustrative text, not model-quality evidence.
+  - Simple verified piece-loss explanations bypass provider requests.
+verified:
+  - Production fetch is routed over HTTP to existing local simulations.
+  - Both provider adapters reject overlong, malformed, refused and HTML responses.
+  - Browser tests exercise retry, cancellation and independent engine playback.
+limitations:
+  - No live provider credentials were used; model availability and response quality remain unverified.
+  - Claim IDs and move checks cannot establish semantic correctness of arbitrary prose.
+  - Piece-loss shortcuts are conservative heuristics, not exhaustive tactical proofs.

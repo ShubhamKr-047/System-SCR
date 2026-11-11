@@ -16,33 +16,26 @@ http.createServer(async (req, res) => {
   const body = req.body;
   let context;
   try { context = JSON.parse(body.contents[0].parts[0].text); } catch {}
-  if (!key?.startsWith("test-") || !context?.before?.fen || !context?.after?.fen ||
-      !context.stockfish || !body?.systemInstruction?.parts?.[0]?.text ||
+  if (!key?.startsWith("test-") || !context?.positions?.before || !context?.positions?.after ||
+      !context.facts || !body?.systemInstruction?.parts?.[0]?.text ||
       body.generationConfig?.responseFormat?.text?.mimeType !== "APPLICATION_JSON" ||
-      body.generationConfig.responseFormat.text.schema.required.length !== 3) {
+      body.generationConfig.responseFormat.text.schema.required.length !== 2) {
     return send(400, { error: { code: 400, status: "INVALID_ARGUMENT", message: "Invalid coaching contract" } });
   }
   const schema = body.generationConfig.responseFormat.text.schema;
-  if (["concept", "summary", "tip"].some(field => !schema.required.includes(field) || schema.properties[field]?.type !== "string")) {
-    return send(400, { error: { message: "Expected compact coaching fields" } });
+  if (!schema.required.includes('explanation') || !schema.required.includes('claimIds') || schema.properties.explanation?.type !== 'string' || schema.properties.claimIds?.type !== 'array') {
+    return send(400, {error:{message:'Expected concise evidence contract'}});
   }
   if (key === "test-delayed") await new Promise(resolve => setTimeout(resolve, 2000));
   if (key === "test-timeout") await new Promise(resolve => setTimeout(resolve, 27000));
   const move = context.played.san;
   const coaching = {
-    concept: "Keep central pawn breaks in mind",
-    summary: `Explanation for ${move}: consider how the ${context.played.piece} on ${context.played.to} affects central control. Stockfish recommends ${context.stockfish.recommendedMove || "no move in this terminal position"}; compare the supplied continuation before committing to a plan.`,
-    tip: "Check whether your opponent can challenge your central pawn before moving another piece."
+    explanation: `Explanation for ${move}: the supplied evidence does not establish a specific positional purpose.`,
+    claimIds:['played']
   };
-  if (key === "test-long") {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    const paragraph = "The knight supports the central pawn and helps protect the king while the opponent prepares a reply. ";
-    coaching.summary = paragraph.repeat(9) + " LongToken" + "x".repeat(250);
-    coaching.tip = paragraph.repeat(2);
-    coaching.concept = "A detailed explanation of central pawn tension and piece activity in this position";
-  }
-  if (key === "test-html") coaching.summary = '<img src=x onerror="window.aiInjected=true">';
-  if (key === "test-malformed") coaching.summary = { invalid: true };
+  if (key === 'test-long') coaching.explanation = 'Unsupported filler. '.repeat(60);
+  if (key === 'test-html') coaching.explanation = '<img src=x onerror="window.aiInjected=true">';
+  if (key === 'test-malformed') coaching.explanation = {invalid:true};
   if (key === "test-blocked") return send(200, { promptFeedback: { blockReason: "SAFETY" } });
   return send(200, { candidates: [{ content: { role: "model", parts: [{ text: JSON.stringify(coaching) }] }, finishReason: "STOP" }] });
 }).listen(process.env.PORT || 4901);
