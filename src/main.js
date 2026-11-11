@@ -1,3 +1,4 @@
+import { conciseLocalFeedback } from "./coaching-evidence.js";
 import { Chess } from "chess.js";
 import { PIECE_IMAGES } from "./pieces.js";
 import { CLASSIFICATIONS, calculateAccuracy, calculateEstimatedRating } from "./classifications.js";
@@ -1499,199 +1500,7 @@ function formatEvalBarScore(score, mateDistance = null) {
 }
 
 function getLocalDetailedFeedback(result) {
-  if (!result) return { whyText: "", tipText: "", concept: "" };
-
-  const pieceNames = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
-  const isWhite = result.moveColor === "w" || (result.ply !== undefined ? result.ply % 2 === 0 : false);
-  const moverName = isWhite ? "White" : "Black";
-  const opponentName = isWhite ? "Black" : "White";
-  const pName = pieceNames[result.playedPiece?.toLowerCase()] || "piece";
-  const toSq = result.to || "";
-  const bestSan = result.bestSan;
-  const punishSan = result.punishSan;
-  const punishPv = result.punishPv;
-  const punishDetails = result.punishDetails;
-  const bestDetails = result.bestDetails;
-
-  const isDirectHang = Boolean(punishDetails && punishDetails.captured && punishDetails.to === result.to);
-  const isOtherHang = Boolean(punishDetails && punishDetails.captured && punishDetails.to !== result.to);
-  const isMate = Boolean(punishDetails && (punishDetails.san?.endsWith("#") || (result.engineEvidence?.after?.scoreType === "mate" && result.engineEvidence.after.rawScore > 0)));
-  const isCheck = Boolean(punishDetails && punishDetails.san?.endsWith("+"));
-
-  let moveDesc = "";
-  if (result.san === "O-O") {
-    moveDesc = `${moverName} castled kingside (O-O).`;
-  } else if (result.san === "O-O-O") {
-    moveDesc = `${moverName} castled queenside (O-O-O).`;
-  } else if (result.capturedPiece) {
-    const capName = pieceNames[result.capturedPiece?.toLowerCase()] || "piece";
-    moveDesc = `${moverName} played ${result.san}, capturing ${opponentName}'s ${capName} on ${toSq} with the ${pName}.`;
-  } else {
-    moveDesc = `${moverName} played ${result.san}, advancing the ${pName} to ${toSq}.`;
-  }
-
-  let whyText = "";
-  let tipText = "";
-  let concept = "";
-
-  switch (result.key) {
-    case "blunder": {
-      let punishmentDesc = "";
-      if (isDirectHang) {
-        concept = "Hanging Piece";
-        punishmentDesc = `${moverName} moved the ${pName} to ${toSq}, but left it completely undefended! ${opponentName} can punish this immediately with <strong>${punishSan}</strong>, winning the ${pName} for free${punishPv ? ` (${punishPv})` : ''}.`;
-      } else if (isOtherHang) {
-        const hungPiece = pieceNames[punishDetails.captured?.toLowerCase()] || "piece";
-        concept = "Hanging Material";
-        punishmentDesc = `${moveDesc} However, this leaves the ${hungPiece} on ${punishDetails.to} completely unguarded! ${opponentName} can strike immediately with <strong>${punishSan}</strong>, winning material${punishPv ? ` (${punishPv})` : ''}.`;
-      } else if (isMate) {
-        concept = "Mating Threat";
-        punishmentDesc = `${moveDesc} This fatally exposes the king to an unstoppable mating attack! ${opponentName} has forced checkmate starting with <strong>${punishSan}</strong>${punishPv ? ` (${punishPv})` : ''}.`;
-      } else if (isCheck) {
-        concept = "Exposed King";
-        punishmentDesc = `${moveDesc} This walks directly into a dangerous check. ${opponentName} can punish this immediately with <strong>${punishSan}</strong>${punishPv ? ` (${punishPv})` : ''}, taking full control.`;
-      } else if (punishSan) {
-        concept = "Tactical Oversight";
-        punishmentDesc = `${moveDesc} A critical blunder that surrenders the initiative. ${opponentName} can punish this right away with <strong>${punishSan}</strong>${punishPv ? ` (${punishPv})` : ''}.`;
-      } else {
-        concept = "Tactical Blunder";
-        punishmentDesc = `${moveDesc} A critical error that hands ${opponentName} a decisive advantage.`;
-      }
-
-      let betterAlternative = "";
-      if (bestSan) {
-        if (bestDetails?.captured) {
-          const capName = pieceNames[bestDetails.captured?.toLowerCase()] || "piece";
-          betterAlternative = `Instead of ${result.san}, ${moverName} needed to play <strong>${bestSan}</strong> to capture the ${capName} on ${bestDetails.to}.`;
-        } else if (bestDetails?.piece === "k") {
-          betterAlternative = `Instead of ${result.san}, ${moverName} had to play <strong>${bestSan}</strong> to step the king out of danger and secure safety.`;
-        } else {
-          betterAlternative = `Instead of ${result.san}, ${moverName} had to play <strong>${bestSan}</strong> to keep pieces defended and prevent ${opponentName}'s threats.`;
-        }
-      }
-
-      whyText = `${punishmentDesc} ${betterAlternative}`;
-      tipText = isDirectHang
-        ? `Always run a quick "undefended piece check" before moving: is your destination square guarded? Does your opponent have an immediate capture?`
-        : `Whenever you make a move, pause to ask: what did my piece stop defending? Look for opponent checks, captures, and counter-threats.`;
-      break;
-    }
-
-    case "mistake": {
-      let mistakeDesc = "";
-      if (punishSan && (isDirectHang || isOtherHang)) {
-        const hungPiece = pieceNames[punishDetails.captured?.toLowerCase()] || "material";
-        concept = "Dropped Material";
-        mistakeDesc = `${moveDesc} This allows ${opponentName} to win material with <strong>${punishSan}</strong>.`;
-      } else if (punishSan && isCheck) {
-        concept = "King Weakness";
-        mistakeDesc = `${moveDesc} This gives ${opponentName} a dangerous check with <strong>${punishSan}</strong>, disorganizing ${moverName}'s pieces.`;
-      } else if (punishSan) {
-        concept = "Positional Slip";
-        mistakeDesc = `${moveDesc} This concession allows ${opponentName} to seize the upper hand with <strong>${punishSan}</strong>${punishPv ? ` (${punishPv})` : ''}.`;
-      } else {
-        concept = "Positional Mistake";
-        mistakeDesc = `${moveDesc} This compromises ${moverName}'s position and hands ${opponentName} control.`;
-      }
-
-      let betterAlternative = "";
-      if (bestSan) {
-        betterAlternative = `${moverName} should have chosen <strong>${bestSan}</strong> to maintain a solid, active position.`;
-      }
-
-      whyText = `${mistakeDesc} ${betterAlternative}`;
-      tipText = `Watch out for moves that surrender central control or let your opponent's pieces jump into active squares with tempo.`;
-      break;
-    }
-
-    case "miss": {
-      let missDesc = "";
-      if (bestDetails?.san?.endsWith("#")) {
-        concept = "Missed Checkmate";
-        missDesc = `${moveDesc} ${moverName} missed a forced checkmate! Playing <strong>${bestSan}</strong> would have ended the game on the spot.`;
-      } else if (bestDetails?.captured) {
-        const targetCap = pieceNames[bestDetails.captured?.toLowerCase()] || "piece";
-        concept = "Missed Material Win";
-        missDesc = `${moveDesc} ${moverName} missed a winning tactical opportunity! Finding <strong>${bestSan}</strong> would have won ${opponentName}'s ${targetCap} on ${bestDetails.to}.`;
-      } else if (bestDetails?.san?.endsWith("+")) {
-        concept = "Missed Tactical Blow";
-        missDesc = `${moveDesc} ${moverName} missed a decisive tactical attack. <strong>${bestSan}</strong> would have shattered ${opponentName}'s king defenses.`;
-      } else {
-        concept = "Missed Opportunity";
-        missDesc = `${moveDesc} ${moverName} missed a chance to capitalize decisively. Playing <strong>${bestSan}</strong> would have kept crushing pressure on ${opponentName}.`;
-      }
-
-      whyText = `${missDesc} Instead, the position slips back toward equality.`;
-      tipText = `Whenever the opponent's king or pieces look vulnerable, always calculate every check and forcing capture first before choosing a quiet move.`;
-      break;
-    }
-
-    case "inaccuracy": {
-      concept = "Minor Inaccuracy";
-      whyText = `${moveDesc} A slightly imprecise move that lets ${opponentName} equalize or relieve pressure. The engine preferred <strong>${bestSan || "a sharper line"}</strong> to keep active control and maintain tempo.`;
-      tipText = `Compare your move with ${bestSan || 'the engine suggestion'}: notice how the engine continuation coordinates more aggressively toward central outposts.`;
-      break;
-    }
-
-    case "brilliant": {
-      concept = "Tactical Sacrifice";
-      whyText = `${moveDesc} ${esc(result.classificationReason || result.explanation)}`;
-      const offered = result.classificationEvidence?.sacrifice?.acceptances?.[0];
-      if (offered) whyText += ` If ${opponentName} accepts with <strong>${esc(offered.san)}</strong>, Stockfish confirms compensation for the offered material.`;
-      tipText = `Compare the acceptance line with the opponent's strongest reply ${punishSan || ''}; the sacrifice must work against both.`;
-      break;
-    }
-
-    case "great": {
-      concept = "Critical Find";
-      whyText = `${moveDesc} ${esc(result.classificationReason || result.explanation)}`;
-      tipText = `Compare the alternatives to see why they fail to preserve the outcome.`;
-      break;
-    }
-
-    case "best": {
-      concept = "Optimal Move";
-      whyText = `${moveDesc} ${esc(result.classificationReason || result.explanation)}`;
-      tipText = `Consistent best moves compound pressure over time. Notice how seamlessly this aligns with king safety and piece coordination.`;
-      break;
-    }
-
-    case "excellent": {
-      concept = "Strong Continuation";
-      whyText = `${moveDesc} A very strong practical choice. Retains full control and keeps the position healthy, nearly identical in strength to ${bestSan || "the engine line"}.`;
-      tipText = `Practical moves that keep your initiative intact are just as effective as engine top choices.`;
-      break;
-    }
-
-    case "good": {
-      concept = "Solid Move";
-      whyText = `${moveDesc} A sound and sensible move that continues piece development and keeps the position solid.`;
-      tipText = `Look for opportunities to transition from solid development into active threats against weak squares in the opponent's camp.`;
-      break;
-    }
-
-    case "book": {
-      concept = "Opening Theory";
-      whyText = `${moveDesc} ${esc(result.classificationReason || result.explanation)}`;
-      tipText = `In the opening, focus on rapid development, central control, and king safety before launching premature attacks.`;
-      break;
-    }
-
-    case "forced": {
-      concept = "Only Legal Move";
-      whyText = `${moveDesc} ${esc(result.classificationReason || result.explanation)}`;
-      tipText = `This reply does not affect your accuracy because there was no legal alternative.`;
-      break;
-    }
-
-    default: {
-      concept = "Move Analysis";
-      whyText = `${moveDesc} The engine preferred ${bestSan || "a different continuation"}.`;
-      tipText = `Analyze the difference between this move and the engine recommendation ${bestSan || ''}.`;
-    }
-  }
-
-  return { whyText, tipText, concept };
+  return {whyText:esc(conciseLocalFeedback(result)),tipText:'',concept:''};
 }
 
 let feedbackTarget = null;
@@ -1725,13 +1534,12 @@ function renderFeedback(result) {
   const coaching = ai?.status === "ready" ? ai.coaching : null;
   const continuation = continuationMarkup(result);
   const genericBody = `<div class="feedback-block"><div class="feedback-block-header"><h3>Feedback</h3>
-      <span class="feedback-concept-pill">${esc(local.concept)}</span></div><p>${local.whyText}</p></div>`;
+      </div><p>${local.whyText}</p></div>`;
   const coachingBody = coaching
     ? `<article class="ai-guidance-card" aria-label="AI move guidance">
         <div class="ai-guidance-label"><span aria-hidden="true">✦</span> Move insight</div>
-        <h3>${esc(coaching.concept)}</h3>
-        <p class="ai-guidance-summary">${esc(coaching.summary)}</p>
-        <p class="ai-guidance-tip"><span aria-hidden="true">↳</span><span>${esc(coaching.tip)}</span></p>
+
+        <p class="ai-guidance-summary">${esc(coaching.explanation)}</p>
       </article>`
     : "";
 
@@ -1747,6 +1555,7 @@ function renderFeedback(result) {
     } else if (ai?.status === "pending") {
       statusHtml = `<div id="aiCoachStatus" class="ai-coach-loading" role="status"><div class="ai-loading-spinner"></div>
         <span>${provider.name} is explaining this position...</span></div>`;
+      feedbackBody = genericBody;
     } else if (coaching) {
       feedbackBody = coachingBody;
     } else if (node?.genericFeedbackRevealed) {

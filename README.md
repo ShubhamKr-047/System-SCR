@@ -166,7 +166,7 @@ PGN analysis runs in the browser. Manual review requires no server or AI account
 | `api.chess.com` | Retrieve public completed-game archives. |
 | Google Gemini / Groq API hosts | Send an explicitly requested explanation to the selected provider. |
 
-AI requests include the selected position, played move, board facts, and engine evidence. Player names and the full PGN are not included. Gemini keys are sent to Google; Groq keys are sent to Groq. No automatic provider fallback is used. Keys and UI preferences use browser-local storage; explanation caches and variation analysis are session-local.
+AI requests include before/after positions, the played move, classification, selected board relationships, legally replayed supporting lines, and evidence limitations. Raw evaluations, piece-value totals, legal-move lists, ratings, and search timings are omitted. Explanations are limited to two sentences and 20 words for ordinary moves or 45 words for deeper ideas. Confirmed simple piece losses and terminal outcomes use local text without an AI request. Player names and the full PGN are not included. Gemini keys are sent to Google; Groq keys are sent to Groq. No automatic provider fallback is used. Keys and UI preferences use browser-local storage; explanation caches and variation analysis are session-local.
 
 Use System SCR for completed-game review and independent study. Do not use engine assistance during an ongoing competitive game.
 
