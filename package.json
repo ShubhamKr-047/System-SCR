@@ -5,7 +5,7 @@
   "description": "Local Stockfish game review extension for Zen Browser",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/game-tree.test.js tests/engine.test.js tests/board.test.js tests/coaching.test.js tests/playback.test.js tests/classifications.test.js tests/review-policy.test.js",
+    "test": "node --test tests/game-tree.test.js tests/engine.test.js tests/board.test.js tests/coaching.test.js tests/playback.test.js tests/classifications.test.js tests/review-policy.test.js tests/game-ending.test.js",
     "test:browser": "npm run build && playwright test",
     "test:coaching": "npm run build && playwright test -c playwright.coaching.config.js",
     "test:lichess": "npm run build && playwright test -c playwright.lichess.config.js",

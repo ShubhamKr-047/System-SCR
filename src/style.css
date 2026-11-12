@@ -550,6 +550,32 @@ body.chesscom-theme {
 }
 
 /* SQUARE BADGE (Move classification badge on destination square) */
+.game-ending-marker {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: clamp(22px, 3.8vw, 30px);
+  height: clamp(22px, 3.8vw, 30px);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #b63c36;
+  color: #fff;
+  border: 2px solid var(--bg-card);
+  box-shadow: 0 2px 7px #0006;
+  z-index: 12;
+  pointer-events: none;
+  font: 800 21px/1 var(--font-ui);
+}
+.game-ending-marker svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .square-badge {
   position: absolute;
   top: -5px;

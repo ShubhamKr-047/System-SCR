@@ -1,5 +1,6 @@
 import { conciseLocalFeedback } from "./coaching-evidence.js";
 import { Chess } from "chess.js";
+import { gameEnding, ENDING_ICONS } from './game-ending.js';
 import { PIECE_IMAGES } from "./pieces.js";
 import { CLASSIFICATIONS, calculateAccuracy, calculateEstimatedRating } from "./classifications.js";
 import { getApiKey, setApiKey, hasApiKey, getCoachingState, generateCoaching, cancelPendingCoaching, getConnectionStatus, getProvider, setProvider, PROVIDERS, isCoachingEligible, getMoveQuestion } from "./coaching.js";
@@ -907,7 +908,7 @@ function refreshAnalysisView({ moveNode, summary = true, announce = true } = {})
   $("board").querySelectorAll(".brilliant-move").forEach(square => square.classList.remove("brilliant-move"));
   if (state.showMoveClassification && node.result && node.move) {
     const square = $("board").querySelector(`[data-square="${node.move.to}"]`);
-    if (!square) return;
+    if (!square || square.querySelector('.game-ending-marker')) return;
     const result = node.result;
     const badge = document.createElement("div");
     badge.className = `square-badge ${result.key}`;
@@ -1178,6 +1179,8 @@ function renderBoard(index) {
   const chessInstance = new Chess(fen);
   const boardData = chessInstance.board();
   updateMaterial(boardData);
+  const ending = gameEnding(chessInstance, {headers:state.headers,
+    finalOriginal:state.tree.current === state.tree.mainline.at(-1), preview:Boolean(state.preview)});
 
   const lastMove = state.preview ? state.preview.lastMove : state.cursor ? state.moves[state.cursor - 1] : null;
   const lastSquares = lastMove ? [lastMove.from, lastMove.to] : [];
@@ -1252,10 +1255,13 @@ function renderBoard(index) {
 
       // Move classification badge on the move's destination square
       let badgeHtml = "";
+      const endingOnKing = ending && sq?.type === 'k' && sq.color === ending.loser;
       const isBrilliant = Boolean(state.showMoveClassification && !state.preview && currentResult?.key === "brilliant" && lastMove && sqName === lastMove.to);
-      if (state.showMoveClassification && !state.preview && currentResult && lastMove && sqName === lastMove.to) {
+      if (!endingOnKing && state.showMoveClassification && !state.preview && currentResult && lastMove && sqName === lastMove.to) {
         badgeHtml = `<div class="square-badge ${currentResult.key}" style="background-color: ${currentResult.color}; color: ${currentResult.textColor};" title="${esc(currentResult.label)}: ${esc(currentResult.classificationReason || currentResult.explanation)}">${esc(currentResult.sign)}</div>`;
       }
+
+      if (endingOnKing) badgeHtml += `<span class="game-ending-marker ${ending.kind}" role="img" aria-label="${ending.label}" title="${ending.label}">${ENDING_ICONS[ending.kind]}</span>`;
 
       html += `<div class="square ${shade} ${isLast ? 'last-move' : ''} ${isCheck ? 'in-check' : ''} ${isBrilliant ? 'brilliant-move' : ''} ${isSelected ? 'selected' : ''} ${isLegalTarget ? 'legal-target' : ''}" data-square="${sqName}">${pieceHtml}${coordRank}${coordFile}${badgeHtml}${legalHintHtml}</div>`;
     }
