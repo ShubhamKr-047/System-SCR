@@ -2600,24 +2600,51 @@ body.resizing-feedback {
 }
 
 .topbar-menu-btn {
-  width: 32px;
-  height: 32px;
+  height: 34px;
+  padding: 0 11px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #11100f;
+  gap: 8px;
+  background: var(--bg-panel);
   border: 1px solid var(--line-subtle);
-  border-radius: 6px;
-  color: var(--text-main);
+  border-radius: 8px;
+  color: #c5c1ba;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.topbar-menu-btn:hover,
-.topbar-menu-btn.active {
+.topbar-menu-btn svg {
+  flex-shrink: 0;
+}
+
+.topbar-menu-btn:hover {
   background: var(--bg-hover);
   border-color: var(--line-strong);
-  color: #ffffff;
+  color: var(--text-main);
+}
+
+.topbar-menu-btn[aria-expanded="true"] {
+  background: #283020;
+  border-color: #52683c;
+  color: #a4cc7a;
+}
+
+.topbar-menu-btn:focus-visible {
+  outline: 2px solid var(--chess-green);
+  outline-offset: 3px;
+}
+
+.topbar-menu-btn .menu-chevron {
+  color: var(--text-muted);
+}
+
+.topbar-menu-btn[aria-expanded="true"] .menu-chevron {
+  color: inherit;
+  transform: rotate(180deg);
 }
 
 .topbar-actions .hamburger-dropdown {
