@@ -1,5 +1,47 @@
 const api = globalThis.browser ?? globalThis.chrome;
 
+let lichessRetryAt = 0;
+let lichessQueue = Promise.resolve();
+const lichessRequests = new Map();
+function lichessGameId(raw) {
+  const url = new URL(raw);
+  if (url.protocol !== 'https:' || url.hostname !== 'lichess.org') throw new Error('Unsupported Lichess game URL.');
+  const match = url.pathname.match(/^\/(?:(?:game|analysis)\/)?([a-zA-Z0-9]{8})(?:[a-zA-Z0-9]{4})?(?:\/(?:white|black))?\/?$/);
+  if (!match || ['analysis', 'training', 'practice', 'insights'].includes(match[1])) throw new Error('Open a Lichess game first.');
+  return match[1];
+}
+
+async function lichessExport(raw, withPgn = false) {
+  const id = lichessGameId(raw);
+  if (Date.now() < lichessRetryAt) throw new Error('Lichess rate limit reached. Wait at least one minute before retrying.');
+  const key = `${id}:${withPgn}`;
+  if (lichessRequests.has(key)) return lichessRequests.get(key);
+  const request = lichessQueue.then(async () => {
+    if (Date.now() < lichessRetryAt) throw new Error('Lichess rate limit reached. Wait at least one minute before retrying.');
+    const query = new URLSearchParams({ moves:String(withPgn), tags:String(withPgn), pgnInJson:String(withPgn), clocks:'false', evals:'false', opening:'false' });
+    const response = await fetch(`https://lichess.org/game/export/${id}?${query}`, {
+      headers:{Accept:'application/json'}, credentials:'omit', cache:'no-store', signal:AbortSignal.timeout(10000)
+    });
+    if (response.status === 429) {
+      lichessRetryAt = Date.now() + Math.max(60000, (Number(response.headers.get('Retry-After')) || 60) * 1000);
+      throw new Error('Lichess rate limit reached. Wait at least one minute before retrying.');
+    }
+    if (!response.ok) throw new Error(`Lichess returned HTTP ${response.status}. The game may be unavailable.`);
+    const game = await response.json();
+    const finished = ['mate','resign','stalemate','timeout','draw','outoftime','cheat','unknownFinish','insufficientMaterialClaim','variantEnd'].includes(game.status);
+    if (game.id !== id || typeof game.variant !== 'string' || typeof game.status !== 'string') throw new Error('Could not verify this Lichess game.');
+    if (!withPgn) return {ok:true, gameId:id, finished, supported:game.variant === 'standard'};
+    if (!finished) throw new Error('This game is still in progress or was aborted. Analyze is available for completed games.');
+    if (game.variant !== 'standard') throw new Error('Only standard chess games are supported. Lichess variants cannot be imported.');
+    if (typeof game.pgn !== 'string' || !/\[Result "(?:1-0|0-1|1\/2-1\/2)"\]/.test(game.pgn)) throw new Error('Lichess did not return a completed game PGN. Please retry shortly.');
+    return {ok:true, gameId:id, pgn:game.pgn, meta:{source:'Lichess',
+      white:game.players?.white?.user?.name || 'White', black:game.players?.black?.user?.name || 'Black'}};
+  });
+  lichessQueue = request.catch(() => {});
+  lichessRequests.set(key, request);
+  try { return await request; } finally { lichessRequests.delete(key); }
+}
+
 function parseGameUrl(rawUrl) {
   const url = new URL(rawUrl);
   if (url.protocol !== 'https:' || !['www.chess.com', 'chess.com'].includes(url.hostname)) throw new Error('Unsupported game URL.');
@@ -72,6 +114,8 @@ async function retrieveCompletedGame(rawUrl) {
 
 api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   let response;
+  if (message?.type === 'ZEN_LICHESS_STATUS') response = lichessExport(message.url);
+  if (message?.type === 'ZEN_FETCH_LICHESS_GAME') response = lichessExport(message.url, true);
   if (message?.type === 'ZEN_GAME_STATUS') {
     response = gameMetadata(message.url).then(({game, id}) => ({ok:true, gameId:id, finished:game.isFinished}));
   }

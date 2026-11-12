@@ -6,7 +6,7 @@ Stockfish runs locally in a single-threaded WebAssembly worker. An AI API key is
 
 ## Features
 
-- PGN file and text import, plus a Chess.com **Analyze** launcher for public completed games.
+- PGN file and text import, plus Chess.com and Lichess **Analyze** launchers for public completed games.
 - Quick, Balanced, and Deep whole-game reviews with selective critical-move verification.
 - Eleven move classifications, evaluation graph, accuracy, estimated performance ratings, and classification explanations.
 - Interactive board with animated moves, legal move hints, drag-and-drop, promotion selection, and nested variations.
@@ -68,6 +68,30 @@ The rook **Analyze** button requests game metadata, finds the exact completed ga
 Import requires a publicly archived completed game. Archive publication can lag behind the result, so a visible button does not guarantee immediate import. The callback endpoint used for metadata is undocumented and can change.
 
 If the button is missing, try opening the completed game from your profile. If detection or retrieval still fails, download the PGN from Chess.com's Share/PGN controls and import it manually. Immediate post-game detection and archive availability are not guaranteed.
+
+## Direct Lichess import
+
+Open a completed Lichess game and select the rook **Analyze** button to import it
+into System SCR. Both current `/game/<id>` links and older game URLs are supported.
+Your profile's game history also has an **Analyze** button on
+each game row, including rows added while scrolling. Clicking a history button
+verifies completion before importing; ongoing and aborted games are rejected.
+
+After a live game ends, the result display triggers a completion check and the
+button appears when the API confirms completion, with a few short retries while
+the result settles. A 30-second fallback check
+covers missed result updates. Requests can be delayed by network errors or rate
+limits; HTTP 429 pauses new export requests for at least a minute.
+
+No Lichess login or API key is required. Only standard chess is supported.
+The integration uses the official single-game export API, without waiting for a
+monthly archive. Reload the extension and existing Lichess tabs after building;
+the manifest adds access to `https://lichess.org/*`.
+
+Run `npm run test:lichess` for the dedicated Chromium
+and Firefox suite. Postman CLI 1.75+ runs local HTTP fixtures for completed/live
+games, variants, invalid exports, timeouts and provider errors. Real post-game
+UI behavior still needs checking in an installed extension on Lichess.
 
 ## Review speed and engine searches
 
@@ -165,6 +189,7 @@ PGN analysis runs in the browser. Manual review requires no server or AI account
 | `tabs` | Open the review page. |
 | `www.chess.com` | Inject the Analyze launcher and fetch game metadata. |
 | `api.chess.com` | Retrieve public completed-game archives. |
+| `lichess.org` | Add history/game launchers and retrieve completed public games through the export API. |
 | Google Gemini / Groq API hosts | Send an explicitly requested explanation to the selected provider. |
 
 AI requests include before/after positions, the played move, classification, selected board relationships, legally replayed supporting lines, and evidence limitations. Raw evaluations, piece-value totals, legal-move lists, ratings, and search timings are omitted. Explanations are limited to two sentences and 20 words for ordinary moves or 45 words for deeper ideas. Confirmed simple piece losses and terminal outcomes use local text without an AI request. Player names and the full PGN are not included. Gemini keys are sent to Google; Groq keys are sent to Groq. No automatic provider fallback is used. Keys and UI preferences use browser-local storage; explanation caches and variation analysis are session-local.
