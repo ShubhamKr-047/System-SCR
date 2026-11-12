@@ -32,6 +32,7 @@ async function setup(page,path='/play/online',html='<div class="board" data-game
     }},storage:{local:{set:async value=>{window.saved=value;}}}};
   });
   if(configure) await page.evaluate(configure);
+  await page.addStyleTag({content:readFileSync(new URL('../../launcher.css',import.meta.url),'utf8')});
   await page.addScriptTag({content:source});
 }
 const launcher=page=>page.locator('#zen-chess-review-launcher');

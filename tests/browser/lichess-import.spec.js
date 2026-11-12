@@ -21,6 +21,7 @@ async function setup(page, path, html) {
       storage:{local:{set:async value=>{window.saved=value;}}},tabs:{create:async ({url})=>{window.opened=url;}}};
   });
   await page.addScriptTag({content:background});
+  await page.addStyleTag({content:readFileSync(new URL('../../launcher.css',import.meta.url),'utf8')});
   await page.addScriptTag({content});
 }
 const launcher = page => page.locator('#scr-lichess-launcher');

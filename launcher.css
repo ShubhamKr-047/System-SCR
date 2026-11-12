@@ -1,0 +1,42 @@
+/* Scoped to SCR's injected controls; independent of either site's button theme. */
+.scr-analyze-launcher.scr-analyze-launcher {
+  all: initial;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7.2px;
+  padding: 7.2px 14.4px;
+  border: .6px solid #78b845;
+  border-radius: 8.4px;
+  background: linear-gradient(180deg, #5fae2e 0%, #4c9724 55%, #3d7f1b 100%);
+  color: #ffffff;
+  font: 700 12px/normal Arial, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: inset 0 1.2px 0 rgba(255,255,255,.18), 0 2.4px 0 #2f6315, 0 4.8px 9px rgba(0,0,0,.28);
+  transition: transform .15s, box-shadow .15s, filter .15s;
+}
+.scr-analyze-launcher.scr-analyze-launcher > svg {
+  width: 19.2px;
+  height: 21px;
+  flex-shrink: 0;
+  display: block;
+  fill: white;
+}
+.scr-analyze-launcher.scr-analyze-launcher:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-.6px);
+}
+.scr-analyze-launcher.scr-analyze-launcher:focus-visible {
+  outline: 1.8px solid #b5e779;
+  outline-offset: 2.4px;
+}
+.scr-analyze-launcher.scr-analyze-launcher:active:not(:disabled) {
+  transform: translateY(1.8px);
+  box-shadow: 0 .6px 0 #2f6315, 0 1.8px 3.6px rgba(0,0,0,.25);
+}
+.scr-analyze-launcher.scr-analyze-launcher:disabled { opacity: .6; cursor: wait; }
+@media (prefers-reduced-motion: reduce) {
+  .scr-analyze-launcher.scr-analyze-launcher { transition: none; }
+}

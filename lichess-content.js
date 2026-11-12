@@ -1,7 +1,7 @@
 (() => {
   const api = globalThis.browser ?? globalThis.chrome;
   const launcherId = 'scr-lichess-launcher';
-  const rook = '<svg aria-hidden="true" viewBox="0 0 24 24" width="19" height="19" fill="currentColor"><path d="M4 3h4v4h2V3h4v4h2V3h4v7l-3 2v6h2v3H5v-3h2v-6l-3-2V3zm5 9v6h6v-6H9z"/></svg>';
+  const rook = '<svg class="rook-icon" viewBox="0 0 70 72" fill="white" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 5 H19 Q21 5 21 7 V13 Q21 15 23 15 H28 Q30 15 30 13 V7 Q30 5 32 5 H38 Q40 5 40 7 V13 Q40 15 42 15 H47 Q49 15 49 13 V7 Q49 5 51 5 H56 Q58 5 58 7 V18 Q58 26 50 26 H20 Q12 26 12 18 Z"/><path d="M20 31H50L54 54H16Z"/><path d="M16 58 H54 Q61 58 61 65 V67 H9 V65 Q9 58 16 58 Z"/></svg>';
   let timer, current = null;
 
   function gameUrl(raw) {
@@ -17,12 +17,12 @@
   function button(url, floating = false) {
     const el = document.createElement('button');
     el.type = 'button';
-    el.className = 'scr-lichess-analyze';
+    el.className = 'scr-lichess-analyze scr-analyze-launcher' + (floating ? '' : ' scr-analyze-compact');
     el.dataset.gameUrl = url;
     const reset = () => { el.innerHTML = `${rook}<span>Analyze</span>`; el.disabled = false; };
     reset();
     el.title = 'Analyze this completed game in System SCR';
-    el.style.cssText = `display:inline-flex;align-items:center;gap:7px;padding:10px 14px;border:1px solid #b8f0ce;border-radius:8px;background:#81b64c;color:white;font:700 14px system-ui;cursor:pointer;position:${floating ? 'fixed' : 'relative'};z-index:${floating ? '2147483647' : '5'};${floating ? 'right:22px;bottom:22px' : 'margin:8px'}`;
+    el.style.cssText = `position:${floating ? 'fixed' : 'relative'};z-index:${floating ? '2147483647' : '5'};${floating ? 'right:22px;bottom:22px' : 'margin:8px'}`;
     el.addEventListener('click', async event => {
       event.preventDefault(); event.stopPropagation();
       el.disabled = true; el.textContent = 'Importing…';

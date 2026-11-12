@@ -2,7 +2,7 @@
   const BUTTON_ID = "zen-chess-review-launcher";
   let insertTimer = null;
   let status = { url: null, finished: false, pending: false, next: 0, failures: 0 };
-  const ROOK = '<svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M4 3h4v4h2V3h4v4h2V3h4v7l-3 2v6h2v3H5v-3h2v-6l-3-2V3zm5 9v6h6v-6H9z"/></svg>';
+  const ROOK = '<svg class="rook-icon" viewBox="0 0 70 72" fill="white" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 5 H19 Q21 5 21 7 V13 Q21 15 23 15 H28 Q30 15 30 13 V7 Q30 5 32 5 H38 Q40 5 40 7 V13 Q40 15 42 15 H47 Q49 15 49 13 V7 Q49 5 51 5 H56 Q58 5 58 7 V18 Q58 26 50 26 H20 Q12 26 12 18 Z"/><path d="M20 31H50L54 54H16Z"/><path d="M16 58 H54 Q61 58 61 65 V67 H9 V65 Q9 58 16 58 Z"/></svg>';
 
   function canonicalGame(raw) {
     try {
@@ -77,21 +77,14 @@
     if (!document.body) return;
     const button = document.createElement("button");
     button.id = BUTTON_ID;
+    button.className = "scr-analyze-launcher";
     button.type = "button";
     button.innerHTML = `${ROOK}<span>Analyze</span>`;
     button.dataset.gameUrl = context.url || '';
     button.disabled = !context.url;
     button.title = "Analyze this completed game in System SCR";
     if (!context.url) button.title = 'Waiting for the completed game link';
-    button.style.cssText = [
-      "position:fixed", "right:22px", "bottom:22px", "z-index:2147483647",
-      "display:flex", "align-items:center", "gap:9px", "padding:13px 17px",
-      "border:1px solid #b8f0ce", "border-radius:12px", "background:#81b64c",
-      "color:#ffffff", "font:700 14px/1.2 system-ui,sans-serif",
-      "box-shadow:0 8px 28px #0006", "cursor:pointer"
-    ].join(";");
-    button.addEventListener("mouseenter", () => { button.style.background = "#96bc4b"; });
-    button.addEventListener("mouseleave", () => { button.style.background = "#81b64c"; });
+    button.style.cssText = "position:fixed;right:22px;bottom:22px;z-index:2147483647";
     button.addEventListener("click", async () => {
       const gameUrl = button.dataset.gameUrl;
       if (!gameUrl) return;

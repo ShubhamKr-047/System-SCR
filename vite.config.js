@@ -7,7 +7,7 @@ function extensionStaticFiles() {
     name: "extension-static-files",
     closeBundle() {
       const out = resolve("dist");
-      for (const file of ["manifest.json", "background.js", "content.js", "lichess-content.js"]) {
+      for (const file of ["manifest.json", "background.js", "content.js", "lichess-content.js", "launcher.css"]) {
         copyFileSync(resolve(file), resolve(out, file));
       }
       const engineSrc = resolve("public/engine");

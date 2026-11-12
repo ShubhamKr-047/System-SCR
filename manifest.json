@@ -46,7 +46,10 @@
       "js": [
         "content.js"
       ],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "css": [
+        "launcher.css"
+      ]
     },
     {
       "matches": [
@@ -55,7 +58,10 @@
       "js": [
         "lichess-content.js"
       ],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "css": [
+        "launcher.css"
+      ]
     }
   ],
   "browser_specific_settings": {
