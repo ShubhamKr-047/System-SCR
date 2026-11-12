@@ -1,0 +1,37 @@
+purpose:
+  stands_in_for: Lichess public single-game JSON/PGN export
+  unblocks: Completed-game imports and post-game launcher checks without playing real games
+assumptions:
+  - id: game-route
+    status: confirmed
+    claim: Lichess uses /game/ owner URLs with twelve characters, while the export API needs the first eight.
+    reason: The user's failing game URL had the /game/ prefix excluded by the original parser.
+    verification: Regression tests cover /game/ owner URLs, history links, and direct background import, retaining older URL forms.
+    source: tests/browser/lichess-import.spec.js
+    updated_at: '2026-11-12'
+  - id: public-export
+    status: confirmed
+    claim: Public single-game export supports unauthenticated JSON with status, variant and pgnInJson.
+    reason: Official specification declares security empty; a live anonymous request returned these fields.
+    verification: Exported q7ZvsdUF with Accept application/json and pgnInJson=true; received id, draw, standard and PGN.
+    source: https://github.com/lichess-org/api/blob/master/doc/specs/tags/games/game-export-gameId.yaml
+    updated_at: '2026-11-12'
+  - id: launcher-markup
+    status: unknown
+    claim: History game-row overlays and round result-wrap elements cover current Lichess game pages.
+    reason: Selectors match upstream game-row styles and round replay source; real browser game completion remains unverified.
+    verification: Chromium and Firefox synthetic DOM tests exercise completion transitions, owner links, appended rows and navigation.
+    source: https://github.com/lichess-org/lila/blob/master/ui/round/src/view/replay.ts
+    updated_at: '2026-11-12'
+  - id: failures
+    status: confirmed
+    claim: The client rejects active, aborted, variant and malformed games and backs off on rate limits.
+    reason: Background checks precede transfer to review; export HTTP calls are serialized and time bounded.
+    verification: Local HTTP simulation tests cover 404, 503, 429, timeout and invalid PGN. This verifies client handling, not provider uptime.
+    source: tests/browser/lichess-import.spec.js
+    updated_at: '2026-11-12'
+fingerprints:
+  - id: lichess-import
+    date: '2026-11-12'
+    commit: null
+    cli: '1.76.0'

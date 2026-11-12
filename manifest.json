@@ -28,6 +28,7 @@
   "host_permissions": [
     "https://www.chess.com/*",
     "https://api.chess.com/*",
+    "https://lichess.org/*",
     "https://generativelanguage.googleapis.com/*",
     "https://api.groq.com/*"
   ],
@@ -44,6 +45,15 @@
       ],
       "js": [
         "content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://lichess.org/*"
+      ],
+      "js": [
+        "lichess-content.js"
       ],
       "run_at": "document_idle"
     }

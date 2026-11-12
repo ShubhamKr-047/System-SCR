@@ -2168,21 +2168,21 @@ $("moveTime").addEventListener("change", () => {
 // AUTOMATIC IMPORT
 async function autoImportPendingGame() {
   const params = new URLSearchParams(location.search);
-  if (params.get("source") !== "chesscom") return;
+  if (!["chesscom", "lichess"].includes(params.get("source"))) return;
   try {
     const api = globalThis.browser ?? globalThis.chrome;
     if (!api?.storage?.local) return;
     const stored = await api.storage.local.get(["zenChessPendingPgn", "zenChessPendingMeta"]);
     const pgn = stored.zenChessPendingPgn;
     if (!pgn) {
-      setStatus("No imported game was found. Return to the completed Chess.com game and click Analyze with Zen.", true);
+      setStatus("No imported game was found. Return to the completed game and click Analyze.", true);
       return;
     }
     $("pgnText").value = pgn;
     await api.storage.local.remove(["zenChessPendingPgn", "zenChessPendingMeta"]);
     readImport();
     const meta = stored.zenChessPendingMeta || {};
-    setStatus(`Imported automatically from Chess.com${meta.white && meta.black ? `: ${meta.white} vs ${meta.black}` : ""}. Ready to analyze!`);
+    setStatus(`Imported automatically from ${meta.source || "Chess.com"}${meta.white && meta.black ? `: ${meta.white} vs ${meta.black}` : ""}. Ready to analyze!`);
   } catch (e) {
     setStatus(`Automatic import failed: ${e.message || e}`, true);
   }

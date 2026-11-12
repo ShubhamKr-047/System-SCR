@@ -1,0 +1,6 @@
+simulation: lichess-import
+routing: path
+mocks:
+  - routeKey: lichess
+    origin: https://lichess.org
+    path: ../mocks/lichess/config.yaml
