@@ -11,7 +11,8 @@ Stockfish runs locally in a single-threaded WebAssembly worker. An AI API key is
 - Eleven move classifications, evaluation graph, accuracy, estimated performance ratings, and classification explanations.
 - Interactive board with animated moves, legal move hints, drag-and-drop, promotion selection, and nested variations.
 - Navigation, autoplay, engine continuation previews, board flipping, and colored planning arrows and circles.
-- Menu switches for the best-move arrow, evaluation bar, move classification badges, and AI Coach.
+- Menu switches for the best-move arrow, evaluation bar, move classification badges, Feedback, and AI Coach. AI Coach controls appear only while Feedback is enabled.
+- Captured opponent pieces beside each player's name and rating, followed by any material advantage, updated for the displayed position.
 - Resizable sidebar, rook branding, and bundled fonts: Space Grotesk for headings, Inter for UI, and JetBrains Mono for numerical data.
 
 **Analyze availability:** On numbered game pages, the launcher waits for Chess.com metadata to confirm that the matching game has finished. It checks about every five seconds while the tab is visible, backs off on failures, and stops after completion. Live end-of-game timing still needs manual verification; manual PGN import remains available.

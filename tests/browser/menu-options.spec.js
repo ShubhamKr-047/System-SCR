@@ -1,5 +1,58 @@
 import { test, expect } from '@playwright/test';
 
+test('Feedback hides its panel, divider and AI options and persists across reloads', async ({page}) => {
+  const errors=[]; page.on('pageerror', e=>errors.push(e.message));
+  await page.goto('/review.html');
+  await page.locator('#pgnFile').setInputFiles({name:'game.pgn',mimeType:'text/plain',buffer:Buffer.from('1. e4 d5 2. exd5 Qxd5 *')});
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#feedbackContainer')).toBeVisible();
+  const movesHeight = (await page.locator('#moveListWrapper').boundingBox()).height;
+  await page.locator('#topbarMenuBtn').click();
+  await page.locator('label:has(#toggleFeedback)').click();
+  await expect(page.locator('#feedbackContainer')).toBeHidden();
+  await expect(page.locator('#feedbackSplitter')).toBeHidden();
+  await expect(page.locator('#aiCoachToggleRow')).toBeHidden();
+  await expect(page.locator('#aiCoachSettings')).toBeHidden();
+  await expect(page.locator('#moveList')).toBeVisible();
+  expect((await page.locator('#moveListWrapper').boundingBox()).height).toBeGreaterThan(movesHeight);
+  await page.reload();
+  await page.locator('#topbarMenuBtn').click();
+  await expect(page.locator('#toggleFeedback')).not.toBeChecked();
+  await expect(page.locator('#aiCoachToggleRow')).toBeHidden();
+  await page.locator('label:has(#toggleFeedback)').click();
+  await expect(page.locator('#aiCoachToggleRow')).toBeVisible();
+  await expect(page.locator('#toggleAiCoach')).toBeChecked();
+  await expect(page.locator('#aiCoachSettings')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('material advantage follows captures, navigation, flipping and promotion', async ({page}) => {
+  await page.goto('/review.html');
+  const load=async pgn=>page.locator('#pgnFile').setInputFiles({name:'material.pgn',mimeType:'text/plain',buffer:Buffer.from(pgn)});
+  await load('1. e4 d5 2. exd5 Qxd5 *');
+  await expect(page.locator('#bottomPlayerMaterial')).toBeHidden();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#bottomPlayerMaterial')).toHaveText('+1');
+  await expect(page.locator('#bottomPlayerMaterial')).toBeVisible();
+  await expect(page.locator('#bottomPlayerMaterial img[alt="Captured black pawn"]')).toHaveCount(1);
+  await page.keyboard.press('f');
+  await expect(page.locator('#topPlayerMaterial')).toHaveText('+1');
+  await expect(page.locator('#topPlayerMaterial img[alt="Captured black pawn"]')).toHaveCount(1);
+  await expect(page.locator('#bottomPlayerMaterial')).toBeHidden();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#topPlayerMaterial')).toBeVisible();
+  await expect(page.locator('#topPlayerMaterial .material-score')).toHaveCount(0);
+  await expect(page.locator('#bottomPlayerMaterial img[alt="Captured white pawn"]')).toHaveCount(1);
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('#topPlayerMaterial')).toBeVisible();
+  await load('[SetUp "1"]\n[FEN "7k/P7/8/8/8/8/8/7K w - - 0 1"]\n\n1. a8=Q+ *');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#topPlayerMaterial')).toHaveText('+9');
+  await expect(page.locator('.captured-pieces img')).toHaveCount(0);
+});
+
 test('top bar only has the menu action and evaluation bar preference persists', async ({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/review.html');
@@ -34,7 +87,7 @@ test('AI Coach switch controls prompts, retains keys and persists without API ca
   await page.locator('#summaryReviewBtn').click();
   await expect(page.locator('#summaryStartBtn')).toBeVisible({timeout:30000});
   await page.locator('#summaryStartBtn').click();
-  await page.locator('.move-chip[title="2. g4"]').click();
+  await page.locator('.move-chip[title="1. f3"]').click();
   await expect(page.locator('#askAiCoachingBtn')).toBeVisible();
   await page.locator('#topbarMenuBtn').click();
   await page.locator('label:has(#toggleAiCoach)').click();

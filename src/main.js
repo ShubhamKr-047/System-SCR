@@ -40,6 +40,7 @@ const state = {
   showEvaluationBar: localStorage.getItem('zen-chess-show-eval-bar') !== 'false',
   showMoveClassification: localStorage.getItem('zen-chess-show-classification') !== 'false',
   aiCoachEnabled: localStorage.getItem('zen-chess-ai-coach-enabled') !== 'false',
+  feedbackEnabled: localStorage.getItem('zen-chess-feedback-enabled') !== 'false',
   tree: null,
   line: [],
   session: new AbortController(),
@@ -243,6 +244,45 @@ function updatePlayerHeaders() {
   if ($("summaryBlackAvatar")) $("summaryBlackAvatar").innerHTML = `<img src="${PIECE_IMAGES.bk}" alt="Black">`;
 }
 
+function updateMaterial(board) {
+  const values = {p:1, n:3, b:3, r:5, q:9, k:0};
+  const names = {p:'pawn', n:'knight', b:'bishop', r:'rook', q:'queen'};
+  const base = state.preview?.base || state.tree.current;
+  const moves = state.tree.path(base).map(node => node.move).filter(Boolean);
+  if (state.preview) moves.push(...state.preview.frames.slice(0, state.preview.index).map(frame => frame.move));
+  const difference = board.flat().reduce((sum, piece) => !piece ? sum :
+    sum + (piece.color === 'w' ? 1 : -1) * values[piece.type], 0);
+  for (const [id, color] of [['topPlayerMaterial', state.flipped ? 'w' : 'b'],
+    ['bottomPlayerMaterial', state.flipped ? 'b' : 'w']]) {
+    const advantage = difference * (color === 'w' ? 1 : -1);
+    const el = $(id);
+    const captured = moves.filter(move => move.color === color && move.captured)
+      .map(move => move.captured).sort((a,b) => values[a] - values[b]);
+    const opponent = color === 'w' ? 'b' : 'w';
+    el.replaceChildren();
+    const icons = document.createElement('span');
+    icons.className = 'captured-pieces';
+    for (const piece of captured) {
+      const image = document.createElement('img');
+      image.src = PIECE_IMAGES[opponent + piece];
+      image.alt = `Captured ${opponent === 'w' ? 'white' : 'black'} ${names[piece]}`;
+      image.title = image.alt;
+      icons.append(image);
+    }
+    el.append(icons);
+    if (advantage > 0) {
+      const score = document.createElement('span');
+      score.className = 'material-score';
+      score.textContent = `+${advantage}`;
+      el.append(score);
+    }
+    el.hidden = !captured.length && advantage <= 0;
+    el.title = `${color === 'w' ? 'White' : 'Black'} captured ${captured.length} pieces` +
+      (advantage > 0 ? `; ahead by ${advantage} material points` : '');
+    el.setAttribute('aria-label', el.title);
+  }
+}
+
 // Hamburger Menu Wiring
 const topbarMenuBtn = $("topbarMenuBtn");
 const hamburgerMenu = $("hamburgerMenu");
@@ -386,8 +426,12 @@ pasteDrawer.addEventListener('keydown', event => {
 
 // AI provider settings
 function updateAiUi(refreshInput = true) {
+  $('toggleFeedback').checked = state.feedbackEnabled;
+  $('feedbackContainer').hidden = !state.feedbackEnabled;
+  $('feedbackSplitter').hidden = !state.feedbackEnabled;
+  $('aiCoachToggleRow').hidden = !state.feedbackEnabled;
   $("toggleAiCoach").checked = state.aiCoachEnabled;
-  $("aiCoachSettings").hidden = !state.aiCoachEnabled;
+  $("aiCoachSettings").hidden = !state.feedbackEnabled || !state.aiCoachEnabled;
   const hasKey = hasApiKey();
   const provider = PROVIDERS[getProvider()];
   $("aiProvider").value = getProvider();
@@ -493,6 +537,17 @@ $('toggleAiCoach').addEventListener('change', () => {
     if (!state.aiCoachEnabled) cancelPendingCoaching();
     updateAiUi(false);
     renderFeedback(state.tree?.current?.result || null);
+});
+
+$('toggleFeedback').addEventListener('change', () => {
+  state.feedbackEnabled = $('toggleFeedback').checked;
+  localStorage.setItem('zen-chess-feedback-enabled', String(state.feedbackEnabled));
+  if (!state.feedbackEnabled) {
+    cancelPendingCoaching();
+    if (state.preview) stopPreview();
+  }
+  updateAiUi(false);
+  renderFeedback(state.tree?.current?.result || null);
 });
 
 const classificationToggle = $('toggleMoveClassification');
@@ -1122,6 +1177,7 @@ function renderBoard(index) {
   const fen = state.preview?.fen || currentPos.fen;
   const chessInstance = new Chess(fen);
   const boardData = chessInstance.board();
+  updateMaterial(boardData);
 
   const lastMove = state.preview ? state.preview.lastMove : state.cursor ? state.moves[state.cursor - 1] : null;
   const lastSquares = lastMove ? [lastMove.from, lastMove.to] : [];
@@ -1506,6 +1562,7 @@ function getLocalDetailedFeedback(result) {
 let feedbackTarget = null;
 
 function renderFeedback(result) {
+  if (!state.feedbackEnabled) return;
   if (state.preview) result = state.preview.result;
   const tree = state.tree;
   const node = tree?.current;
@@ -1619,7 +1676,7 @@ function renderFeedback(result) {
   });
 
   const request = (retry = false) => {
-    if (!state.aiCoachEnabled) return;
+    if (!state.feedbackEnabled || !state.aiCoachEnabled) return;
     const key = getApiKey();
     const selectedProvider = getProvider();
     const promise = generateCoaching(result, beforeFen, { retry });

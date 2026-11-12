@@ -259,6 +259,24 @@ body.chesscom-theme {
   font-weight: 500;
 }
 
+.player-material {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-main);
+  font-family: var(--font-numeric);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.captured-pieces { display: inline-flex; align-items: center; }
+.captured-pieces img { width: 18px; height: 18px; object-fit: contain; }
+.captured-pieces img + img { margin-left: -7px; }
+
+#feedbackContainer[hidden], #feedbackSplitter[hidden],
+#aiCoachToggleRow[hidden], .player-material[hidden] { display: none; }
+
 .player-side-metrics {
   display: flex;
   align-items: center;

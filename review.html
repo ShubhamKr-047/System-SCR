@@ -135,8 +135,22 @@
             </label>
           </div>
 
-          <!-- OPTIONAL AI COACHING -->
           <div class="menu-speed-row">
+            <span class="menu-speed-label">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M4 4h16v12H9l-5 4V4Z"></path>
+                <path d="M8 8h8M8 12h5"></path>
+              </svg>
+              <span>Feedback</span>
+            </span>
+            <label class="toggle-switch">
+              <input id="toggleFeedback" type="checkbox" aria-label="Feedback" checked />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <!-- OPTIONAL AI COACHING -->
+          <div id="aiCoachToggleRow" class="menu-speed-row">
             <span class="menu-speed-label">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
@@ -205,6 +219,7 @@
               </div>
               <span id="topPlayerName" class="player-name">Black</span>
               <span id="topPlayerRating" class="player-rating"></span>
+              <span id="topPlayerMaterial" class="player-material" hidden></span>
             </div>
             <div class="player-side-metrics">
               <span id="topPlayerRatingEstimate" class="rating-pill" style="display:none">
@@ -271,6 +286,7 @@
               </div>
               <span id="bottomPlayerName" class="player-name">White</span>
               <span id="bottomPlayerRating" class="player-rating"></span>
+              <span id="bottomPlayerMaterial" class="player-material" hidden></span>
             </div>
             <div class="player-side-metrics">
               <span id="bottomPlayerRatingEstimate" class="rating-pill" style="display:none">
