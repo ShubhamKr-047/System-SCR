@@ -1,3 +1,5 @@
+import { brilliantAlternative, criticalAlternative, isRecapture } from './classification-policy.js';
+import { delayedSacrifices } from './delayed-sacrifice.js';
 import { lookupOpening } from "./openings.js";
 import { DEFAULT_REVIEW_TIME, reviewPolicy } from "./review-policy.js";
 import { chessAtNode } from "./position-analysis.js";
@@ -40,7 +42,7 @@ async function verifySacrifice(node, candidates, evaluate, options, time) {
   const baseline = materialBalance(node.parent.fen, node.move.color);
   const evidence = [];
   for (const candidate of candidates) {
-    const child = { parent: node, move: candidate.move, fen: candidate.fen };
+    const child = { parent: candidate.parent || node, move: candidate.move, fen: candidate.fen };
     const analysis = await normal(evaluate, child, options, time);
     if (!analysis) return null;
     const accepted = asPlayer(analysis, child, node.move.color);
@@ -86,7 +88,9 @@ export async function analyzeClassification(node, evaluate, options = {}) {
   const cpLoss = () => Math.max(0, Math.min(1000, (best.pawns - played.pawns) * 100));
   const loss = () => Math.max(0, best.chances - played.chances);
 
-  const routineRecapture = node.move.captured && node.parent.move?.to === node.move.to;
+  const recapture = isRecapture(node.move, node.parent.move);
+  const routineRecapture = recapture && node.move.captured === node.parent.move.captured &&
+    !beforeChess.isCheck() && !afterChess.isCheck() && !node.move.promotion;
   const bookQuality = () => opening && loss() <= 2 && cpLoss() <= 30;
   const nearBest = () => loss() <= 2 && (playedUci === before.bestmove || cpLoss() <= 10);
   const mateTransition = best.mate !== played.mate;
@@ -103,8 +107,10 @@ export async function analyzeClassification(node, evaluate, options = {}) {
   const exceptional = legalMovesCount > 1 && loss() <= 5 && !after.terminal &&
     played.chances >= 48;
   // Static exchange analysis is useful only for a plausible exceptional move.
-  const sacrificeOffers = exceptional ? sacrificeCandidates(node.parent.fen, node.fen, node.move) : [];
-  const compareAlternatives = exceptional && (!bookQuality() || sacrificeOffers.length) && (!routineRecapture || sacrificeOffers.length);
+  const immediateOffers = exceptional ? sacrificeCandidates(node.parent.fen, node.fen, node.move) : [];
+  const sacrificeOffers = immediateOffers.length ? immediateOffers : exceptional && completed(after) ? delayedSacrifices(node, after) : [];
+  const compareAlternatives = exceptional && (!bookQuality() || sacrificeOffers.length) &&
+    (!routineRecapture || sacrificeOffers.length);
   const recheck = legalMovesCount > 1 && !afterChess.isCheckmate() &&
     (mateTransition || mateDisagreement || kingDanger || inconsistent || possibleMiss || (uncertain && (borderline || loss() >= 5)));
   const reasons = [recheck && (mateTransition || mateDisagreement || kingDanger) && 'mate', recheck && inconsistent && 'inconsistent', recheck && possibleMiss && 'miss',
@@ -136,7 +142,7 @@ export async function analyzeClassification(node, evaluate, options = {}) {
   // Try the cheap legal proof before alternative searches can consume its time.
   let sacrifice = null;
   let mateProof = null;
-  if (options.refine !== false && sacrificeOffers.length && played.mate > 0 && budget - spent >= 150) {
+  if (options.refine !== false && immediateOffers.length && played.mate > 0 && budget - spent >= 150) {
     const allowance = Math.min(150, budget - spent, options.deadline == null ? Infinity : options.deadline - performance.now());
     if (allowance > 0) {
       spent += allowance;
@@ -185,10 +191,8 @@ export async function analyzeClassification(node, evaluate, options = {}) {
   let alternativeScore = other ? asPlayer(other, node.parent, color) : null;
   let hasAlternatives = alternatives?.complete && before === alternatives && reliableSearch(alternatives) && other &&
     reliableSearch(other) && other.depth === alternatives.depth;
-  const gap = alternativeScore ? played.chances - alternativeScore.chances : 0;
-  let critical = Boolean(hasAlternatives && !routineRecapture && gap >= 12 &&
-    ((played.chances >= 48 && alternativeScore.chances <= 35) ||
-      (played.chances >= 70 && alternativeScore.chances <= 55)));
+
+  let critical = Boolean(hasAlternatives && !routineRecapture && criticalAlternative(played, alternativeScore));
   let greatStatus = critical ? 'inconclusive' : 'excluded-by-policy';
   if (critical && options.refine !== false) {
     // Confirm both scores together: root identity and distinct first moves are
@@ -198,7 +202,7 @@ export async function analyzeClassification(node, evaluate, options = {}) {
     const a = check?.candidates?.find(line => line.pv.split(' ')[0] !== playedUci);
     const ps = p && asPlayer(p, node.parent, color), alt = a && asPlayer(a, node.parent, color);
     critical = Boolean(check?.complete && p && a && beforeChess.moves({ verbose: true }).some(m => uciMove(m) === a.pv.split(' ')[0]) && completed(p) && completed(a) && p.depth === a.depth &&
-      ps.chances - alt.chances >= 12 && ((ps.chances >= 48 && alt.chances <= 35) || (ps.chances >= 70 && alt.chances <= 55)));
+      criticalAlternative(ps, alt));
     greatStatus = critical ? 'verified' : check?.complete && p && a && completed(p) && completed(a) ? 'refuted' : 'inconclusive';
     if (check?.complete && p && a && completed(p) && completed(a) && p.depth === a.depth) {
       // A changed ranking must also update ordinary quality, not merely remove !.
@@ -209,7 +213,7 @@ export async function analyzeClassification(node, evaluate, options = {}) {
   }
   const engineMateCandidate = played.mate > 0;
   if (!sacrifice && options.refine !== false && confirmed && (hasAlternatives || engineMateCandidate) && nearBest() && sacrificeOffers.length &&
-    played.chances >= 48 && (engineMateCandidate || alternativeScore.chances < 75)) {
+    played.chances >= 48 && (engineMateCandidate || brilliantAlternative(played, alternativeScore))) {
     // Reserve a fair share for the strongest reply and every acceptance. No
     // partially checked sacrifice can earn Brilliant when its budget expires.
     const each = Math.min(Math.max(1000, policy.confirmation), Math.floor((budget - spent) / (sacrificeOffers.length + 1)));
@@ -221,7 +225,7 @@ export async function analyzeClassification(node, evaluate, options = {}) {
       if (engineMateCandidate && sacrifice?.verified) {
         const mating = asPlayer(reply, node, color).mate > 0 && sacrifice.acceptances.every(a => a.evaluation.mate > 0);
         if (mating) sacrifice = { ...sacrifice, kind: 'engine-mate', confidence: 'engine-confirmed' };
-        else if (!hasAlternatives || alternativeScore.chances >= 75) sacrifice = null;
+        else if (!hasAlternatives || !brilliantAlternative(played, alternativeScore)) sacrifice = null;
       }
     }
   }
@@ -253,13 +257,13 @@ export async function analyzeClassification(node, evaluate, options = {}) {
   const unresolved = [];
   const sacrificeStatus = sacrifice?.verified ? "verified" : sacrifice?.rejected ? "refuted"
     : sacrifice?.excluded ? 'excluded-by-policy'
-    : hasAlternatives && alternativeScore.chances >= 75 && !played.mate ? "excluded-already-winning" : "inconclusive";
+    : hasAlternatives && !brilliantAlternative(played, alternativeScore) && !played.mate ? "excluded-already-winning" : "inconclusive";
   if (reasons.includes("sacrifice") && sacrificeStatus === "inconclusive") unresolved.push("sacrifice");
   if (reasons.includes("alternatives") && !hasAlternatives) unresolved.push("alternatives");
   if (possibleMiss && !opportunityEvidence) unresolved.push("miss");
   if (recheck && !confirmed) unresolved.push("evaluation");
   if (greatStatus === 'inconclusive') unresolved.push('critical-gap');
-  const refinement = { greatStatus, sacrificeStatus, mateProof, unresolved, verificationComplete: !unresolved.length, reasons, priority: mateTransition || mateDisagreement || kingDanger ? 4 : possibleMiss || inconsistent ? 3 :
+  const refinement = { recapture, routineRecapture, delayedSacrifice: sacrificeOffers.some(c => c.delayed), greatStatus, sacrificeStatus, mateProof, unresolved, verificationComplete: !unresolved.length, reasons, priority: mateTransition || mateDisagreement || kingDanger ? 4 : possibleMiss || inconsistent ? 3 :
     sacrificeOffers.length ? 2 : recheck ? 1 : 0, spentMs: spent, failedChecks,
     complete: options.refine !== false || !reasons.length };
   const classification = classifyEvidence({ before: best, played, isBest: playedUci === before.bestmove,

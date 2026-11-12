@@ -99,7 +99,7 @@ Quick has less verification time and can differ from deeper modes on subtle or l
 
 Classification reasons are available on move badges and feedback headings. Brilliant precedes Great when its evidence is established. Miss requires verified historical evidence; simply losing an advantage is insufficient.
 
-See [classification v5](docs/classification-v5.md) for current rules. Earlier documents provide context and provenance: [v4 mating-sacrifice changes](docs/mating-sacrifices-v4.md), [v3 architecture](docs/review-v3.md), and [original classification reference](docs/move-classification.md). Later versions supersede conflicting earlier rules and timing tables.
+See [classification v6](docs/classification-v6.md) and its [v5 foundation](docs/classification-v5.md) for current rules. Earlier documents provide context and provenance: [v4 mating-sacrifice changes](docs/mating-sacrifices-v4.md), [v3 architecture](docs/review-v3.md), and [original classification reference](docs/move-classification.md). Later versions supersede conflicting earlier rules and timing tables.
 
 These are SCR's heuristics, not Chess.com's proprietary classifier. Bounded searches and sacrifice checks can miss unusual or long tactics. Regression fixtures protect known examples; they do not establish universal accuracy or agreement with every human annotation. The opening index is bundled locally from the CC0 Lichess opening dataset and supports transpositions.
 

@@ -1,7 +1,7 @@
 import { Chess } from "chess.js";
 import { mateTransition } from './review-evidence.js';
 
-export const CLASSIFICATION_VERSION = 5;
+export const CLASSIFICATION_VERSION = 6;
 // Percentage-point losses, calibrated against the human-game curve documented
 // at https://lichess.org/page/accuracy. These are SCR rules, not Chess.com's model.
 export const QUALITY_THRESHOLDS = Object.freeze({ excellent: 2, good: 5, inaccuracy: 10, mistake: 20 });

@@ -5,24 +5,81 @@ import { readFileSync } from "node:fs";
 import { proveShortMate } from "../src/mate-proof.js";
 import { verifiedPrevious, rootIdentity } from '../src/review-evidence.js';
 import { traceSacrifice } from '../src/sacrifice-trace.js';
+import { delayedSacrifices } from '../src/delayed-sacrifice.js';
+import { brilliantAlternative, criticalAlternative, isRecapture } from '../src/classification-policy.js';
 import { GameTree } from "../src/game-tree.js";
 import { evaluatePosition, chessAtNode, positionHistory } from "../src/position-analysis.js";
 import { analyzeMove } from "../src/analysis.js";
 import { lookupOpening } from "../src/openings.js";
-import { classifyEvidence, playerEvaluation, sacrificeCandidates, winningChances, gameAccuracy } from "../src/move-quality.js";
+import { CLASSIFICATION_VERSION, classifyEvidence, playerEvaluation, sacrificeCandidates, winningChances, gameAccuracy } from "../src/move-quality.js";
 
 const score = (pawns, mate = 0) => ({ pawns, mate, chances: mate ? mate > 0 ? 100 : 0 : winningChances(pawns) });
 const matingGames = JSON.parse(readFileSync(new URL('./fixtures/mating-sacrifices.json', import.meta.url)));
+
+test('a capture after a quiet move is not a recapture', () => {
+  const tree = new GameTree('1. e4 Nc6 2. d4 Ne5 3. dxe5 *');
+  const n = tree.mainline.at(-1);
+  assert.equal(isRecapture(n.move, n.parent.move), false);
+  const exchange = new GameTree('1. e4 d5 2. exd5 Qxd5 *').mainline.at(-1);
+  assert.equal(isRecapture(exchange.move, exchange.parent.move), true);
+});
+
+test('winning conversions require a substantial gap and exclude routine decided positions', () => {
+  assert.equal(criticalAlternative({chances:85}, {chances:65}), true);
+  assert.equal(criticalAlternative({chances:85}, {chances:76}), false);
+  assert.equal(brilliantAlternative({chances:90}, {chances:80}), true);
+  assert.equal(brilliantAlternative({chances:90}, {chances:89}), false);
+  assert.equal(brilliantAlternative({chances:100}, {chances:95}), false);
+});
+
+test('ordinary equal recaptures remain excluded from Great', async () => {
+  const node = new GameTree('1. e4 d5 2. exd5 Qxd5 *').mainline.at(-1);
+  const result = await analyzeMove(node, async position => position === node
+    ? search(-1, 'b1c3') : search(1, 'd8d5'), {moveTime:1000});
+  assert.equal(result.refinement.recapture, true);
+  assert.equal(result.refinement.routineRecapture, true);
+  assert.notEqual(result.key, 'great');
+});
+
+test('delayed offers require forced defense and continuation by the initiating piece', () => {
+  const make = king => new GameTree(`[SetUp "1"]\n[FEN "7k/8/${king}/8/8/8/8/4R3 w - - 0 1"]\n\n1. Re8+ *`).mainline[1];
+  const n = make('5K2');
+  assert.equal(sacrificeCandidates(n.parent.fen, n.fen, n.move).length, 0);
+  const offers = delayedSacrifices(n, {pv:'h8h7 e8h8'});
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].uci, 'h7h8');
+  assert.equal(offers[0].parent.parent.parent, n);
+  assert.equal(delayedSacrifices(n, {pv:'h8h7 f6g5'}).length, 0);
+  const branching = new GameTree('[SetUp "1"]\n[FEN "7k/8/8/8/8/8/8/K3R3 w - - 0 1"]\n\n1. Re8+ *').mainline[1];
+  assert.equal(delayedSacrifices(branching, {pv:'h8h7 e8h8'}).length, 0);
+});
 test('historical confirmation requires the exact root, mover, played move and adequate mode', () => {
   const n = new GameTree('1. e4 e5 *').mainline[2];
-  const r = { classificationVersion: 5, reviewQuality: { complete: true, baseTime: 500 },
+  const r = { classificationVersion: CLASSIFICATION_VERSION, reviewQuality: { complete: true, baseTime: 500 },
     classificationEvidence: { confirmed: true, comparison: { root: rootIdentity(n.parent), mover: 'b', playedMove: 'e7e5' } } };
-  assert.equal(verifiedPrevious(r,n,5,125), true);
-  assert.equal(verifiedPrevious(r,n,5,1000), false);
+  assert.equal(verifiedPrevious(r,n,CLASSIFICATION_VERSION,125), true);
+  assert.equal(verifiedPrevious(r,n,CLASSIFICATION_VERSION,1000), false);
   r.classificationEvidence.comparison.mover = 'w';
-  assert.equal(verifiedPrevious(r,n,5,125), false);
+  assert.equal(verifiedPrevious(r,n,CLASSIFICATION_VERSION,125), false);
   r.classificationEvidence.comparison.mover = 'b'; r.classificationEvidence.comparison.root = 'different-history';
-  assert.equal(verifiedPrevious(r,n,5,125), false);
+  assert.equal(verifiedPrevious(r,n,CLASSIFICATION_VERSION,125), false);
+});
+
+test('delayed discovery requires sound acceptance evidence before awarding Brilliant', async () => {
+  for (const sound of [true, false]) {
+  const node = new GameTree('[SetUp "1"]\n[FEN "7k/8/5K2/8/8/8/8/4R3 w - - 0 1"]\n\n1. Re8+ *').mainline[1];
+  const result = await analyzeMove(node, async (position, options) => {
+    if (position === node) return { ...search(-1, 'h8h7'), pv: 'h8h7 e8h8' };
+    if (position === node.parent) {
+      const primary = search(1, 'e1e8');
+      return options.multiPv === 2 ? { ...primary, candidates: [primary, search(-2, 'e1e7')] } : primary;
+    }
+    return { ...search(sound ? 0 : -8, 'f6g5'), pv: 'f6g5 h8g8' };
+  }, {moveTime:1000});
+  assert.equal(result.refinement.delayedSacrifice, true);
+  assert.equal(result.key === 'brilliant', sound);
+  assert.equal(result.refinement.sacrificeStatus, sound ? 'verified' : 'refuted');
+  }
 });
 test('mate transitions distinguish new losses, existing losses and preserved longer mates', () => {
   const classify = (before, played, extra = {}) => classifyEvidence({ before, played, legalMovesCount: 20, lossCp: 0, confirmed: true, ...extra });
@@ -48,7 +105,7 @@ test('material trace records immediate recovery elsewhere and excludes a routine
 });
 test('Black Miss verifies the preceding White mistake from White perspective', async () => {
   const node = new GameTree('1. e4 h6 2. e5 a6 *').mainline[4];
-  node.parent.result = { classificationVersion: 5, chanceLoss: 15 };
+  node.parent.result = { classificationVersion: CLASSIFICATION_VERSION, chanceLoss: 15 };
   const result = await analyzeMove(node, async (position, options) => {
     if (position === node.parent.parent) return options.searchMoves?.length ? search(-2.4,'e4e5') : search(-0.5,'d2d4');
     if (position === node) return search(-0.7,'g1f3');
@@ -66,6 +123,20 @@ test('Great is refused when a second complete comparison eliminates the critical
     return options.multiPv === 2 ? { ...primary, candidates: [primary, search(++comparisons === 1 ? -3 : 2.9,'g1h1')] } : primary;
   }, { moveTime: 250 });
   assert.equal(result.key, 'best'); assert.equal(result.refinement.greatStatus, 'refuted');
+});
+
+test('a winning conversion earns Great only after a second complete comparison', async () => {
+  const node = new GameTree('[SetUp "1"]\n[FEN "7k/pp3ppp/8/8/8/8/PP3PPP/6K1 w - - 0 20"]\n\n20. Kf1 *').mainline[1];
+  let comparisons = 0;
+  const result = await analyzeMove(node, async (position, options) => {
+    if (position === node) return search(-5, 'h8g8');
+    const primary = search(5, 'g1f1');
+    if (options.multiPv !== 2) return primary;
+    comparisons++;
+    return { ...primary, candidates: [primary, search(2, 'g1h1')] };
+  }, {moveTime:1000});
+  assert.equal(result.key, 'great');
+  assert.equal(comparisons, 2);
 });
 test('a reversed confirmation ranking also updates ordinary move severity', async () => {
   const node = new GameTree('[SetUp "1"]\n[FEN "7k/pp3ppp/8/8/8/8/PP3PPP/6K1 w - - 0 20"]\n\n20. Kf1 *').mainline[1];
@@ -313,7 +384,7 @@ test("an unsound acceptance refutes a Brilliant candidate", async () => {
 test("Miss verifies the opponent's preceding mistake rather than trusting its cached label", async () => {
   const tree = new GameTree("1. h3 e5 2. a3 *");
   const node = tree.mainline[3];
-  node.parent.result = { classificationVersion: 5, chanceLoss: 15 };
+  node.parent.result = { classificationVersion: CLASSIFICATION_VERSION, chanceLoss: 15 };
   for (const opponentReallyErred of [true, false]) {
     const result = await analyzeMove(node, async (position, options) => {
       if (position === node.parent.parent) return options.searchMoves?.length
@@ -328,7 +399,7 @@ test("Miss verifies the opponent's preceding mistake rather than trusting its ca
 
 test("a severe missed opportunity is verified as Miss through the full analysis pipeline", async () => {
   const node = new GameTree("1. h3 e5 2. a3 *").mainline[3];
-  node.parent.result = { classificationVersion: 5, chanceLoss: 30 };
+  node.parent.result = { classificationVersion: CLASSIFICATION_VERSION, chanceLoss: 30 };
   const result = await analyzeMove(node, async (position, options) => {
     if (position === node.parent.parent) return options.searchMoves?.length
       ? search(-3, "e7e5") : search(0, "d7d5");
