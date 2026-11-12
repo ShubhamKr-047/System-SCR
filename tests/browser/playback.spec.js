@@ -63,6 +63,13 @@ test("AutoPlay advances original moves, pauses, restarts at the end and stops on
 });
 
 test("Show Move previews without saving, goes back, and saves the line only on a legal continuation", async ({ page }, info) => {
+  await page.evaluate(() => {
+    window.playedSounds = [];
+    HTMLMediaElement.prototype.play = function () {
+      window.playedSounds.push(new URL(this.src).pathname);
+      return Promise.resolve();
+    };
+  });
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   await load(page);
@@ -93,12 +100,22 @@ test("Show Move previews without saving, goes back, and saves the line only on a
   const total = tokens.length;
   const evaluation = await page.locator("#evalBarScore").textContent();
   const feedback = await page.locator(".feedback-header-box").innerText();
+  await page.evaluate(() => { window.playedSounds = []; });
   await page.locator("#showContinuationBtn").click();
   await expect(page.locator("#moveCounter")).toHaveText(`Preview ${total}/${total}`, { timeout: 12000 });
   await expect(page.locator("#moveList .move-chip")).toHaveCount(chips);
   await expect(page.locator("#evalBarScore")).toHaveText(evaluation);
   await expect(page.locator(".feedback-header-box")).toHaveText(feedback, { useInnerText: true });
   await expect(page.locator(".pv-move.is-played")).toHaveCount(total);
+  const expectedSounds = [];
+  const replay = new Chess();
+  for (const token of tokens) {
+    const move = replay.move(token);
+    const sound = replay.isGameOver() ? (replay.isCheckmate() ? "game-end" : "game-draw")
+      : replay.inCheck() ? "check" : /[kq]/.test(move.flags) ? "castle" : move.captured ? "capture" : "move";
+    expectedSounds.push(`/sounds/${sound}.mp3`);
+  }
+  expect(await page.evaluate(() => window.playedSounds)).toEqual(expectedSounds);
   await page.screenshot({ path: info.outputPath("stockfish-preview.png") });
   // A selection and an illegal destination must not save the preview.
   const next = chess.moves({ verbose: true })[0];

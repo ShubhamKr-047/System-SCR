@@ -697,6 +697,7 @@ function showContinuation(result) {
     if (preview.complete) clearInterval(preview.timer);
     $("continuationPreviewStatus").textContent = `Preview ${preview.index}/${frames.length}: ${frame.move.san}`;
     renderBoard(state.cursor);
+    playMoveSound(frame.move, frame.fen);
     updateContinuationMoveHighlights();
   }, 1100);
 }
@@ -1130,6 +1131,31 @@ function openPromotionPicker(from, to) {
   choices.querySelector("button").focus();
 }
 
+function playMoveSound(move, fen, result) {
+  const chessAfter = new Chess(fen);
+  const isGameOver = chessAfter.isGameOver();
+  const san = move.san || "";
+  const isCastle = san === "O-O" || san === "O-O-O" || (move.piece === "k" && Math.abs(move.from.charCodeAt(0) - move.to.charCodeAt(0)) === 2);
+
+  if (isGameOver) {
+    if (chessAfter.isCheckmate()) {
+      playSound("gameEnd");
+    } else {
+      playSound("draw");
+    }
+  } else if (result?.key === "brilliant") {
+    playSound("brilliant");
+  } else if (chessAfter.inCheck()) {
+    playSound("check");
+  } else if (isCastle) {
+    playSound("castle");
+  } else if (move.captured) {
+    playSound("capture");
+  } else {
+    playSound("move");
+  }
+}
+
 function renderBoard(index) {
   if (!state.tree) return;
   const target = state.line[Math.max(0, Math.min(index, state.line.length - 1))];
@@ -1147,28 +1173,7 @@ function renderBoard(index) {
       overlay.clear();
       const node = state.tree.current;
       if (node?.move) {
-        const chessAfter = new Chess(node.fen);
-        const isGameOver = chessAfter.isGameOver();
-        const san = node.move.san || "";
-        const isCastle = san === "O-O" || san === "O-O-O" || (node.move.piece === "k" && Math.abs(node.move.from.charCodeAt(0) - node.move.to.charCodeAt(0)) === 2);
-
-        if (isGameOver) {
-          if (chessAfter.isCheckmate()) {
-            playSound("gameEnd");
-          } else {
-            playSound("draw");
-          }
-        } else if (node.result?.key === "brilliant") {
-          playSound("brilliant");
-        } else if (chessAfter.inCheck()) {
-          playSound("check");
-        } else if (isCastle) {
-          playSound("castle");
-        } else if (node.move.captured) {
-          playSound("capture");
-        } else {
-          playSound("move");
-        }
+        playMoveSound(node.move, node.fen, node.result);
       }
     }
     displayedNode = state.tree.current;
