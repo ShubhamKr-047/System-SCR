@@ -77,7 +77,7 @@ test('top bar only has the menu action and evaluation bar preference persists', 
 test('AI Coach switch controls prompts, retains keys and persists without API calls',async({page})=>{
   const requests=[];
   await page.addInitScript(()=>{
-    if (!localStorage.getItem('zen-chess-gemini-key')) localStorage.setItem('zen-chess-gemini-key','test-key-not-a-real-credential');
+    if (!localStorage.getItem('zen-chess-groq-key')) localStorage.setItem('zen-chess-groq-key','test-key-not-a-real-credential');
   });
   await page.route(/generativelanguage\.googleapis\.com|api\.groq\.com/,route=>{
     requests.push(route.request().url());return route.abort();
@@ -102,7 +102,7 @@ test('AI Coach switch controls prompts, retains keys and persists without API ca
   await page.locator('#topbarMenuBtn').click();
   await expect(page.locator('#toggleAiCoach')).not.toBeChecked();
   await expect(page.locator('#aiCoachSettings')).toBeHidden();
-  expect(await page.evaluate(()=>Boolean(localStorage.getItem('zen-chess-gemini-key')))).toBe(true);
+  expect(await page.evaluate(()=>Boolean(localStorage.getItem('zen-chess-groq-key')))).toBe(true);
   expect(requests).toEqual([]);
 });
 

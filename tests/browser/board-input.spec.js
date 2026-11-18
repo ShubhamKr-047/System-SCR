@@ -10,6 +10,7 @@ async function load(page, pgn = PGN) {
   await page.goto("/review.html");
   await page.locator("#pgnFile").setInputFiles({ name: "game.pgn", mimeType: "text/plain", buffer: Buffer.from(pgn) });
   await expect(page.locator("#moveCounter")).toHaveText("Start");
+  await page.locator("body").press("ArrowLeft");
 }
 
 async function center(page, square) {
@@ -30,7 +31,7 @@ async function drag(page, from, to, button = "left") {
 }
 
 async function toggleEngineArrow(page, enabled) {
-  await page.locator("#hamburgerBtn").click();
+  await page.locator("#topbarMenuBtn").click();
   const checkbox = page.locator("#toggleBestMoveArrow");
   if (await checkbox.isChecked() !== enabled) await page.locator('label:has(#toggleBestMoveArrow)').click();
   await expect(checkbox).toBeChecked({ checked: enabled });
@@ -191,6 +192,7 @@ test("dragging castling and en passant applies both pieces' board changes", asyn
   await expect(page.locator('[data-square="g1"] img')).toHaveAttribute("alt", "White k");
   await expect(page.locator('[data-square="f1"] img')).toHaveAttribute("alt", "White r");
   await page.locator("#pgnFile").setInputFiles({ name: "ep.pgn", mimeType: "text/plain", buffer: Buffer.from("1. e4 a6 2. e5 d5 3. Nf3 *") });
+  await page.locator("body").press("ArrowLeft");
   await page.locator('.move-chip[title="2... d5"]').click();
   await drag(page, "e5", "d6");
   await expect(page.locator("#moveCounter")).toHaveText("3. exd6");
@@ -208,9 +210,9 @@ async function delayedEngine(page, invalidFirst = false) {
         if (command === "isready") queueMicrotask(() => this.emit("readyok"));
         if (command.startsWith("go ")) {
           window.engineRequests.push(command);
-          const invalid = invalidFirst && window.engineRequests.length === 1;
+          const invalid = invalidFirst && window.engineRequests.length <= 2;
           this.timer = setTimeout(() => {
-            this.emit("info depth 12 score cp 30");
+            this.emit(invalid ? "info depth 12 score cp 30" : "info depth 12 score cp 30 pv e2e4");
             this.emit(`bestmove ${invalid ? "(none)" : "e2e4"}`);
           }, 700);
         }
@@ -240,7 +242,7 @@ test("a score without a legal best move exposes Retry and recovers", async ({ pa
   await page.locator("#retryPositionAnalysis").click();
   await expect(engineArrow(page)).toHaveCount(1);
   await expect(page.locator("#retryPositionAnalysis")).toBeHidden();
-  expect(await page.evaluate(() => window.engineRequests.length)).toBe(2);
+  expect(await page.evaluate(() => window.engineRequests.length)).toBe(3);
 });
 
 test("enabling the arrow recovers a failed suggestion without moving pieces", async ({ page }) => {
@@ -250,7 +252,7 @@ test("enabling the arrow recovers a failed suggestion without moving pieces", as
   await toggleEngineArrow(page, false);
   await toggleEngineArrow(page, true);
   await expect(engineArrow(page)).toHaveCount(1);
-  expect(await page.evaluate(() => window.engineRequests.length)).toBe(2);
+  expect(await page.evaluate(() => window.engineRequests.length)).toBe(3);
 });
 
 test("importing another game cancels an active drag and clears annotations", async ({ page }) => {
@@ -294,9 +296,10 @@ test("new variation moves hold the displayed evaluation until calculated, includ
         if (command.startsWith("go ")) {
           window.pendingSearch = { worker: this, finish: () => {
             window.pendingSearch = null;
-            const black = this.fen.split(" ")[1] === "b";
+            const parts=this.fen.split(" moves ");
+            const black = (parts[0].split(" ")[1] === "b") !== Boolean(parts[1]?.trim().split(/\s+/).length % 2);
             const score = window.zeroEvaluation ? 0 : black ? 150 : 300;
-            this.emit(`info depth 12 score cp ${score}`);
+            this.emit(`info depth 12 score cp ${score} pv ${black ? "e7e5" : "g1f3"}`);
             this.emit(`bestmove ${black ? "e7e5" : "g1f3"}`);
           } };
         }

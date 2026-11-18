@@ -170,21 +170,23 @@
           <div id="aiCoachSettings">
           <div class="menu-speed-row">
             <label for="aiProvider" class="menu-speed-label">Provider</label>
-            <select id="aiProvider" class="menu-select">
-              <option value="gemini">Gemini</option>
+            <select id="aiProvider" class="menu-select" aria-label="AI provider">
               <option value="groq">Groq</option>
             </select>
           </div>
+          <div class="menu-speed-row"><label for="aiPlayerLevel" class="menu-speed-label">Explanation level</label><select id="aiPlayerLevel" class="menu-select"><option value="beginner">Beginner</option><option value="intermediate" selected>Intermediate</option><option value="advanced">Advanced</option></select></div>
+          <button id="exportCoachDiagnostics" class="dock-btn" type="button">Export coach diagnostics</button>
+          <button id="clearCoachCache" class="dock-btn" type="button">Clear saved explanations</button>
           <div class="menu-api-row">
-            <input id="aiApiKey" type="password" class="menu-api-input" placeholder="Gemini API key" autocomplete="off"
+            <input id="aiApiKey" type="password" class="menu-api-input" placeholder="Groq API key" autocomplete="off"
               spellcheck="false" />
             <button id="saveAiKey" class="dock-btn primary-sm" type="button" style="flex-shrink:0;">Save</button>
             <button id="clearAiKey" class="sidebar-nav-btn" type="button" title="Clear API key"
               style="width:28px;height:28px;font-size:11px;display:none;padding:0;">✕</button>
           </div>
           <div id="aiKeyHelp" class="menu-api-help"></div>
-          <span id="aiStatus" class="ai-status-dot off" title="Gemini AI coaching disabled" hidden></span>
-          <div class="menu-api-help"><span id="aiConnectionStatus" role="status">Local feedback; no Gemini API key
+          <span id="aiStatus" class="ai-status-dot off" title="Groq AI coaching disabled" hidden></span>
+          <div class="menu-api-help"><span id="aiConnectionStatus" role="status">Local feedback; no Groq API key
               saved</span></div>
           </div>
         </div>

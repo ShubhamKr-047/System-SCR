@@ -5,6 +5,7 @@ const PGN = '[White "Alice"]\n[Black "Bob"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *';
 async function load(page, pgn = PGN) {
   await page.locator("#pgnFile").setInputFiles({ name: "game.pgn", mimeType: "text/plain", buffer: Buffer.from(pgn) });
   await expect(page.locator("#moveCounter")).toHaveText("Start");
+  await page.locator("body").press("ArrowLeft");
 }
 
 async function play(page, from, to) {
@@ -79,11 +80,12 @@ test("nested branches and multiple alternatives stay selectable", async ({ page 
 
 test("original-game accuracy and feedback survive branching and returning", async ({ page }) => {
   await load(page);
-  await page.locator("#startReview").click();
-  await expect(page.locator("#startReviewText")).toHaveText("Start", { timeout: 30000 });
+  await page.locator("#backToSummaryBtn").click();
+  if(await page.locator("#summaryReviewBtn").isVisible()) await page.locator("#summaryReviewBtn").click();
+  await expect(page.locator("#summaryStartBtn")).toBeVisible({timeout:30000});
   const white = await page.locator("#summaryWhiteAcc").textContent();
   const black = await page.locator("#summaryBlackAcc").textContent();
-  await page.locator("#tabMoves").click();
+  await page.locator("body").press("ArrowLeft");
   await move(page, "2... Nc6").click();
   const feedback = await page.locator("#feedbackContent").textContent();
   await play(page, "f1", "c4");
@@ -92,7 +94,7 @@ test("original-game accuracy and feedback survive branching and returning", asyn
   await expect(page.locator("#summaryBlackAcc")).toHaveText(black);
   await page.locator("#resetVariationBtn").click();
   await expect(page.locator("#feedbackContent")).toHaveText(feedback);
-  await expect(page.locator("#startReviewText")).toHaveText("Start");
+  await expect(page.locator("#startReviewText")).toHaveText("Play");
 });
 
 test("leaving a variation during analysis and importing another game cannot overwrite the new board", async ({ page }) => {
@@ -131,9 +133,10 @@ test("exploring during full-game review stops it safely and resumes retained res
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   await load(page);
-  await page.locator("#startReview").click();
+  await page.locator("#backToSummaryBtn").click();
+  if(await page.locator("#summaryReviewBtn").isVisible()) await page.locator("#summaryReviewBtn").click();
   // Let one original move finish so resuming must preserve its result.
-  await page.locator("#tabMoves").click();
+  await page.locator("body").press("ArrowLeft");
   await expect(move(page, "1. e4").locator(".move-sign")).toBeVisible();
   await move(page, "2... Nc6").click();
   await play(page, "f1", "c4");
@@ -142,9 +145,10 @@ test("exploring during full-game review stops it safely and resumes retained res
   await expect(move(page, "1. e4").locator(".move-sign")).toBeVisible();
   await page.locator("#resetVariationBtn").click();
   await expect(page.locator("#moveCounter")).toHaveText("2... Nc6");
-  await page.locator("#startReview").click();
-  await expect(page.locator("#startReviewText")).toHaveText("Start", { timeout: 30000 });
-  await page.locator("#tabMoves").click();
+  await page.locator("#backToSummaryBtn").click();
+  if(await page.locator("#summaryReviewBtn").isVisible()) await page.locator("#summaryReviewBtn").click();
+  await expect(page.locator("#summaryStartBtn")).toBeVisible({timeout:30000});
+  await page.locator("body").press("ArrowLeft");
   await expect(move(page, "3. Bc4")).toBeVisible();
   await expect(move(page, "3... a6").locator(".move-sign")).toBeVisible();
   expect(errors).toEqual([]);
@@ -157,7 +161,7 @@ test("board flipping, keyboard navigation, and identical moves preserve existing
   await expect(move(page, "3. Bc4").locator(".move-sign")).toBeVisible();
   const evaluation = await page.locator("#evalBarScore").textContent();
   await page.screenshot({ path: test.info().outputPath("variation-explorer.png") });
-  await page.locator("#hamburgerBtn").click();
+  await page.locator("#topbarMenuBtn").click();
   await page.locator("#flipBoard").click();
   await page.locator("#closeHamburgerBtn").click();
   await expect(page.locator("#board .square").first()).toHaveAttribute("data-square", "h1");

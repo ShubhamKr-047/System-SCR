@@ -1,15 +1,72 @@
-purpose: Verify concise evidence-based coaching request and response handling.
-sources:
-  - src/coaching.js defines the shared Gemini/Groq request contract.
-  - src/coaching-evidence.js builds locally replayed facts and selected lines.
+purpose:
+  stands_in_for: Groq coaching API using the repository-owned local mock; historical Gemini evidence is retained below.
+  unblocks: Verify evidence-constrained coaching requests, response validation and browser fallback.
 assumptions:
-  - Provider success fixtures are illustrative text, not model-quality evidence.
-  - Simple verified piece-loss explanations bypass provider requests.
-verified:
-  - Production fetch is routed over HTTP to existing local simulations.
-  - Both provider adapters reject overlong, malformed, refused and HTML responses.
-  - Browser tests exercise retry, cancellation and independent engine playback.
-limitations:
-  - No live provider credentials were used; model availability and response quality remain unverified.
-  - Claim IDs and move checks cannot establish semantic correctness of arbitrary prose.
-  - Piece-loss shortcuts are conservative heuristics, not exhaustive tactical proofs.
+  - id: smaller-coach-budget-and-quota-admission
+    status: supported
+    claim: Routine moves can receive two consecutive explanations when the simulated token budget covers both, and an explicit provider cooldown prevents another submission.
+    reason: The repository-owned Groq fixture returns realistic usage and exposes rate-limit headers to the browser. Browser checks verify the persisted balances and cached-input discount.
+    verification: Chromium and Firefox displayed both uncached explanations, revisited the first with zero extra requests, and showed local feedback during a simulated 429 cooldown without another POST. The Postman log recorded the expected two success POSTs and one 429 POST per browser. The broader suite and targeted reruns covered 40 distinct browser cases, and 150 unit tests passed. Live quota and model quality remain unverified.
+    source: src/coaching/groq.js, src/coaching/quota-browser.js, tests/browser/coaching.spec.js, and postman/mocks/groq/default.js
+    updated_at: "2026-11-18"
+  - id: natural-coach-cutover
+    status: supported
+    claim: The connected replacement sends one Groq POST only after an explicit action; its responses can contain fresh prose, with local evidence and fallback retained.
+    reason: The production request path was exercised through the repository-owned Groq simulation in Chromium and Firefox. Cache, cooldown, cancellation and cross-tab admission are local.
+    verification: On 2026-11-13 all 38 coaching browser checks passed across the 34-case core run and four additional quota tests, including POST request events for success, 401, 429, 503, malformed/refused/truncated/HTML/unsupported output, duplicate actions, cross-tab admission, unavailable storage, and navigation/key-removal cancellation. No real provider was called. The earlier 28-case run passed before adding navigation and storage-failure coverage. All 148 final unit checks passed; the local 240-position benchmark completed. Human quality scores are not established.
+    source: src/coaching.js; src/coaching/; tests/browser/coaching.spec.js; tests/browser/ai-playback.spec.js; postman/mocks/groq/default.js
+    updated_at: "2026-11-13"
+  - id: replacement-controller-foundation
+    status: supported
+    claim: The new controller coalesces duplicate explicit requests and does not automatically retry failed generation or validation.
+    reason: A single injected generation call is reachable only through explain; preparation, cancellation and quota checks precede it.
+    verification: Ten controller and quota unit tests passed on 2026-11-13 using injected dependencies; the full suite passed 146 tests and the production build succeeded. That foundation check preceded UI integration. The replacement is now connected; see the natural-coach-cutover record for current HTTP evidence.
+    source: src/coaching/controller.js; src/coaching/quota.js; tests/coaching-controller.test.js
+    updated_at: "2026-11-13"
+  - id: historical-browser-coverage
+    status: supported
+    claim: Prior simulation checks covered production fetch routing, retries, cancellation and independent engine playback.
+    reason: Retained from the previous context record; these are caller checks against fixtures, not provider-quality evidence.
+    verification: The previous record reported browser checks for overlong, malformed, refused and HTML responses.
+    source: tests/browser/coaching.spec.js; tests/browser/ai-playback.spec.js; postman/README.md
+    updated_at: "2026-11-12"
+  - id: prose-citations-do-not-prove-chess-claims
+    status: supported
+    claim: Valid claim IDs and legal move names do not establish the semantic correctness of arbitrary prose.
+    reason: A capture fact does not imply a net material gain; JSON schema compliance does not imply factual accuracy.
+    verification: Reproduced the reported Nxb3 and Rbxb3 positions locally; regression tests reject invented material gains and forks even with valid IDs.
+    source: tests/coaching.test.js; https://console.groq.com/docs/structured-outputs
+    updated_at: "2026-11-12"
+  - id: exact-option-validation
+    status: supported
+    claim: Before the redesign, the caller accepted only an exact locally generated explanation and its matching evidence IDs.
+    reason: Providers select from verified explanation options rather than author unrestricted chess claims.
+    verification: 136 unit tests passed, including the user's exchange, rook-placement comparison, missing evidence and fake fork regressions. All 44 Chromium/Firefox coaching tests passed against the local mocks; request events confirmed both provider POST paths. Hallucinated prose with valid IDs was rejected with local feedback retained. Final template changes were checked with the 17 coaching unit tests and a production rebuild.
+    source: src/coaching.js; src/coaching-evidence.js; tests/coaching.test.js
+    updated_at: "2026-11-12"
+  - id: live-provider-behavior
+    status: unknown
+    claim: Live provider selection in the old design was unverified; current Groq natural-writing model access and explanation quality remain unverified for the user's project.
+    reason: No live provider credentials were used; fixture compliance cannot prove model behavior or availability.
+    verification: Existing local mocks were reused; the earlier owner-maintained mock search required Postman login and no owner mock was available.
+    source: postman/README.md; postman/mocks/groq/default.js; postman/mocks/gemini/default.js
+    updated_at: "2026-11-12"
+  - id: local-shortcut-scope
+    status: supported
+    claim: Simple piece-loss explanations bypass providers but remain conservative heuristics rather than exhaustive tactical proofs.
+    reason: Retains the previous record's limitation; template selection cannot improve the underlying engine search or prove every positional cause.
+    verification: Unit tests cover provider bypass, recapture exclusions and sacrifice exclusions.
+    source: tests/coaching.test.js; src/coaching-evidence.js
+    updated_at: "2026-11-12"
+  - id: compact-natural-coach-payload
+    status: supported
+    claim: The compact payload preserves local evidence IDs and legal line roles while removing duplicate representations and shared caveats.
+    reason: The production serializer keeps the full report locally for validation; identical same-root continuations use movesRef and the shared instructions explain its meaning.
+    verification: All 150 unit tests passed, including 240-position corpus preservation checks. Report JSON bytes decreased 29.9 percent excluding shared instructions and schema. Eight Chromium/Firefox browser cases passed against the local simulation for success, 429, hallucinated prose and truncation; simulation POST logs confirmed all eight paths. The build and diff whitespace check passed. This does not establish live model comprehension or unchanged human-rated quality.
+    source: src/coaching/groq.js; src/coaching/schema.js; tests/coaching.test.js; tests/browser/coaching.spec.js
+    updated_at: "2026-11-13"
+fingerprints:
+  - id: evidence-options-working-tree
+    date: "2026-11-12"
+    commit: "8a46b2358f4478655decdc053f80f4f27eb0f237 (dirty working tree)"
+    cli: "1.76.0"

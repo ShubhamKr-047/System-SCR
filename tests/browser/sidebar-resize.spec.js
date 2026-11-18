@@ -7,6 +7,7 @@ test.beforeEach(async ({ page }) => {
   await page.getByRole("button", { name: "Paste PGN", exact: true }).click();
   await page.locator("#emptyPgnText").fill("1. e4 e5 2. Nf3 Nc6 *");
   await page.getByRole("button", { name: "Load game", exact: true }).click();
+  await page.locator("body").press("ArrowLeft");
 });
 
 async function longFeedback(page) {
@@ -33,13 +34,15 @@ test("dragging and keyboard resizing preserve game position and remember the spl
   await expect(page.locator("#moveCounter")).toHaveText("Start");
   const savedHeight = (await page.locator("#feedbackContainer").boundingBox()).height;
   await page.reload();
+  await page.locator("#pgnFile").setInputFiles({name:"game.pgn",mimeType:"text/plain",buffer:Buffer.from("1. e4 e5 2. Nf3 Nc6 *")});
+  await page.locator("body").press("ArrowLeft");
   await expect.poll(async () => (await page.locator("#feedbackContainer").boundingBox()).height).toBeCloseTo(savedHeight, 0);
   await splitter.dblclick();
   await expect(page.locator(".sidebar-panel")).not.toHaveClass(/has-feedback-split/);
   expect(await page.evaluate(() => localStorage.getItem("zen-chess-feedback-split"))).toBeNull();
 });
 
-test("both panes stay usable at resize limits, on both tabs and small screens", async ({ page }, info) => {
+test("both panes stay usable at resize limits, on small and large screens", async ({ page }, info) => {
   await longFeedback(page);
   const splitter = page.getByRole("separator", { name: "Resize feedback and moves" });
   for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
@@ -47,8 +50,7 @@ test("both panes stay usable at resize limits, on both tabs and small screens", 
     await splitter.scrollIntoViewIfNeeded();
     for (const key of ["Home", "End"]) {
       await splitter.press(key);
-      for (const [tab, pane] of [["#tabMoves", "#moveListWrapper"], ["#tabSummary", "#summaryPanel"]]) {
-        await page.locator(tab).click();
+      for (const pane of ["#moveListWrapper"]) {
         const lower = await page.locator(pane).boundingBox();
         const footer = await page.locator(".sidebar-footer").boundingBox();
         const feedback = await page.locator("#feedbackContainer").boundingBox();

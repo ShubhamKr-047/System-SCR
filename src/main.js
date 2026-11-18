@@ -1,9 +1,10 @@
-import { conciseLocalFeedback } from "./coaching-evidence.js";
+import { coachingDiagnostics } from "./coaching/diagnostics.js";
+import { conciseLocalFeedback } from "./coaching/local-feedback.js";
 import { Chess } from "chess.js";
 import { gameEnding, ENDING_ICONS } from './game-ending.js';
 import { PIECE_IMAGES } from "./pieces.js";
 import { CLASSIFICATIONS, calculateAccuracy, calculateEstimatedRating } from "./classifications.js";
-import { getApiKey, setApiKey, hasApiKey, getCoachingState, generateCoaching, cancelPendingCoaching, getConnectionStatus, getProvider, setProvider, PROVIDERS, isCoachingEligible, getMoveQuestion } from "./coaching.js";
+import { getApiKey, setApiKey, hasApiKey, getCoachingState, generateCoaching, cancelPendingCoaching, getConnectionStatus, getProvider, setProvider, PROVIDERS, isCoachingEligible, getMoveQuestion, initializeCoaching, configureCoaching, getPlayerLevel, setPlayerLevel, clearCoachingCache } from "./coaching.js";
 import { GameTree, moveLabel } from "./game-tree.js";
 import { EngineQueue } from "./engine.js";
 import { analyzeMove } from "./analysis.js";
@@ -433,6 +434,7 @@ function updateAiUi(refreshInput = true) {
   $('aiCoachToggleRow').hidden = !state.feedbackEnabled;
   $("toggleAiCoach").checked = state.aiCoachEnabled;
   $("aiCoachSettings").hidden = !state.feedbackEnabled || !state.aiCoachEnabled;
+  $("aiPlayerLevel").value = getPlayerLevel();
   const hasKey = hasApiKey();
   const provider = PROVIDERS[getProvider()];
   $("aiProvider").value = getProvider();
@@ -460,7 +462,7 @@ function updateAiUi(refreshInput = true) {
     clearBtn.style.display = hasKey ? "inline-flex" : "none";
   }
   if ($("aiKeyHelp")) {
-    $("aiKeyHelp").innerHTML = "";
+    $("aiKeyHelp").innerHTML = '<a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Get a Groq key</a>. Requests run only when you click Explain. Free-tier quotas apply.';
   }
 }
 
@@ -470,11 +472,19 @@ $("aiProvider").addEventListener("change", event => {
   renderFeedback(state.tree?.current?.result || null);
 });
 
+$("aiPlayerLevel").addEventListener('change',event=>{setPlayerLevel(event.target.value);renderFeedback(state.tree?.current?.result || null);});
+$("exportCoachDiagnostics").addEventListener('click',()=>{
+  const url=URL.createObjectURL(new Blob([JSON.stringify(coachingDiagnostics(),null,2)],{type:'application/json'}));
+  const anchor=document.createElement('a');anchor.href=url;anchor.download='coaching-diagnostics.json';anchor.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+$("clearCoachCache").addEventListener('click',async()=>{await clearCoachingCache();renderFeedback(state.tree?.current?.result || null);});
+window.addEventListener('coachingchange',()=>{updateAiUi(false);renderFeedback(state.tree?.current?.result || null);});
 const saveAiKeyBtn = $("saveAiKey");
 if (saveAiKeyBtn) {
-  saveAiKeyBtn.addEventListener("click", () => {
+  saveAiKeyBtn.addEventListener("click", async () => {
     const val = $("aiApiKey")?.value || "";
-    setApiKey(val);
+    await setApiKey(val);
     updateAiUi();
     if (val.trim()) {
       setStatus(`${PROVIDERS[getProvider()].name} API key saved. Select an analyzed move to verify the connection.`);
@@ -487,8 +497,8 @@ if (saveAiKeyBtn) {
 
 const clearAiKeyBtn = $("clearAiKey");
 if (clearAiKeyBtn) {
-  clearAiKeyBtn.addEventListener("click", () => {
-    setApiKey("");
+  clearAiKeyBtn.addEventListener("click", async () => {
+    await setApiKey("");
     updateAiUi();
     setStatus(`${PROVIDERS[getProvider()].name} API key cleared.`);
     renderFeedback(state.tree?.current?.result || null);
@@ -670,7 +680,7 @@ function updateContinuationMoveHighlights() {
   });
 }
 
-function showContinuation(result) {
+function showContinuation(result, { feedbackResult = result, baseNode = null } = {}) {
   const frames = continuationFrames(result);
   if (!frames.length || state.running || !state.tree) return;
   stopPlayback();
@@ -679,9 +689,9 @@ function showContinuation(result) {
   overlay.clear();
   const origin = state.tree.current;
   const source = state.tree.nodes.get(result.nodeId) || origin;
-  const base = source.parent || source;
+  const base = baseNode || source.parent || source;
   const preview = state.preview = {
-    result, origin, base, frames, index: 0, fen: result.beforeFen,
+    result: feedbackResult, origin, base, frames, index: 0, fen: result.beforeFen,
     lastMove: null, complete: false, timer: null
   };
   $("continuationPreview").hidden = false;
@@ -1570,6 +1580,10 @@ function getLocalDetailedFeedback(result) {
   return {whyText:esc(conciseLocalFeedback(result)),tipText:'',concept:''};
 }
 
+function coachText(text) {
+  return esc(text).replace(/\b[a-h][1-8]\b/g,square=>`<button type="button" class="coach-square" data-coach-square="${square}" aria-label="Highlight ${square}">${square}</button>`);
+}
+
 let feedbackTarget = null;
 
 function renderFeedback(result) {
@@ -1607,7 +1621,10 @@ function renderFeedback(result) {
     ? `<article class="ai-guidance-card" aria-label="AI move guidance">
         <div class="ai-guidance-label"><span aria-hidden="true">✦</span> Move insight</div>
 
-        <p class="ai-guidance-summary">${esc(coaching.explanation)}</p>
+        <p class="ai-guidance-summary">${coachText(coaching.explanation)}</p>
+        ${coaching.comparison ? `<details class="coach-details"><summary>Show why</summary>
+          <p>${coachText(coaching.comparison.text)}</p>
+        </details>` : ''}
       </article>`
     : "";
 
@@ -1622,11 +1639,12 @@ function renderFeedback(result) {
       feedbackBody = genericBody;
     } else if (ai?.status === "pending") {
       statusHtml = `<div id="aiCoachStatus" class="ai-coach-loading" role="status"><div class="ai-loading-spinner"></div>
-        <span>${provider.name} is explaining this position...</span></div>`;
+        <span>${ai.stage === "preparing" ? "Checking this position locally..." : `${provider.name} is explaining this position...`}</span></div>`;
       feedbackBody = genericBody;
     } else if (coaching) {
       feedbackBody = coachingBody;
-    } else if (node?.genericFeedbackRevealed) {
+      if(ai.needsRefresh) promptHtml='<div class="ai-prompt-card"><p>Showing the previous explanation. Apply the selected level:</p><button id="askAiCoachingBtn" type="button" class="ai-ask-btn">Explain</button></div>';
+    } else if (node?.genericFeedbackRevealed && !hasApiKey()) {
       feedbackBody = genericBody;
     } else {
       const question = getMoveQuestion(result);
@@ -1674,7 +1692,7 @@ function renderFeedback(result) {
       <span class="feedback-move-text">${esc(result.moveNo)} ${esc(result.san)}</span></div>
       </div>
     ${promptHtml}
-    ${statusHtml}${feedbackBody ? `<div id="positionFeedback" data-source="${coaching ? providerId : "local"}" aria-busy="${ai?.status === "pending"}">${feedbackBody}</div>` : ""}
+    ${statusHtml}${feedbackBody ? `<div id="positionFeedback" data-source="${coaching && !coaching.local ? providerId : "local"}" aria-busy="${ai?.status === "pending"}">${feedbackBody}</div>` : ""}
     ${continuation}`;
   $("feedbackContainer").scrollTop = scrollTop;
 
@@ -1690,7 +1708,7 @@ function renderFeedback(result) {
     if (!state.feedbackEnabled || !state.aiCoachEnabled) return;
     const key = getApiKey();
     const selectedProvider = getProvider();
-    const promise = generateCoaching(result, beforeFen, { retry });
+    const promise = generateCoaching(result, beforeFen, { retry, node });
     // Render pending/loading state immediately when triggered
     renderFeedback(result);
     $("feedbackContainer").focus({ preventScroll: true });
@@ -1701,6 +1719,12 @@ function renderFeedback(result) {
     });
   };
 
+  document.querySelectorAll('[data-coach-square]').forEach(button=>button.addEventListener('click',()=>{
+    document.querySelectorAll('.coach-focus').forEach(square=>square.classList.remove('coach-focus'));
+    const square=document.querySelector(`[data-square="${button.dataset.coachSquare}"]`);
+    square?.classList.add('coach-focus');
+    setTimeout(()=>square?.classList.remove('coach-focus'),2500);
+  }));
   $("retryAiCoaching")?.addEventListener("click", () => request(true));
   $("askAiCoachingBtn")?.addEventListener("click", () => {
     if (hasApiKey()) {
@@ -2198,7 +2222,9 @@ async function autoImportPendingGame() {
     setStatus(`Automatic import failed: ${e.message || e}`, true);
   }
 }
+configureCoaching({engine});
 updatePlayerHeaders();
+initializeCoaching().then(()=>updateAiUi()).catch(()=>setStatus("Could not load AI settings; local feedback is available.",true));
 updateAiUi();
 initEvalGraphInteraction();
 showSummaryView();

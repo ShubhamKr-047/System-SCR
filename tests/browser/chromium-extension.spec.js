@@ -41,6 +41,18 @@ test('installed Chromium extension imports a game through its background worker'
       type: 'ZEN_FETCH_COMPLETED_GAME', url: 'https://www.chess.com/'
     }));
     expect(response).toEqual({ ok: false, error: 'Open a Chess.com live or daily game page first.' });
+    const providerRequests=[];
+    review.on('request',request=>{if(request.url().startsWith('https://api.groq.com/')) providerRequests.push(request.url());});
+    await review.locator('#topbarMenuBtn').click();
+    await review.locator('#aiApiKey').fill('test-extension-storage-only');
+    await review.locator('#saveAiKey').click();
+    await expect.poll(()=>review.evaluate(async()=>{
+      const stored=await chrome.storage.local.get('zen-chess-groq-key');
+      return stored['zen-chess-groq-key']==='test-extension-storage-only' && localStorage.getItem('zen-chess-groq-key')===null;
+    })).toBe(true);
+    expect(providerRequests).toEqual([]);
+    await review.locator('#clearAiKey').click();
+    await expect.poll(()=>review.evaluate(async()=>Boolean((await chrome.storage.local.get('zen-chess-groq-key'))['zen-chess-groq-key']))).toBe(false);
     await expect(launcher).toBeEnabled();
   } finally {
     await context.close();

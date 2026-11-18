@@ -19,7 +19,8 @@ export function continuationFrames(result) {
     const chess = new Chess(result.beforeFen);
     const line = result.pv || result.engineEvidence?.before?.pv || result.bestUci || result.bestSan || "";
     const frames = [];
-    for (const token of line.trim().split(/\s+/).slice(0, 8)) {
+    const limit=result.coachingPreview ? 12 : 8;
+    for (const token of line.trim().split(/\s+/).slice(0, limit)) {
       try {
         const input = /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(token)
           ? { from: token.slice(0, 2), to: token.slice(2, 4), promotion: token[4] }

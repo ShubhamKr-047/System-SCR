@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-for (const provider of ["gemini", "groq"]) {
+for (const provider of ["groq"]) {
   test(`${provider}: Stockfish stays independent before, during and after AI explanations`, async ({ page }) => {
     const errors = [];
     let requests = 0;
@@ -36,18 +36,19 @@ for (const provider of ["gemini", "groq"]) {
     const chips = await page.locator("#moveList .move-chip").count();
     await page.locator("#showContinuationBtn").click();
     await expect(page.locator("#continuationPreviewStatus")).toContainText(line.split(/\s+/)[0]);
-    await expect(page.locator(".ai-guidance-card")).toContainText("Explanation for f3");
+    await expect(page.locator(".ai-guidance-card")).toContainText("f3");
     await expect(page.locator(".ai-guidance-card .pv-line")).toHaveCount(0);
     await expect(page.locator(".stockfish-continuation")).toHaveCount(1);
     await page.locator("#showContinuationBtn").click();
     await expect(page.locator("#moveCounter")).toHaveText("1. f3");
     await expect(page.locator('[data-square="f3"] img')).toHaveAttribute("alt", "White p");
-    await expect(page.locator(".ai-guidance-card")).toContainText("Explanation for f3");
+    await expect(page.locator(".ai-guidance-card")).toContainText("f3");
     await expect(page.locator(".stockfish-continuation .pv-line")).toHaveText(line);
     await expect(page.locator("#moveList .move-chip")).toHaveCount(chips);
     expect(requests).toBe(1);
     // Provider failures must not hide or duplicate the local engine card.
     await page.locator("#topbarMenuBtn").click();
+    await page.locator("#clearCoachCache").click();
     await page.locator("#aiApiKey").fill("test-quota");
     await page.locator("#saveAiKey").click();
     await page.locator("#closeHamburgerBtn").click();

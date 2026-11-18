@@ -1,6 +1,6 @@
 # System SCR
 
-System SCR is a chess game review extension for Chrome, Zen Browser, and Firefox. Review imported PGNs with a bundled Stockfish 19 engine, explore variations, and optionally request move explanations from Gemini or Groq.
+System SCR is a chess game review extension for Chrome, Zen Browser, and Firefox. Review imported PGNs with a bundled Stockfish 19 engine, explore variations, and optionally request move explanations from Groq.
 
 Stockfish runs locally in a single-threaded WebAssembly worker. An AI API key is optional and never determines move classifications.
 
@@ -168,16 +168,16 @@ Drag the divider above **Moves / Game Summary** to resize the sidebar sections. 
 
 Local Stockfish analysis and feedback work without an API key. To request additional explanations:
 
-1. Enable **Menu > AI Coach** and select Gemini or Groq.
-2. Create a key in [Google AI Studio](https://aistudio.google.com/app/apikey) or [Groq Console](https://console.groq.com/keys).
-3. Paste the selected provider's key and select **Save**.
-4. Select an eligible analyzed move and choose **Ask AI**.
+1. Enable **Menu > AI Coach** and choose your explanation level.
+2. Create a free-tier key in [Groq Console](https://console.groq.com/keys).
+3. Paste your Groq key and select **Save**.
+4. Select an analyzed move and choose **Explain**.
 
-Requests are manual. Saving a key, navigating, or flipping the board does not automatically request an explanation. Book and forced moves retain local feedback. Previously requested explanations can be reused from the in-memory cache; **Retry AI** retries a failed request.
+Requests are manual. Saving a key, navigating, or flipping the board does not automatically request an explanation. Book and forced moves can also be explained. Terminal outcomes and confirmed simple losses use local text. Compatible explanations persist in IndexedDB across reloads. **Retry** requests a failed explanation manually; quota cooldowns never automatically submit a request.
 
-Keys are stored separately in the browser profile. Switching providers retains both keys; clearing a key removes only the selected provider's key. Connection status distinguishes a saved key from a successful request. Local feedback remains available if a provider fails, and engine continuations stay independent of AI output.
+Connection status distinguishes a saved key from a successful Groq request. Clearing the key cancels pending coaching. Local feedback and engine continuations remain available when Groq fails.
 
-The adapters are configured for `gemini-3.8-flash` and `openai/gpt-oss-120b`. These are repository configuration values, not guarantees of account access or model availability. Provider access, pricing, and quotas apply. AI explanations can contain errors and do not change engine scores or labels.
+The Groq adapter uses `openai/gpt-oss-120b` with structured JSON output. Availability and free-tier quotas depend on your account. The model writes natural explanations from local evidence; it is not restricted to prewritten sentences. Explanations can contain errors and do not change engine scores or labels. Each explicit Explain or Retry action submits at most one request, with no automatic repairs or retries. Cache hits submit none.
 
 ## Privacy and permissions
 
@@ -190,9 +190,13 @@ PGN analysis runs in the browser. Manual review requires no server or AI account
 | `www.chess.com` | Inject the Analyze launcher and fetch game metadata. |
 | `api.chess.com` | Retrieve public completed-game archives. |
 | `lichess.org` | Add history/game launchers and retrieve completed public games through the export API. |
-| Google Gemini / Groq API hosts | Send an explicitly requested explanation to the selected provider. |
+| Groq API host | Send one explicitly requested explanation to Groq. |
 
-AI requests include before/after positions, the played move, classification, selected board relationships, legally replayed supporting lines, and evidence limitations. Raw evaluations, piece-value totals, legal-move lists, ratings, and search timings are omitted. Explanations are limited to two sentences and 20 words for ordinary moves or 45 words for deeper ideas. Confirmed simple piece losses and terminal outcomes use local text without an AI request. Player names and the full PGN are not included. Gemini keys are sent to Google; Groq keys are sent to Groq. No automatic provider fallback is used. Keys and UI preferences use browser-local storage; explanation caches and variation analysis are session-local.
+AI requests contain before/after positions, readable piece locations, the played move, classification, evaluations explicitly from White's perspective, locally detected features, legally replayed comparison lines, and evidence limitations. Player names, ratings, full PGNs, credentials, and search timings are excluded from the report. Keys are sent only to Groq for authentication. In installed extensions, keys migrate from legacy page-local storage into extension storage restricted to trusted contexts where supported. The standalone development page uses localStorage. Extension storage is not an encrypted vault. Explanations and an estimated quota ledger persist in IndexedDB; clear saved explanations from Menu. No paid server or automatic provider fallback is used.
+
+**Show why** expands cached comparisons and lessons. **Show line** replays a supplied legal continuation without an API call. Changing level requests no explanation until you click Explain. Extra local searches run only for the requested move when compatible evidence is missing. Across tabs, one persistent lease admits one request at a time. Double clicks coalesce, cooldowns preserve local feedback, and aborted requests retain conservative token estimates because provider computation may already have started.
+
+Run `npm run benchmark:coaching` to generate a local 240-position evaluation candidate corpus and timing report in `logs/coaching/`. This evaluates local evidence with Stockfish and sends no cloud requests. Human correctness and usefulness review is still required; these are not certified gold labels. An explicitly initiated `node scripts/benchmark-coaching.mjs --live --limit=3` pilot uses `GROQ_API_KEY`, is capped at five cases, and is paced; it is never part of normal tests.
 
 Use System SCR for completed-game review and independent study. Do not use engine assistance during an ongoing competitive game.
 
@@ -271,3 +275,16 @@ Reports are written under the ignored `logs/` directory. Results depend on the m
 Stockfish is GPL-licensed. The build includes upstream `Copying.txt`; preserve it and meet upstream license obligations, including applicable source requirements, when redistributing engine builds.
 
 The opening dataset comes from [Lichess chess openings](https://github.com/lichess-org/chess-openings), published under CC0. Font license notices are bundled in `public/fonts/`. Review relevant upstream licenses before redistributing third-party assets.
+
+
+Groq request compaction preserves the full local report for validation and previews,
+while sending FEN instead of duplicate piece maps, material facts instead of a
+second comparisons array, and alternative-position facts once. Repeated generic
+geometry caveats live in the shared instructions. Identical continuations from
+the same root use `movesRef` while retaining each line ID and role; distinct
+roots are never merged. All distinct facts, certainty markers, position-specific
+caveats and complete supplied continuations remain available. Prompt version 8
+invalidates earlier cached explanations. Across the 240 local corpus positions,
+serialized report bytes decreased from 612,296 to 429,019 (29.9%); this excludes
+instructions, response schema and output tokens and is not a measured provider
+token reduction. Live explanation quality still needs provider/human evaluation.
