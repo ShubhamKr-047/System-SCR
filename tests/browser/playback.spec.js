@@ -87,6 +87,8 @@ test("Show Move previews without saving, goes back, and saves the line only on a
   expect(Math.abs(button.y + button.height / 2 - card.y - card.height / 2)).toBeLessThan(1);
   await page.locator("#showContinuationBtn").click();
   await expect(page.locator("#showContinuationBtn")).toHaveText("Go back");
+  const engineArrow = page.locator('#boardArrows [data-layer="engine"] :is(line, path)');
+  await expect(engineArrow).toHaveCount(0);
   await expect(page.locator("#moveCounter")).toHaveText("Preview 1/" + Math.min(8, line.split(/\s+/).length), { timeout: 5000 });
   await expect(page.locator("#moveList .move-chip")).toHaveCount(chips);
   await expect(page.locator(".stockfish-continuation .pv-line")).toHaveText(line);
@@ -107,6 +109,7 @@ test("Show Move previews without saving, goes back, and saves the line only on a
   await expect(page.locator("#evalBarScore")).toHaveText(evaluation);
   await expect(page.locator(".feedback-header-box")).toHaveText(feedback, { useInnerText: true });
   await expect(page.locator(".pv-move.is-played")).toHaveCount(total);
+  await expect(engineArrow).toHaveCount(chess.isGameOver() ? 0 : 1);
   const expectedSounds = [];
   const replay = new Chess();
   for (const token of tokens) {

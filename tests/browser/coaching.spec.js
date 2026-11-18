@@ -32,12 +32,14 @@ test.beforeEach(async({context})=>{
  });
 });
 test('manual single request, natural prose, private report, expansion and persistent cache',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('scr-coach-level','advanced'));
  await load(page);await key(page,'test-success');expect(requests).toHaveLength(0);
  await page.locator('#askAiCoachingBtn').click();
  await expect(page.locator('.ai-guidance-summary')).toContainText('f3');
  await page.locator('.coach-square[data-coach-square="f3"]').first().click();
  await expect(page.locator('[data-square="f3"]')).toHaveClass(/coach-focus/);
  const report=JSON.parse(requests[0].messages[1].content);
+ expect(report.level).toBe('intermediate');
  expect(report).not.toHaveProperty('explanationOptions');
  for(const field of ['pieces','comparisons','positionDifferences','version','localText']) expect(report).not.toHaveProperty(field);
  expect(report.facts.every(f=>!Object.hasOwn(f,'origin'))).toBe(true);expect(report.evaluation.perspective).toBe('White');
@@ -92,10 +94,11 @@ test('two tabs admit only one concurrent request',async({page,context})=>{
  // An explicit retry never automatically runs on cooldown expiry.
  expect(requests).toHaveLength(1);
 });
-test('level changes, cache clearing and disabled coach make no API calls',async({page})=>{
+test('options omit retired coaching controls and disabling the coach makes no API calls',async({page})=>{
  await load(page);await key(page,'test-success');
- await page.locator('#topbarMenuBtn').click();await page.locator('#aiPlayerLevel').selectOption('beginner');
- await page.locator('#clearCoachCache').click();await page.locator('label:has(#toggleAiCoach)').click();
+ await page.locator('#topbarMenuBtn').click();
+ await expect(page.locator('#clearCoachCache, #exportCoachDiagnostics, #aiPlayerLevel')).toHaveCount(0);
+ await page.locator('label:has(#toggleAiCoach)').click();
  await page.locator('#closeHamburgerBtn').click();
  await expect(page.locator('#askAiCoachingBtn')).toHaveCount(0);expect(requests).toHaveLength(0);
 });

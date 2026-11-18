@@ -19,23 +19,17 @@ export const hasApiKey=()=>Boolean(getApiKey());
 let connection='saved';
 export const getConnectionStatus=()=>hasApiKey()?connection:'off';
 const states=new Map(), loading=new Set();
-const previousAnswers=new Map();
+const EXPLANATION_LEVEL = 'intermediate';
 let engine;
 let activeKey=null;
 let cacheEpoch=0;
-let activeInput=null;
 export function configureCoaching(options){engine=options.engine;}
 export async function initializeCoaching(){await initializeSettings();}
-export function getPlayerLevel(){const level=globalThis.localStorage?.getItem('scr-coach-level');return ['beginner','intermediate','advanced'].includes(level)?level:'intermediate';}
-export function setPlayerLevel(level){
-  if(!['beginner','intermediate','advanced'].includes(level)) throw new Error('Unknown player level');
-  cancelPendingCoaching();localStorage.setItem('scr-coach-level',level);
-}
 export function buildCoachingContext(result,fen){
-  const {localText,...report}=buildReport(result,fen,getPlayerLevel());return report;
+  const {localText,...report}=buildReport(result,fen,EXPLANATION_LEVEL);return report;
 }
 const identity=coachingIdentity;
-function inputFor(result,fen,node){return {result:fen?{...result,beforeFen:fen}:result,node,level:getPlayerLevel()};}
+function inputFor(result,fen,node){return {result:fen?{...result,beforeFen:fen}:result,node,level:EXPLANATION_LEVEL};}
 function notify(){globalThis.dispatchEvent?.(new Event('coachingchange'));}
 const controller=createCoachingController({
   identity,cache:explanationCache,
@@ -66,10 +60,6 @@ const controller=createCoachingController({
     if(state.status==='cooldown') {mapped.status='error';mapped.error=state.reason;}
     if(mapped.status==='error' && state.retryAt) mapped.error+=` Retry after ${new Date(state.retryAt).toLocaleTimeString()}.`;
     states.set(activeKey,mapped);
-    if(state.status==='ready' && activeInput) {
-      previousAnswers.set(identity({...activeInput,level:'any'}),mapped);
-      if(previousAnswers.size>120) previousAnswers.delete(previousAnswers.keys().next().value);
-    }
     if(states.size>120) {const first=states.keys().next().value;if(first!==activeKey) states.delete(first);}
     if(state.status==='ready' && state.source==='groq') connection='verified';
     if(state.status==='error') connection='error';
@@ -77,7 +67,7 @@ const controller=createCoachingController({
   }
 });
 export function cancelPendingCoaching(){
-  controller.cancel();activeKey=null;activeInput=null;
+  controller.cancel();activeKey=null;
   for(const [key,state] of states) if(state.status==='pending') states.delete(key);
 }
 export function getCoachingState(result,fen){
@@ -88,17 +78,15 @@ export function getCoachingState(result,fen){
     loading.add(key);
     explanationCache.get(key).then(result=>{if(epoch===cacheEpoch && result && !states.has(key)){states.set(key,{status:'ready',coaching:result});notify();}}).finally(()=>loading.delete(key));
   }
-  const old=previousAnswers.get(identity({...inputFor(result,fen),level:'any'}));
-  return states.get(key) || (old ? {...old,needsRefresh:true} : null);
+  return states.get(key) || null;
 }
 export function generateCoaching(result,fen,{node}={}){
   const input=inputFor(result,fen,node),key=identity(input);
   activeKey=key;
-  activeInput=input;
   states.set(key,{status:'pending',stage:'preparing'});
   return controller.explain(input);
 }
-export async function clearCoachingCache(){cacheEpoch++;cancelPendingCoaching();states.clear();previousAnswers.clear();await explanationCache.clear();notify();}
+export async function clearCoachingCache(){cacheEpoch++;cancelPendingCoaching();states.clear();await explanationCache.clear();notify();}
 export const isCoachingEligible=result=>Boolean(result?.key);
 export const getMoveQuestion=result=>result ? `Explain the idea behind ${result.san || 'this move'}?` : '';
 onCredentialsChanged(()=>{connection='saved';controller.credentialsChanged();cancelPendingCoaching();states.clear();notify();});

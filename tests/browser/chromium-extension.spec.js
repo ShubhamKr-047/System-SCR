@@ -53,7 +53,23 @@ test('installed Chromium extension imports a game through its background worker'
     expect(providerRequests).toEqual([]);
     await review.locator('#clearAiKey').click();
     await expect.poll(()=>review.evaluate(async()=>Boolean((await chrome.storage.local.get('zen-chess-groq-key'))['zen-chess-groq-key']))).toBe(false);
+    await review.locator('label:has(#toggleBestMoveArrow)').click();
+    await expect(review.locator('#toggleBestMoveArrow')).not.toBeChecked();
+    await review.locator('#closeHamburgerBtn').click();
     await expect(launcher).toBeEnabled();
+
+    await review.locator('[data-square="f2"]').click();
+    await review.locator('[data-square="f3"]').click();
+    const showMove = review.locator("#showContinuationBtn");
+    await expect(showMove).toHaveText("Show Move");
+    const engineArrow = review.locator('#boardArrows [data-layer="engine"] :is(line, path)');
+    await expect(engineArrow).toHaveCount(0);
+    await showMove.click();
+    await expect(engineArrow).toHaveCount(0);
+    await expect(review.locator("#moveCounter")).toHaveText(/^Preview (\d+)\/\1$/);
+    await expect(engineArrow).toHaveCount(1);
+    await showMove.click();
+    await expect(engineArrow).toHaveCount(0);
   } finally {
     await context.close();
   }

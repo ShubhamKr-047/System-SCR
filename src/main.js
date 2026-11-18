@@ -1,10 +1,9 @@
-import { coachingDiagnostics } from "./coaching/diagnostics.js";
 import { conciseLocalFeedback } from "./coaching/local-feedback.js";
 import { Chess } from "chess.js";
 import { gameEnding, ENDING_ICONS } from './game-ending.js';
 import { PIECE_IMAGES } from "./pieces.js";
 import { CLASSIFICATIONS, calculateAccuracy, calculateEstimatedRating } from "./classifications.js";
-import { getApiKey, setApiKey, hasApiKey, getCoachingState, generateCoaching, cancelPendingCoaching, getConnectionStatus, getProvider, setProvider, PROVIDERS, isCoachingEligible, getMoveQuestion, initializeCoaching, configureCoaching, getPlayerLevel, setPlayerLevel, clearCoachingCache } from "./coaching.js";
+import { getApiKey, setApiKey, hasApiKey, getCoachingState, generateCoaching, cancelPendingCoaching, getConnectionStatus, getProvider, setProvider, PROVIDERS, isCoachingEligible, getMoveQuestion, initializeCoaching, configureCoaching } from "./coaching.js";
 import { GameTree, moveLabel } from "./game-tree.js";
 import { EngineQueue } from "./engine.js";
 import { analyzeMove } from "./analysis.js";
@@ -434,7 +433,6 @@ function updateAiUi(refreshInput = true) {
   $('aiCoachToggleRow').hidden = !state.feedbackEnabled;
   $("toggleAiCoach").checked = state.aiCoachEnabled;
   $("aiCoachSettings").hidden = !state.feedbackEnabled || !state.aiCoachEnabled;
-  $("aiPlayerLevel").value = getPlayerLevel();
   const hasKey = hasApiKey();
   const provider = PROVIDERS[getProvider()];
   $("aiProvider").value = getProvider();
@@ -472,13 +470,6 @@ $("aiProvider").addEventListener("change", event => {
   renderFeedback(state.tree?.current?.result || null);
 });
 
-$("aiPlayerLevel").addEventListener('change',event=>{setPlayerLevel(event.target.value);renderFeedback(state.tree?.current?.result || null);});
-$("exportCoachDiagnostics").addEventListener('click',()=>{
-  const url=URL.createObjectURL(new Blob([JSON.stringify(coachingDiagnostics(),null,2)],{type:'application/json'}));
-  const anchor=document.createElement('a');anchor.href=url;anchor.download='coaching-diagnostics.json';anchor.click();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
-});
-$("clearCoachCache").addEventListener('click',async()=>{await clearCoachingCache();renderFeedback(state.tree?.current?.result || null);});
 window.addEventListener('coachingchange',()=>{updateAiUi(false);renderFeedback(state.tree?.current?.result || null);});
 const saveAiKeyBtn = $("saveAiKey");
 if (saveAiKeyBtn) {
@@ -619,6 +610,7 @@ function stopAutoplay() {
 function stopPreview({ render = true } = {}) {
   if (!state.preview) return;
   clearInterval(state.preview.timer);
+  if (state.preview.analysisNode && quickRequest?.node === state.preview.analysisNode) cancelQuickAnalysis();
   boardInput.cancel();
   clearBoardSelection();
   $("promotionDialog").close();
@@ -690,9 +682,16 @@ function showContinuation(result, { feedbackResult = result, baseNode = null } =
   const origin = state.tree.current;
   const source = state.tree.nodes.get(result.nodeId) || origin;
   const base = baseNode || source.parent || source;
+  // Analyze the endpoint during playback without adding preview moves to the game tree.
+  const analysisRoot = base.fen === result.beforeFen ? base : { fen: result.beforeFen };
+  const analysisNode = frames.reduce((parent, { fen, move }) => ({ parent, fen, move }), analysisRoot);
+  const engineLine = result.engineEvidence?.before?.pv?.trim().split(/\s+/) || [];
+  const followsEngineLine = frames.every(({ move }, index) =>
+    engineLine[index] === `${move.from}${move.to}${move.promotion || ""}`);
+  const nextInLine = followsEngineLine ? engineLine[frames.length] : undefined;
   const preview = state.preview = {
     result: feedbackResult, origin, base, frames, index: 0, fen: result.beforeFen,
-    lastMove: null, complete: false, timer: null
+    lastMove: null, complete: false, timer: null, analysisNode, nextInLine
   };
   $("continuationPreview").hidden = false;
   $("continuationPreviewStatus").textContent = `Preview 0/${frames.length}`;
@@ -865,8 +864,16 @@ function updateSelectionHints() {
 }
 
 function drawBestMoveArrow() {
-  const node = state.tree?.current;
-  overlay.bestmove = !state.preview && state.showBestMoveArrow && node ? legalBestMove(node.fen, node.analysis) : "";
+  const preview = state.preview;
+  if (preview) {
+    const { fen, analysis } = preview.analysisNode;
+    overlay.bestmove = preview.complete && !analysis?.terminal
+      ? legalBestMove(fen, analysis) || legalBestMove(fen, preview.nextInLine && { bestmove: preview.nextInLine })
+      : "";
+  } else {
+    const node = state.tree?.current;
+    overlay.bestmove = state.showBestMoveArrow && node ? legalBestMove(node.fen, node.analysis) : "";
+  }
   overlay.render();
 }
 
@@ -983,41 +990,49 @@ async function ensureMoveAnalysis(node, { moveTime, priority = 1, signal = state
 
 function requestQuickAnalysisForCurrentPosition({ retry = false } = {}) {
   const tree = state.tree;
-  const node = tree?.current;
+  const preview = state.preview;
+  const node = preview ? preview.analysisNode : tree?.current;
   if (!node) return;
   if (quickRequest && (quickRequest.tree !== tree || quickRequest.node !== node || retry)) cancelQuickAnalysis();
   engine.focus([node.fen, node.parent?.fen].filter(Boolean));
   const moveTime = Number($("moveTime")?.value) || DEFAULT_REVIEW_TIME;
-  if ((!node.mainline || tree.isAnalysisBoard) && node.move && node.analysisStatus !== "pending" && !hasReview(node, moveTime) && node.analysisStatus !== "error") {
+  if (!preview && (!node.mainline || tree.isAnalysisBoard) && node.move && node.analysisStatus !== "pending" && !hasReview(node, moveTime) && node.analysisStatus !== "error") {
     ensureMoveAnalysis(node, { moveTime, priority: 3 }).catch(() => {});
   }
   if (retry) node.positionError = "";
-  const terminal = new Chess(node.fen).isGameOver();
+  const terminal = node.analysis?.terminal || new Chess(node.fen).isGameOver();
   const ready = node.analysis && (terminal || legalBestMove(node.fen, node.analysis));
   // Selecting pieces or redrawing this position must not cancel its request.
   if (ready || quickRequest?.status === "pending" || node.positionError) {
-    refreshPositionAnalysis();
+    if (!preview) refreshPositionAnalysis();
     return;
   }
   const controller = new AbortController();
   const signal = AbortSignal.any([controller.signal, state.session.signal]);
   const request = { tree, node, controller, status: "pending" };
+  const isCurrent = () => state.tree === tree && state.preview === preview &&
+    (preview || tree.current === node) && quickRequest === request;
   quickRequest = request;
-  refreshPositionAnalysis();
+  if (!preview) refreshPositionAnalysis();
   quickAnalysisTimer = setTimeout(async () => {
     try {
-      await evaluateNode(node, { moveTime: 200, priority: 4, signal });
+      await evaluateNode(node, { moveTime: preview && retry ? 400 : 200, priority: 4, signal });
       request.status = "complete";
-      if (state.tree === tree && tree.current === node && quickRequest === request) {
-        syncActiveLine();
-        updateEvaluationDisplay();
+      if (isCurrent()) {
+        if (!preview) {
+          syncActiveLine();
+          updateEvaluationDisplay();
+        }
         drawBestMoveArrow();
       }
     } catch (error) {
       request.status = "error";
-      if (error.name !== "AbortError") node.positionError = error.message;
+      if (error.name !== "AbortError") {
+        node.positionError = error.message;
+        if (preview && !retry && isCurrent()) requestQuickAnalysisForCurrentPosition({ retry: true });
+      }
     } finally {
-      if (state.tree === tree && tree.current === node && quickRequest === request) refreshPositionAnalysis();
+      if (!preview && isCurrent()) refreshPositionAnalysis();
     }
   }, 100);
 }
@@ -1640,10 +1655,8 @@ function renderFeedback(result) {
     } else if (ai?.status === "pending") {
       statusHtml = `<div id="aiCoachStatus" class="ai-coach-loading" role="status"><div class="ai-loading-spinner"></div>
         <span>${ai.stage === "preparing" ? "Checking this position locally..." : `${provider.name} is explaining this position...`}</span></div>`;
-      feedbackBody = genericBody;
     } else if (coaching) {
       feedbackBody = coachingBody;
-      if(ai.needsRefresh) promptHtml='<div class="ai-prompt-card"><p>Showing the previous explanation. Apply the selected level:</p><button id="askAiCoachingBtn" type="button" class="ai-ask-btn">Explain</button></div>';
     } else if (node?.genericFeedbackRevealed && !hasApiKey()) {
       feedbackBody = genericBody;
     } else {
@@ -1692,7 +1705,7 @@ function renderFeedback(result) {
       <span class="feedback-move-text">${esc(result.moveNo)} ${esc(result.san)}</span></div>
       </div>
     ${promptHtml}
-    ${statusHtml}${feedbackBody ? `<div id="positionFeedback" data-source="${coaching && !coaching.local ? providerId : "local"}" aria-busy="${ai?.status === "pending"}">${feedbackBody}</div>` : ""}
+    ${statusHtml}${feedbackBody ? `<div id="positionFeedback" data-source="${coaching && !coaching.local ? providerId : "local"}">${feedbackBody}</div>` : ""}
     ${continuation}`;
   $("feedbackContainer").scrollTop = scrollTop;
 

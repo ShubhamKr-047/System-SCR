@@ -31,6 +31,7 @@ for (const provider of ["groq"]) {
     await expect(page.locator("#positionFeedback")).toHaveCount(0);
     await page.locator("#askAiCoachingBtn").click();
     await expect(page.locator("#aiCoachStatus")).toContainText("is explaining");
+    await expect(page.locator('#positionFeedback[data-source="local"]')).toHaveCount(0);
     await expect(page.locator(".stockfish-continuation .pv-line")).toHaveText(line);
     await expect(page.locator("#showContinuationBtn")).toBeEnabled();
     const chips = await page.locator("#moveList .move-chip").count();
@@ -48,13 +49,18 @@ for (const provider of ["groq"]) {
     expect(requests).toBe(1);
     // Provider failures must not hide or duplicate the local engine card.
     await page.locator("#topbarMenuBtn").click();
-    await page.locator("#clearCoachCache").click();
     await page.locator("#aiApiKey").fill("test-quota");
     await page.locator("#saveAiKey").click();
     await page.locator("#closeHamburgerBtn").click();
+    await page.keyboard.press("ArrowLeft");
+    await page.locator('[data-square="g1"]').click();
+    await page.locator('[data-square="f3"]').click();
+    await expect(page.locator("#askAiCoachingBtn")).toBeVisible();
+    const failureLine = await page.locator(".stockfish-continuation .pv-line").innerText();
     await page.locator("#askAiCoachingBtn").click();
     await expect(page.locator("#aiCoachStatus")).toContainText("quota or rate limit");
-    await expect(page.locator(".stockfish-continuation .pv-line")).toHaveText(line);
+    await expect(page.locator('#positionFeedback[data-source="local"]')).toBeVisible();
+    await expect(page.locator(".stockfish-continuation .pv-line")).toHaveText(failureLine);
     await expect(page.locator(".stockfish-continuation")).toHaveCount(1);
     await expect(page.locator("#showContinuationBtn")).toBeEnabled();
     expect(requests).toBe(2);
