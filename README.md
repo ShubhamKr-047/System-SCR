@@ -101,8 +101,6 @@ UI behavior still needs checking in an installed extension on Lichess.
 | Balanced | 60 seconds | 16 / 19 / 20 |
 | Deep | 90 seconds | 18 / 21 / 22 |
 
-Older design documents call Balanced **Thorough**. The UI now calls it Balanced; the underlying middle review policy is the same.
-
 These are adaptive targets, not fixed delays or guaranteed deadlines. Short games and cached reviews can finish sooner. Long games, engine startup, hardware, and CPU load can increase runtime. Searches may finish below their target depth when their time expires.
 
 Ordinary searches use one principal variation. Alternative comparisons use two; a played move outside those lines receives a restricted search. Critical candidates receive additional checks within the shared game budget. The bundled engine uses one worker and cannot be made multithreaded through a setting.
@@ -124,7 +122,7 @@ Quick has less verification time and can differ from deeper modes on subtle or l
 
 Classification reasons are available on move badges and feedback headings. Brilliant precedes Great when its evidence is established. Miss requires verified historical evidence; simply losing an advantage is insufficient.
 
-See [classification v6](docs/classification-v6.md) and its [v5 foundation](docs/classification-v5.md) for current rules. Earlier documents provide context and provenance: [v4 mating-sacrifice changes](docs/mating-sacrifices-v4.md), [v3 architecture](docs/review-v3.md), and [original classification reference](docs/move-classification.md). Later versions supersede conflicting earlier rules and timing tables.
+See the [project guide](docs/project-guide.md#how-moves-are-classified) for the review pipeline, the evidence behind exceptional labels, and verification commands.
 
 These are SCR's heuristics, not Chess.com's proprietary classifier. Bounded searches and sacrifice checks can miss unusual or long tactics. Regression fixtures protect known examples; they do not establish universal accuracy or agreement with every human annotation. The opening index is bundled locally from the CC0 Lichess opening dataset and supports transpositions.
 
@@ -144,7 +142,7 @@ Playing an alternative from an imported position creates a variation. Continue t
 
 Autoplay follows the original game. When started from a variation, it starts the original game from the beginning. Manual navigation and board interaction stop playback.
 
-**Show Move** previews the engine's recommended continuation from before the reviewed move. **Back to move** or Escape restores the selected position. Previewing does not create variations or request AI explanations.
+**Show Move** previews the engine's recommended continuation from before the reviewed move. The final preview position shows Stockfish?s next-move arrow when available. **Go back** or Escape restores the selected position. Previewing does not create variations or request AI explanations.
 
 ### Planning annotations and display
 
@@ -168,7 +166,7 @@ Drag the divider above **Moves / Game Summary** to resize the sidebar sections. 
 
 Local Stockfish analysis and feedback work without an API key. To request additional explanations:
 
-1. Enable **Menu > AI Coach** and choose your explanation level.
+1. Enable **Menu > AI Coach**. Explanations use the Intermediate style.
 2. Create a free-tier key in [Groq Console](https://console.groq.com/keys).
 3. Paste your Groq key and select **Save**.
 4. Select an analyzed move and choose **Explain**.
@@ -194,7 +192,7 @@ PGN analysis runs in the browser. Manual review requires no server or AI account
 
 AI requests contain before/after positions, readable piece locations, the played move, classification, evaluations explicitly from White's perspective, locally detected features, legally replayed comparison lines, and evidence limitations. Player names, ratings, full PGNs, credentials, and search timings are excluded from the report. Keys are sent only to Groq for authentication. In installed extensions, keys migrate from legacy page-local storage into extension storage restricted to trusted contexts where supported. The standalone development page uses localStorage. Extension storage is not an encrypted vault. Explanations and an estimated quota ledger persist in IndexedDB. No paid server or automatic provider fallback is used.
 
-**Show why** expands cached comparisons and lessons. **Show line** replays a supplied legal continuation without an API call. Changing level requests no explanation until you click Explain. Extra local searches run only for the requested move when compatible evidence is missing. Across tabs, one persistent lease admits one request at a time. Double clicks coalesce, cooldowns preserve local feedback, and aborted requests retain conservative token estimates because provider computation may already have started.
+**Show why** expands the explanation?s optional comparison. The coach shows a loading indicator while Groq works and shows local feedback if the request fails. Extra local searches run only for the requested move when compatible evidence is missing. Across tabs, one persistent lease admits one request at a time. Double clicks coalesce, cooldowns preserve local feedback, and aborted requests retain conservative token estimates because provider computation may already have started.
 
 Run `npm run benchmark:coaching` to generate a local 240-position evaluation candidate corpus and timing report in `logs/coaching/`. This evaluates local evidence with Stockfish and sends no cloud requests. Human correctness and usefulness review is still required; these are not certified gold labels. An explicitly initiated `node scripts/benchmark-coaching.mjs --live --limit=3` pilot uses `GROQ_API_KEY`, is capped at five cases, and is paced; it is never part of normal tests.
 
@@ -251,7 +249,7 @@ Reports are written under the ignored `logs/` directory. Results depend on the m
 | `public/` | Branding, pieces, fonts, sounds, and generated engine assets |
 | `scripts/` | Engine copying, opening-data generation, and benchmarks |
 | `tests/` | Unit tests, browser tests, and chess fixtures |
-| `docs/` | Versioned classification design and validation notes |
+| [`docs/project-guide.md`](docs/project-guide.md) | Current review, classification, coaching, and verification guide |
 | `postman/` | Local coaching simulations |
 | `dist/` | Generated extension; not committed |
 

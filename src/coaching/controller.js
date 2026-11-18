@@ -1,7 +1,7 @@
 // The replacement coach's explicit-action boundary. Constructing, observing,
 // cancelling, or changing a target never invokes the provider.
 export function createCoachingController({ prepare, generate, validate, cache, quota,
-  identity, onChange = () => {}, onEvent = () => {}, timeoutMs = 25000 }) {
+  identity, onChange = () => {}, timeoutMs = 25000 }) {
   const jobs = new Map();
   let target = null;
   let credentialRevision = 0;
@@ -10,8 +10,7 @@ export function createCoachingController({ prepare, generate, validate, cache, q
     if (target === job.key && jobs.get(job.key) === job) onChange({ ...job.state });
   };
   const transition = (job, status, extra = {}) => {
-    job.state = { status, elapsedMs:performance.now()-job.started, ...extra };
-    onEvent(job.state);
+    job.state = { status, ...extra };
     publish(job);
   };
   function cancel() {
@@ -30,7 +29,7 @@ export function createCoachingController({ prepare, generate, validate, cache, q
     const key = identity(input);
     select(input);
     if (jobs.has(key)) return jobs.get(key).promise;
-    const job = { key, started:performance.now(), controller: new AbortController(), state: { status: 'preparing' } };
+    const job = { key, controller: new AbortController(), state: { status: 'preparing' } };
     const revision = credentialRevision;
     const { signal } = job.controller;
     const check = () => {
@@ -46,7 +45,6 @@ export function createCoachingController({ prepare, generate, validate, cache, q
       let reservation;
       let evidence;
       let timedOut = false;
-      let metrics = {};
       try {
         check();
         publish(job);
@@ -62,12 +60,11 @@ export function createCoachingController({ prepare, generate, validate, cache, q
           transition(job, 'ready', { result: evidence.localResult, source: 'local' });
           return evidence.localResult;
         }
-        metrics = { estimatedTokens:evidence.estimatedTokens };
         reservation = await quota.reserve(evidence);
         check();
         if (!reservation.allowed) {
           transition(job, 'cooldown', { retryAt: reservation.retryAt,
-            reason: reservation.reason, outcome:reservation.code, fallback: evidence.fallback, ...metrics });
+            reason: reservation.reason, fallback: evidence.fallback });
           return null;
         }
         transition(job, 'writing', { fallback: evidence.fallback });
@@ -77,14 +74,10 @@ export function createCoachingController({ prepare, generate, validate, cache, q
         submitted = true;
         const response = await generate(evidence, { signal });
         clearTimeout(timer);
-        const usage = response.usage;
-        metrics = { ...metrics, httpStatus:response.status, tokens:usage?.total_tokens,
-          promptTokens:usage?.prompt_tokens, completionTokens:usage?.completion_tokens,
-          cachedTokens:usage?.prompt_tokens_details?.cached_tokens };
         const retryAt = await quota.reconcile(reservation, response);
         check();
         if (response.error) {
-          transition(job, 'error', { ...metrics, outcome:response.outcome, error:response.error,
+          transition(job, 'error', { error:response.error,
             retryAt:response.status === 429 ? retryAt : undefined, fallback:evidence.fallback });
           return null;
         }
@@ -92,21 +85,21 @@ export function createCoachingController({ prepare, generate, validate, cache, q
         try {
           result = validate(response.result, evidence);
         } catch (error) {
-          transition(job, 'error', { ...metrics, outcome:'rejected-prose', error:error.message, fallback:evidence.fallback });
+          transition(job, 'error', { error:error.message, fallback:evidence.fallback });
           return null;
         }
         await cache.set(key, result);
         check();
-        transition(job, 'ready', { result, source: 'groq', ...metrics });
+        transition(job, 'ready', { result, source: 'groq' });
         return result;
       } catch (error) {
         if(submitted) {
           try { await quota.failed?.(reservation); } catch { /* persisted lease expires */ }
         }
         if (!signal.aborted && key === target && revision === credentialRevision) {
-          transition(job, 'error', { ...metrics, outcome:'request-error', error: error.message, fallback:evidence?.fallback });
+          transition(job, 'error', { error: error.message, fallback:evidence?.fallback });
         } else {
-          transition(job, timedOut ? 'error' : 'cancelled', {...metrics, outcome:timedOut?'timeout':'cancelled', error:timedOut ? 'Groq took too long to respond. You can retry.' : undefined});
+          transition(job, timedOut ? 'error' : 'cancelled', {error:timedOut ? 'Groq took too long to respond. You can retry.' : undefined});
         }
         return null;
       } finally {

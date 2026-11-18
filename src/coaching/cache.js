@@ -21,9 +21,5 @@ export const explanationCache={
         r.onsuccess=()=>r.result.sort((a,b)=>b.touched-a.touched).slice(MAX_ENTRIES).forEach(old=>store.delete(old.key));
       });
     } catch { /* A full disk must not discard an otherwise valid answer. */ }
-  },
-  async clear() {
-    memory.clear();
-    try {await transaction('explanations',store=>store.clear());} catch { /* memory-only mode */ }
   }
 };

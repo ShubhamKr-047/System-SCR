@@ -6,7 +6,6 @@ import { explanationCache } from './coaching/cache.js';
 import { createBrowserQuota } from './coaching/quota-browser.js';
 import { requestGroq, estimateTokens, MODEL } from './coaching/groq.js';
 import { coachingIdentity } from './coaching/identity.js';
-import { recordCoachingEvent } from './coaching/diagnostics.js';
 import { validateCoaching as validate } from './coaching/validation.js';
 import { getApiKey, setApiKey, initializeSettings, quotaScope, onCredentialsChanged } from './coaching/settings.js';
 export { getApiKey, setApiKey };
@@ -22,7 +21,6 @@ const states=new Map(), loading=new Set();
 const EXPLANATION_LEVEL = 'intermediate';
 let engine;
 let activeKey=null;
-let cacheEpoch=0;
 export function configureCoaching(options){engine=options.engine;}
 export async function initializeCoaching(){await initializeSettings();}
 export function buildCoachingContext(result,fen){
@@ -52,7 +50,6 @@ const controller=createCoachingController({
   },
   generate:(evidence,{signal})=>requestGroq(evidence.report,getApiKey(),signal),
   validate:(response,evidence)=>validate(response,evidence.report),
-  onEvent:state=>recordCoachingEvent(state.status,state),
   onChange(state){
     if(!activeKey) return;
     const mapped={...state,status:['preparing','writing'].includes(state.status)?'pending':state.status,
@@ -74,9 +71,8 @@ export function getCoachingState(result,fen){
   if(!result) return null;
   const key=identity(inputFor(result,fen));
   if(!states.has(key) && !loading.has(key)) {
-    const epoch=cacheEpoch;
     loading.add(key);
-    explanationCache.get(key).then(result=>{if(epoch===cacheEpoch && result && !states.has(key)){states.set(key,{status:'ready',coaching:result});notify();}}).finally(()=>loading.delete(key));
+    explanationCache.get(key).then(result=>{if(result && !states.has(key)){states.set(key,{status:'ready',coaching:result});notify();}}).finally(()=>loading.delete(key));
   }
   return states.get(key) || null;
 }
@@ -86,7 +82,6 @@ export function generateCoaching(result,fen,{node}={}){
   states.set(key,{status:'pending',stage:'preparing'});
   return controller.explain(input);
 }
-export async function clearCoachingCache(){cacheEpoch++;cancelPendingCoaching();states.clear();await explanationCache.clear();notify();}
 export const isCoachingEligible=result=>Boolean(result?.key);
 export const getMoveQuestion=result=>result ? `Explain the idea behind ${result.san || 'this move'}?` : '';
 onCredentialsChanged(()=>{connection='saved';controller.credentialsChanged();cancelPendingCoaching();states.clear();notify();});
